@@ -2,6 +2,9 @@ import pygame #window + drawing
 import cv2  #webcam 
 import time 
 import mediapipe as mp
+import speech_recognition as sr
+import pyttsx3
+import threading 
 
 
 #settings 
@@ -49,6 +52,48 @@ card_color = (255, 0, 0) # red
 # Grab state
 is_grabbing = False
 
+#=============VOICE SETUP============== 
+recognizer = sr.Recognizer()
+mic = sr.Microphone()
+
+#Text-to-Speech engine 
+tts_engine = pyttsx3.init()
+tts_engine.setProperty('rate', 150) #speed of speech( words per minute)
+
+#Variable to store last voice command 
+last_command = ""
+is_listening = False
+
+#Function to speak ( runs in the background so it doesn't freezes the app)
+def speak(text): 
+    tts_engine.say(text)
+    tts_engine.runAndWait()
+
+#Function to listen for voice commands ( runs in the background)
+def listen_for_command():
+    global last_command, is_listening
+
+    with mic as source: 
+        recognizer.adjust_for_ambient_noise(source, duration=0.5) 
+        is_listening = True 
+        print("Listening...")
+    
+        try: 
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+            command = recognizer.recognize_google(audio).lower()
+            print(f"You said: {command}")
+            last_command = command
+        except sr.WaitTimeoutError:
+            print("No voice input detected")
+        except sr.UnknownValueError:
+            print("Could not understand audio")
+        except sr.RequestError:
+            print("Could not request results from Google Speech Recognition service")
+        finally: 
+            is_listening = False 
+
+
+
 #============MAIN LOOP============== 
 ''' everything happens inside the main loop  
 like 60 times per second (FPS_CAP)''' 
@@ -59,6 +104,13 @@ while running :
     for event in pygame.event.get():
         if event.type == pygame.QUIT: 
             running = False 
+
+
+        # 2 Press spacebar to toggle voice command 
+        if event.type == pygame.KEYDOWN: 
+            if event.key == pygame.K_SPACE and not is_listening:
+                # start listening in background thread 
+                threading.Thread(target=listen_for_command, daemon=True).start()
     
     #2. Read webcam frame (this is where the webcam image is read)
     success, frame = cap.read()
@@ -111,6 +163,29 @@ while running :
             if is_grabbing: 
                 card_x = cursor_x - card_width // 2 
                 card_y = cursor_y - card_height // 2
+        
+    # ==== PROCESS VOICE COMMANDS ==== 
+    if last_command:
+        if "reset" in last_command:
+            card_x = 400 
+            card_y = 300 
+            threading.Thread(target=speak, args=("Card reset!",), daemon=True).start()
+
+        elif "color" in last_command or "colour" in last_command:
+            import random
+            card_color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
+            threading.Thread(target=speak, args=("Card color changed!",), daemon=True).start()
+
+        elif "hello" in last_command or "hi" in last_command:
+            threading.Thread(target=speak, args=("Hello! How can I help you today?",), daemon=True).start()
+        elif "bye" in last_command or "goodbye" in last_command:
+            threading.Thread(target=speak, args=("Goodbye! Have a great day!",), daemon=True).start()
+        elif "thank you" in last_command or "thanks" in last_command:
+            threading.Thread(target=speak, args=("You're welcome!",),daemon=True).start()
+        elif "help" in last_command:
+            threading.Thread(target=speak, args=("I can help you with the following commands: reset, color, hello, bye, thanks",), daemon=True).start()
+        
+        last_command = "" 
 
 
     # Rotate for pygame display (pygame.surfarray needs rotated data)
@@ -140,6 +215,12 @@ while running :
     font = pygame.font.Font(None, 36) 
     fps_text = font.render(f"FPS: {int(fps)}", True, (0, 255, 0)) 
     screen.blit(fps_text, (10, 10))  # blit = " copy this image onto the screen"
+
+    #7 show listening status
+
+    if is_listening:
+        listening_text = font.render("Listening...", True, (255, 255, 0))
+        screen.blit(listening_text, (10, 50))
 
     #7. Draw cursor dot 
     pygame.draw.circle(screen, (255,0,0), (cursor_x, cursor_y), 15) 
