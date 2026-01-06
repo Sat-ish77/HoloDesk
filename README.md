@@ -14,9 +14,10 @@ HoloDesk is a multimodal AI assistant that you can:
 - [x] **Step 0:** Window + Webcam + FPS display
 - [x] Step 1: Hand tracking → cursor dot
 - [x] Step 2: Pinch gesture → grab/drag objects
-- [ ] Step 3: Voice commands
-- [ ] Step 4: AI Agent with tools
-- [ ] Step 5: Database + Cloud storage
+- [x] Step 3: Voice commands
+- [x] Step 4: AI Agent with tools
+- [ ] step 5: Desktop App Contorl
+- [ ] Step 6: Database + Cloud storage
 
 ## Tech Stack
 
