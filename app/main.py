@@ -5,6 +5,9 @@ import mediapipe as mp
 import speech_recognition as sr
 import pyttsx3
 import threading 
+from faster_whisper import WhisperModel
+import tempfile 
+import wave 
 
 
 #settings 
@@ -60,38 +63,76 @@ mic = sr.Microphone()
 tts_engine = pyttsx3.init()
 tts_engine.setProperty('rate', 150) #speed of speech( words per minute)
 
+#whisper model for speech-to-text ( steup - loads once at startup) 
+print("Loading Whisper model....please wait...")
+whisper_model = WhisperModel("base", device = "cpu", compute_type = "int8") 
+print("Whisper model loaded successfully!")
+
 #Variable to store last voice command 
 last_command = ""
 is_listening = False
+ready_to_speak = False  # Shows "SPEAK NOW!" on screen
 
-#Function to speak ( runs in the background so it doesn't freezes the app)
+#Function to speak ( runs in the background so it doesn't freeze the app)
 def speak(text): 
-    tts_engine.say(text)
-    tts_engine.runAndWait()
+    print(f"SPEAKING: {text}")  # Debug
+    try:
+        engine = pyttsx3.init()
+        engine.setProperty('rate', 150)
+        engine.setProperty('volume', 1.0)  # Max volume
+        engine.say(text)
+        engine.runAndWait()
+        del engine  # Clean up properly
+        print("SPEECH DONE")  # Confirm it finished
+    except Exception as e:
+        print(f"SPEECH ERROR: {e}")
 
 #Function to listen for voice commands ( runs in the background)
 def listen_for_command():
-    global last_command, is_listening
+    global last_command, is_listening, ready_to_speak
 
+    is_listening = True
+    ready_to_speak = False
+    print("Adjusting for noise...")
+    
     with mic as source: 
-        recognizer.adjust_for_ambient_noise(source, duration=0.5) 
-        is_listening = True 
-        print("Listening...")
+        recognizer.adjust_for_ambient_noise(source, duration=0.3)
+        ready_to_speak = True  # NOW the user can speak
+        print(">>> NOW SPEAK! <<<")  # Clear signal to speak
     
         try: 
             audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
-            command = recognizer.recognize_google(audio).lower()
-            print(f"You said: {command}")
-            last_command = command
+
+            # save audio to temporary WAV files for whisper 
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
+                temp_path = f.name 
+                wav_file = wave.open(f, 'wb') 
+                wav_file.setnchannels(1) # mono audio 
+                wav_file.setsampwidth(2) # 16-bit audio 
+                wav_file.setframerate(16000) # 16kHz sample rate 
+                wav_file.writeframes(audio.get_wav_data())
+                wav_file.close() 
+
+            # transcribe audio using whisper 
+            segments, info = whisper_model.transcribe(temp_path, beam_size = 5)
+            command = ""
+            for segment in segments: 
+                command += segment.text
+            command = command.strip().lower() 
+
+            if command: 
+                print(f"You said: {command}")
+                last_command = command
+            else: 
+                print(" No speech detected ")
+            
         except sr.WaitTimeoutError:
             print("No voice input detected")
-        except sr.UnknownValueError:
-            print("Could not understand audio")
-        except sr.RequestError:
-            print("Could not request results from Google Speech Recognition service")
+        except Exception as e:
+            print(f"Error : {e}")
         finally: 
             is_listening = False 
-
+            ready_to_speak = False 
 
 
 #============MAIN LOOP============== 
@@ -166,6 +207,7 @@ while running :
         
     # ==== PROCESS VOICE COMMANDS ==== 
     if last_command:
+        print(f"PROCESSING COMMAND: {last_command}")  # Debug
         if "reset" in last_command:
             card_x = 400 
             card_y = 300 
@@ -217,10 +259,18 @@ while running :
     screen.blit(fps_text, (10, 10))  # blit = " copy this image onto the screen"
 
     #7 show listening status
-
     if is_listening:
-        listening_text = font.render("Listening...", True, (255, 255, 0))
-        screen.blit(listening_text, (10, 50))
+        if ready_to_speak:
+            # Big green "SPEAK NOW!" when ready
+            big_font = pygame.font.Font(None, 72)
+            speak_text = big_font.render("SPEAK NOW!", True, (0, 255, 0))
+            # Center it on screen
+            text_rect = speak_text.get_rect(center=(WINDOW_WIDTH // 2, 80))
+            screen.blit(speak_text, text_rect)
+        else:
+            # Yellow "Preparing..." while adjusting for noise
+            listening_text = font.render("Preparing mic...", True, (255, 255, 0))
+            screen.blit(listening_text, (10, 50))
 
     #7. Draw cursor dot 
     pygame.draw.circle(screen, (255,0,0), (cursor_x, cursor_y), 15) 

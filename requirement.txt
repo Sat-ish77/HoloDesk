@@ -3,6 +3,7 @@ pygame==2.5.2   # open windows, draw shapes, handles game loop
 opencv-python==4.9.0.80 #reads webcam, processes images
 mediapipe # Google's hand tracking 
 numpy==1.26.4 # Math operations on arrays (used by opencv)
-SpeechRecognition # converts voice to text
+SpeechRecognition # captures audio from microphone
 pyttsx3 # makes computer speak ( text to voice) 
 pyaudio # Access the microphone
+faster-whisper # OpenAI Whisper for accurate speech-to-text (better than Google!)
