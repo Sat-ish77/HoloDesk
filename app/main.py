@@ -1,6 +1,7 @@
 import pygame #window + drawing
 import cv2  #webcam 
 import time 
+import mediapipe as mp
 
 
 #settings 
@@ -15,6 +16,22 @@ screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) #create window
 pygame.display.set_caption("HoloDesk- Step 0") #window title 
 clock = pygame.time.Clock()  # controls timing 
 cap = cv2.VideoCapture(0) # open webcam ( 0= default camera)
+
+#-----------HAND TRACKING SETUP------------ 
+mp_hands = mp.solutions.hands.Hands(
+    static_image_mode=False,  #False= video mode ( faster ) 
+    max_num_hands=1, #only track one hand 
+    min_detection_confidence=0.7, # confidence threshold for hand detection
+    min_tracking_confidence = 0.5 # confidence threshold for hand tracking 
+
+)
+mp_draw = mp.solutions.drawing_utils # for drawing hand skeleton
+
+
+#------cursor position setup------ 
+cursor_x = WINDOW_WIDTH // 2 # starting in the middle of the screen 
+cursor_y = WINDOW_HEIGHT // 2 # starting in the middle of the screen 
+
 
 
 #============MAIN LOOP============== 
@@ -37,6 +54,20 @@ while running :
     #opencv uses BGR (blue, green, red) but pygame uses RGB (red, green, blue) - so we flip the colors. 
     frame= cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) 
 
+    #-------------HAND TRACKING------------- 
+    #process the frame to find hands 
+    results = mp_hands.process(frame)
+
+    # if a hand is detected 
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            #get index finger tip ( landmark 8)
+            index_tip = hand_landmarks.landmark[8]
+
+            #convert from 0-1 range to screen coordinates
+            cursor_x = int((1 - index_tip.x) * WINDOW_WIDTH) 
+            cursor_y = int(index_tip.y * WINDOW_HEIGHT)
+
     # Rotate for pygame display (pygame.surfarray needs rotated data)
     frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
 
@@ -58,7 +89,10 @@ while running :
     fps_text = font.render(f"FPS: {int(fps)}", True, (0, 255, 0)) 
     screen.blit(fps_text, (10, 10))  # blit = " copy this image onto the screen"
 
-    #6. Update display
+    #6. Draw cursor dot 
+    pygame.draw.circle(screen, (255,0,0), (cursor_x, cursor_y), 15) 
+
+    #7. Update display
     pygame.display.flip() # update the display to show the new frame
     clock.tick(FPS_CAP) 
 
