@@ -18,6 +18,7 @@ FPS_CAP = 60 # frames per second
 
 # SETUP 
 pygame.init()  #  start pygame engine 
+pygame.mixer.quit() # disable audio mixer to free microphone. 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) #create window 
 pygame.display.set_caption("HoloDesk- Step 2: Grab & Drag") #window title 
 clock = pygame.time.Clock()  # controls timing 
@@ -73,19 +74,30 @@ last_command = ""
 is_listening = False
 ready_to_speak = False  # Shows "SPEAK NOW!" on screen
 
-#Function to speak ( runs in the background so it doesn't freeze the app)
+#Function to speak using Windows SAPI directly (more reliable than pyttsx3)
 def speak(text): 
     print(f"SPEAKING: {text}")  # Debug
     try:
-        engine = pyttsx3.init()
-        engine.setProperty('rate', 150)
-        engine.setProperty('volume', 1.0)  # Max volume
-        engine.say(text)
-        engine.runAndWait()
-        del engine  # Clean up properly
+        import comtypes.client  # Windows COM interface
+        speaker = comtypes.client.CreateObject("SAPI.SpVoice")
+        speaker.Rate = 1  # Speed: -10 (slow) to 10 (fast)
+        speaker.Volume = 100  # Volume: 0 to 100
+        speaker.Speak(text)
         print("SPEECH DONE")  # Confirm it finished
     except Exception as e:
         print(f"SPEECH ERROR: {e}")
+        # Fallback to pyttsx3 if comtypes fails
+        try:
+            engine = pyttsx3.init('sapi5')  # Force Windows SAPI driver
+            engine.setProperty('rate', 150)
+            engine.setProperty('volume', 1.0)
+            engine.say(text)
+            engine.runAndWait()
+            engine.stop()
+            del engine
+            print("SPEECH DONE (fallback)")
+        except Exception as e2:
+            print(f"FALLBACK SPEECH ERROR: {e2}")
 
 #Function to listen for voice commands ( runs in the background)
 def listen_for_command():
@@ -96,25 +108,28 @@ def listen_for_command():
     print("Adjusting for noise...")
     
     with mic as source: 
-        recognizer.adjust_for_ambient_noise(source, duration=0.3)
+        recognizer.adjust_for_ambient_noise(source, duration=0.5)  # Longer calibration
+        recognizer.energy_threshold = 300  # Lower threshold for quieter speech
         ready_to_speak = True  # NOW the user can speak
         print(">>> NOW SPEAK! <<<")  # Clear signal to speak
     
         try: 
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+            # timeout=5: wait 5 sec max for speech to start
+            # phrase_time_limit=5: max 5 sec of speech (shorter for commands)
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
 
-            # save audio to temporary WAV files for whisper 
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as f:
-                temp_path = f.name 
-                wav_file = wave.open(f, 'wb') 
-                wav_file.setnchannels(1) # mono audio 
-                wav_file.setsampwidth(2) # 16-bit audio 
-                wav_file.setframerate(16000) # 16kHz sample rate 
-                wav_file.writeframes(audio.get_wav_data())
-                wav_file.close() 
+            # save audio to temporary WAV file for whisper 
+            temp_path = tempfile.mktemp(suffix=".wav")
+            with open(temp_path, "wb") as f:
+                # Convert to 16kHz sample rate for Whisper
+                f.write(audio.get_wav_data(convert_rate=16000, convert_width=2))
 
-            # transcribe audio using whisper 
-            segments, info = whisper_model.transcribe(temp_path, beam_size = 5)
+            # transcribe audio using whisper (force English language)
+            segments, info = whisper_model.transcribe(
+                temp_path, 
+                beam_size=5,
+                language="en"  # Force English to avoid hallucinations
+            )
             command = ""
             for segment in segments: 
                 command += segment.text
