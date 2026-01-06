@@ -8,3 +8,5 @@ pyttsx3 # makes computer speak ( text to voice)
 pyaudio # Access the microphone
 faster-whisper # OpenAI Whisper for accurate speech-to-text (better than Google!)
 comtypes # Windows SAPI for reliable text-to-speech
+groq # AI API client
+python-dotenv # Load API keys from .env file 

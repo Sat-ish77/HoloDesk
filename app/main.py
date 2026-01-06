@@ -1,4 +1,9 @@
 import pygame #window + drawing
+import os 
+from dotenv import load_dotenv
+#load api key from .env file 
+load_dotenv() 
+from groq import Groq
 import cv2  #webcam 
 import time 
 import mediapipe as mp
@@ -8,6 +13,26 @@ import threading
 from faster_whisper import WhisperModel
 import tempfile 
 import wave 
+
+#====AI SETUP====
+grok_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+def ask_ai(question):
+    '''Ask the AI a question and get a response'''
+    try: 
+        response = grok_client.chat.completions.create(
+            model = "llama-3.1-8b-instant",
+            messages= [
+            { "role": "system", "content": "You are HoloDesk, a helpful AI assistant. Keep responses short and conversational (1-2 sentences max)."},
+            {"role": "user", "content": question}
+            ],
+            max_tokens = 100,
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        print(f"AI ERROR: {e}")
+        return "I'm having trouble answering that. Please try again."
+
 
 
 #settings 
@@ -242,7 +267,12 @@ while running :
         elif "help" in last_command:
             threading.Thread(target=speak, args=("I can help you with the following commands: reset, color, hello, bye, thanks",), daemon=True).start()
         
+        else: 
+            #If no soecific command, ask AI 
+            ai_response = ask_ai( last_command )
+            threading.Thread(target=speak, args=(ai_response,), daemon=True).start()
         last_command = "" 
+
 
 
     # Rotate for pygame display (pygame.surfarray needs rotated data)
