@@ -13,6 +13,7 @@ import threading
 from faster_whisper import WhisperModel
 import tempfile 
 import wave 
+import pyautogui 
 
 #====AI SETUP====
 grok_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -45,7 +46,7 @@ FPS_CAP = 60 # frames per second
 pygame.init()  #  start pygame engine 
 pygame.mixer.quit() # disable audio mixer to free microphone. 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) #create window 
-pygame.display.set_caption("HoloDesk- Step 2: Grab & Drag") #window title 
+pygame.display.set_caption("HoloDesk - Step 5: Gesture + Voice + AI + Desktop Control") #window title 
 clock = pygame.time.Clock()  # controls timing 
 cap = cv2.VideoCapture(0) # open webcam ( 0= default camera)
 
@@ -81,6 +82,9 @@ card_color = (255, 0, 0) # red
 # Grab state
 is_grabbing = False
 
+# v gesture for voice activation ( instead of spacebar)
+v_gesture_cooldown = 0 # prevents triggering multiple times 
+
 #=============VOICE SETUP============== 
 recognizer = sr.Recognizer()
 mic = sr.Microphone()
@@ -91,7 +95,7 @@ tts_engine.setProperty('rate', 150) #speed of speech( words per minute)
 
 #whisper model for speech-to-text ( steup - loads once at startup) 
 print("Loading Whisper model....please wait...")
-whisper_model = WhisperModel("base", device = "cpu", compute_type = "int8") 
+whisper_model = WhisperModel("small", device = "cpu", compute_type = "int8")  # "small" is more accurate than "base" 
 print("Whisper model loaded successfully!")
 
 #Variable to store last voice command 
@@ -228,6 +232,55 @@ while running :
             pinch_threshold = 50  # pixels 
             is_pinching = distance < pinch_threshold 
 
+            # ======= Voice Activation (V-Gesture) ======= 
+            # Get finger landmarks 
+            middle_tip = hand_landmarks.landmark[12] # middle finger tip 
+            middle_base = hand_landmarks.landmark[9] # middle finger base
+            ring_tip = hand_landmarks.landmark[16] # ring finger tip
+            ring_base = hand_landmarks.landmark[13] # ring finger base
+            pinky_tip = hand_landmarks.landmark[20] # pinky finger tip
+            pinky_base = hand_landmarks.landmark[17] # pinky finger base
+
+            #check which fingers are up ( tip higher than base = smaller y value )
+            index_up = index_tip.y < hand_landmarks.landmark[5].y # is index finger up?
+            middle_up = middle_tip.y < middle_base.y # is middle finger up?
+            ring_down = ring_tip.y > ring_base.y # is ring finger down?
+            pinky_down = pinky_tip.y > pinky_base.y # is pinky finger down?
+
+            # V gesture: index and middle up , ring and pinky down 
+            is_v_gesture = index_up and middle_up and ring_down and pinky_down
+
+            # Activate voice with v gesture !
+            if is_v_gesture and not is_listening and v_gesture_cooldown <= 0:
+                print("V Gesture detected! Activating voice activation...")
+                threading.Thread(target=listen_for_command, daemon=True).start()
+                v_gesture_cooldown = 60 # Wait 60 frames (1 second) before allowing another v gesture
+
+            # ======= THUMBS UP/DOWN for Continuous Scrolling =======
+            thumb_base = hand_landmarks.landmark[2]   # Thumb base (near palm)
+            index_mcp = hand_landmarks.landmark[5]    # Index finger knuckle
+            
+            # Check if fingers are curled (fist shape - all fingertips below their base)
+            fingers_curled = (
+                index_tip.y > index_mcp.y and      # Index curled
+                middle_tip.y > middle_base.y and   # Middle curled
+                ring_tip.y > ring_base.y and       # Ring curled
+                pinky_tip.y > pinky_base.y         # Pinky curled
+            )
+            
+            # Thumbs UP: thumb tip is much higher than index knuckle, fingers curled
+            is_thumbs_up = thumb_tip.y < index_mcp.y - 0.08 and fingers_curled
+            
+            # Thumbs DOWN: thumb tip is much lower than thumb base, fingers curled  
+            is_thumbs_down = thumb_tip.y > thumb_base.y + 0.08 and fingers_curled
+            
+            # Continuous scroll while holding gesture (only when not listening)
+            if is_thumbs_up and not is_listening and not is_v_gesture:
+                pyautogui.scroll(50)  # Scroll UP continuously - FAST!
+                
+            if is_thumbs_down and not is_listening and not is_v_gesture:
+                pyautogui.scroll(-50)  # Scroll DOWN continuously - FAST!
+
             # ======= Grab Logic ======= (State Machine)
 
             # Check if cursor is over the card 
@@ -244,6 +297,10 @@ while running :
             if is_grabbing: 
                 card_x = cursor_x - card_width // 2 
                 card_y = cursor_y - card_height // 2
+
+            # Decrease V gesture cooldown timer 
+            if v_gesture_cooldown > 0:
+                v_gesture_cooldown -= 1
         
     # ==== PROCESS VOICE COMMANDS ==== 
     if last_command:
@@ -254,11 +311,32 @@ while running :
             threading.Thread(target=speak, args=("Card reset!",), daemon=True).start()
 
         elif "color" in last_command or "colour" in last_command:
-            import random
-            card_color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
+            # Smart color detection - parse the color from command!
+            if "red" in last_command:
+                card_color = (255, 0, 0)
+            elif "green" in last_command:
+                card_color = (0, 255, 0)
+            elif "blue" in last_command:
+                card_color = (0, 0, 255)
+            elif "yellow" in last_command:
+                card_color = (255, 255, 0)
+            elif "purple" in last_command:
+                card_color = (128, 0, 128)
+            elif "orange" in last_command:
+                card_color = (255, 165, 0)
+            elif "white" in last_command:
+                card_color = (255, 255, 255)
+            elif "black" in last_command:
+                card_color = (0, 0, 0)
+            elif "pink" in last_command:
+                card_color = (255, 105, 180)
+            else:
+                # Random color if no specific color mentioned
+                import random
+                card_color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
             threading.Thread(target=speak, args=("Card color changed!",), daemon=True).start()
 
-        elif "hello" in last_command or "hi" in last_command:
+        elif "hello" in last_command or " hi " in f" {last_command} " or last_command == "hi":
             threading.Thread(target=speak, args=("Hello! How can I help you today?",), daemon=True).start()
         elif "bye" in last_command or "goodbye" in last_command:
             threading.Thread(target=speak, args=("Goodbye! Have a great day!",), daemon=True).start()
@@ -266,6 +344,77 @@ while running :
             threading.Thread(target=speak, args=("You're welcome!",),daemon=True).start()
         elif "help" in last_command:
             threading.Thread(target=speak, args=("I can help you with the following commands: reset, color, hello, bye, thanks",), daemon=True).start()
+        
+        #==== SCROLL COMMAND ==== (with spelling variations for Whisper mishearing)
+        elif "scroll up" in last_command or "scrawl up" in last_command or "screw up" in last_command or "scroll all up" in last_command:
+            if "lot" in last_command or "more" in last_command:
+                pyautogui.scroll(1000)  # HUGE scroll
+            else:
+                pyautogui.scroll(500)  # Normal scroll - BIG!
+            threading.Thread(target=speak, args=("Scrolling up!",), daemon=True).start()
+        
+        elif "scroll down" in last_command or "scrawl down" in last_command or "screw down" in last_command or "scroll all down" in last_command or "screw all down" in last_command or "screw it down" in last_command:
+            if "lot" in last_command or "more" in last_command:
+                pyautogui.scroll(-1000)  # HUGE scroll
+            else:
+                pyautogui.scroll(-500)  # Normal scroll - BIG!
+            threading.Thread(target=speak, args=("Scrolling down!",), daemon=True).start()
+
+        #==== APP COMMANDS ==== 
+        elif "open chrome" in last_command:
+            import subprocess
+            subprocess.Popen('start chrome', shell=True)
+            threading.Thread(target=speak, args=("Opening Chrome...",), daemon=True).start()
+
+        elif "open facebook" in last_command or "facebook" in last_command and "open" in last_command:
+            import subprocess
+            subprocess.Popen('start chrome https://facebook.com', shell=True)
+            threading.Thread(target=speak, args=("Opening Facebook...",), daemon=True).start()
+
+        elif "open youtube" in last_command or "youtube" in last_command and "open" in last_command:
+            import subprocess
+            subprocess.Popen('start chrome https://youtube.com', shell=True)
+            threading.Thread(target=speak, args=("Opening YouTube...",), daemon=True).start()
+
+        elif "open netflix" in last_command or "netflix" in last_command and "open" in last_command:
+            import subprocess
+            subprocess.Popen('start chrome https://netflix.com', shell=True)
+            threading.Thread(target=speak, args=("Opening Netflix...",), daemon=True).start()
+
+        elif "open notepad" in last_command:
+            import subprocess
+            subprocess.Popen('start notepad', shell=True)
+            threading.Thread(target=speak, args=("Opening Notepad...",), daemon=True).start()
+
+        elif "open notepad++" in last_command:
+            import subprocess
+            subprocess.Popen('start notepad++', shell=True)
+            threading.Thread(target=speak, args=("Opening Notepad++...",), daemon=True).start()
+
+        elif "close" in last_command and ("window" in last_command or "app" in last_command or "this" in last_command):
+            pyautogui.hotkey('alt', 'F4')
+            threading.Thread(target=speak, args=("Closing window...",), daemon=True).start()
+
+        elif "minimize" in last_command:
+            pyautogui.hotkey('win', 'm')  # minimize current window
+            threading.Thread(target=speak, args=("Minimizing window...",), daemon=True).start()
+
+        elif "open" in last_command:
+            # Extract app name from command
+            # "open chrome" → "chrome"
+            # "open notepad" → "notepad"
+            words = last_command.split()
+            if "open" in words:
+                app_index = words.index("open") + 1
+                if app_index < len(words):
+                    app_name = words[app_index]
+                    try:
+                        import subprocess
+                        subprocess.Popen(f'start {app_name}', shell=True)
+                        threading.Thread(target=speak, args=(f"Opening {app_name}",), daemon=True).start()
+                    except:
+                        threading.Thread(target=speak, args=(f"Sorry, I couldn't open {app_name}",), daemon=True).start()
+
         
         else: 
             #If no soecific command, ask AI 
