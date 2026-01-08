@@ -15,6 +15,10 @@ import tempfile
 import wave 
 import pyautogui 
 
+# Disable pyautogui's built-in delay (default is 0.1 sec between actions = SLOW!)
+pyautogui.PAUSE = 0
+pyautogui.FAILSAFE = False  # Disable fail-safe (moving mouse to corner won't crash)
+
 #====AI SETUP====
 grok_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -46,7 +50,7 @@ FPS_CAP = 60 # frames per second
 pygame.init()  #  start pygame engine 
 pygame.mixer.quit() # disable audio mixer to free microphone. 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) #create window 
-pygame.display.set_caption("HoloDesk - Step 5: Gesture + Voice + AI + Desktop Control") #window title 
+pygame.display.set_caption("HoloDesk - Step 5.5: V-Gesture Voice + Toggle Scroll") #window title 
 clock = pygame.time.Clock()  # controls timing 
 cap = cv2.VideoCapture(0) # open webcam ( 0= default camera)
 
@@ -82,8 +86,7 @@ card_color = (255, 0, 0) # red
 # Grab state
 is_grabbing = False
 
-# v gesture for voice activation ( instead of spacebar)
-v_gesture_cooldown = 0 # prevents triggering multiple times 
+# (V-gesture replaced with Call Me gesture 🤙) 
 
 #=============VOICE SETUP============== 
 recognizer = sr.Recognizer()
@@ -103,15 +106,46 @@ last_command = ""
 is_listening = False
 ready_to_speak = False  # Shows "SPEAK NOW!" on screen
 
+# ====== Toggle States (Simplified) ======
+is_scrolling = False        # When True = continuously scrolling
+scroll_direction = 0        # 1 = up, -1 = down, 0 = stopped
+v_gesture_cooldown = 0      # Prevents rapid V-gesture triggers
+open_palm_cooldown = 0      # Prevents rapid stop triggers
+is_ai_speaking = False      # Track if AI is currently talking
+stop_speaking_flag = False  # Signal to stop speech
+frame_count = 0             # Frame counter for throttling operations
+
+# Global speaker object for interruption support
+sapi_speaker = None
+
 #Function to speak using Windows SAPI directly (more reliable than pyttsx3)
 def speak(text): 
+    global is_ai_speaking, stop_speaking_flag, sapi_speaker
+    
+    # Check if we should stop before even starting
+    if stop_speaking_flag:
+        stop_speaking_flag = False
+        return
+        
+    is_ai_speaking = True
     print(f"SPEAKING: {text}")  # Debug
     try:
         import comtypes.client  # Windows COM interface
-        speaker = comtypes.client.CreateObject("SAPI.SpVoice")
-        speaker.Rate = 1  # Speed: -10 (slow) to 10 (fast)
-        speaker.Volume = 100  # Volume: 0 to 100
-        speaker.Speak(text)
+        sapi_speaker = comtypes.client.CreateObject("SAPI.SpVoice")
+        sapi_speaker.Rate = 1  # Speed: -10 (slow) to 10 (fast)
+        sapi_speaker.Volume = 100  # Volume: 0 to 100
+        
+        # Async speech (1 = SVSFlagsAsync) so we can interrupt
+        sapi_speaker.Speak(text, 1)
+        
+        # Wait for speech to finish, but check stop flag
+        while sapi_speaker.Status.RunningState == 2:  # 2 = SRSEIsSpeaking
+            if stop_speaking_flag:
+                sapi_speaker.Speak("", 2)  # 2 = SVSFPurgeBeforeSpeak (stops speech)
+                print("SPEECH INTERRUPTED!")
+                break
+            time.sleep(0.1)  # Check every 100ms
+            
         print("SPEECH DONE")  # Confirm it finished
     except Exception as e:
         print(f"SPEECH ERROR: {e}")
@@ -127,8 +161,18 @@ def speak(text):
             print("SPEECH DONE (fallback)")
         except Exception as e2:
             print(f"FALLBACK SPEECH ERROR: {e2}")
+    finally:
+        is_ai_speaking = False
+        stop_speaking_flag = False
+
+def stop_ai_speech():
+    """Stop the AI from speaking immediately"""
+    global stop_speaking_flag
+    stop_speaking_flag = True
+    print(">>> STOP SPEECH SIGNAL SENT <<<")
 
 #Function to listen for voice commands ( runs in the background)
+# Single activation: V-gesture → listen → process → auto OFF
 def listen_for_command():
     global last_command, is_listening, ready_to_speak
 
@@ -176,7 +220,8 @@ def listen_for_command():
             print(f"Error : {e}")
         finally: 
             is_listening = False 
-            ready_to_speak = False 
+            ready_to_speak = False
+            # Mic automatically turns OFF after processing - use V gesture to listen again! 
 
 
 #============MAIN LOOP============== 
@@ -232,54 +277,111 @@ while running :
             pinch_threshold = 50  # pixels 
             is_pinching = distance < pinch_threshold 
 
-            # ======= Voice Activation (V-Gesture) ======= 
-            # Get finger landmarks 
-            middle_tip = hand_landmarks.landmark[12] # middle finger tip 
-            middle_base = hand_landmarks.landmark[9] # middle finger base
-            ring_tip = hand_landmarks.landmark[16] # ring finger tip
-            ring_base = hand_landmarks.landmark[13] # ring finger base
-            pinky_tip = hand_landmarks.landmark[20] # pinky finger tip
-            pinky_base = hand_landmarks.landmark[17] # pinky finger base
+            # ======= Finger Landmarks (used for all gestures) ======= 
+            middle_tip = hand_landmarks.landmark[12]   # middle finger tip 
+            middle_base = hand_landmarks.landmark[9]   # middle finger base
+            ring_tip = hand_landmarks.landmark[16]     # ring finger tip
+            ring_base = hand_landmarks.landmark[13]    # ring finger base
+            pinky_tip = hand_landmarks.landmark[20]    # pinky finger tip
+            pinky_base = hand_landmarks.landmark[17]   # pinky finger base
+            index_mcp = hand_landmarks.landmark[5]     # index finger knuckle
+            
+            # ======= Check which fingers are UP or DOWN =======
+            # STRICT thresholds to avoid false triggers!
+            index_up = index_tip.y < index_mcp.y - 0.08      # index CLEARLY up
+            middle_up = middle_tip.y < middle_base.y - 0.08  # middle CLEARLY up
+            ring_up = ring_tip.y < ring_base.y               # ring up?
+            pinky_up = pinky_tip.y < pinky_base.y            # pinky up?
+            thumb_out = abs(thumb_tip.x - index_mcp.x) > 0.1  # thumb sticking out sideways?
+            
+            index_down = index_tip.y > index_mcp.y + 0.05    # index CLEARLY curled
+            middle_down = middle_tip.y > middle_base.y + 0.05  # middle CLEARLY curled
+            ring_down = ring_tip.y > ring_base.y + 0.03      # ring curled
+            pinky_down = pinky_tip.y > pinky_base.y + 0.03   # pinky curled
 
-            #check which fingers are up ( tip higher than base = smaller y value )
-            index_up = index_tip.y < hand_landmarks.landmark[5].y # is index finger up?
-            middle_up = middle_tip.y < middle_base.y # is middle finger up?
-            ring_down = ring_tip.y > ring_base.y # is ring finger down?
-            pinky_down = pinky_tip.y > pinky_base.y # is pinky finger down?
-
-            # V gesture: index and middle up , ring and pinky down 
-            is_v_gesture = index_up and middle_up and ring_down and pinky_down
-
-            # Activate voice with v gesture !
+            # ======= STRICT V-GESTURE ✌️ (Single Voice Activation) =======
+            # Index VERY high + Middle VERY high + Ring CLEARLY down + Pinky CLEARLY down
+            is_v_gesture = (
+                index_up and            # Index finger clearly UP
+                middle_up and           # Middle finger clearly UP  
+                ring_down and           # Ring finger clearly DOWN
+                pinky_down and          # Pinky finger clearly DOWN
+                not is_open_palm        # Make sure it's not open palm (add this check below)
+            )
+            
+            # First check for open palm (before V-gesture to avoid conflict)
+            is_open_palm_check = (
+                index_tip.y < index_mcp.y and 
+                middle_tip.y < middle_base.y and 
+                ring_tip.y < ring_base.y and 
+                pinky_tip.y < pinky_base.y
+            )
+            
+            # Re-evaluate V-gesture with palm check
+            is_v_gesture = (
+                index_up and            
+                middle_up and           
+                ring_down and           
+                pinky_down and          
+                not is_open_palm_check  # NOT open palm!
+            )
+            
+            # Activate voice with V gesture (single activation - not toggle!)
             if is_v_gesture and not is_listening and v_gesture_cooldown <= 0:
-                print("V Gesture detected! Activating voice activation...")
+                print("✌️ V-GESTURE detected! Starting voice...")
                 threading.Thread(target=listen_for_command, daemon=True).start()
-                v_gesture_cooldown = 60 # Wait 60 frames (1 second) before allowing another v gesture
+                v_gesture_cooldown = 90  # 1.5 second cooldown (longer to prevent re-trigger)
+            
+            # ======= OPEN PALM ✋ (Stop scrolling + Stop AI speech) =======
+            # All 5 fingers extended (already checked above as is_open_palm_check)
+            is_open_palm = is_open_palm_check and thumb_out
+            
+            # Open palm stops everything!
+            if is_open_palm and open_palm_cooldown <= 0:
+                # Stop scrolling
+                if is_scrolling:
+                    is_scrolling = False
+                    scroll_direction = 0
+                    print("✋ OPEN PALM - Scrolling stopped!")
+                
+                # Stop AI speech
+                if is_ai_speaking:
+                    stop_ai_speech()
+                    print("✋ OPEN PALM - AI speech stopped!")
+                
+                open_palm_cooldown = 30  # 0.5 second cooldown
 
-            # ======= THUMBS UP/DOWN for Continuous Scrolling =======
+            # ======= THUMBS UP/DOWN for TOGGLE Scrolling =======
             thumb_base = hand_landmarks.landmark[2]   # Thumb base (near palm)
-            index_mcp = hand_landmarks.landmark[5]    # Index finger knuckle
             
             # Check if fingers are curled (fist shape - all fingertips below their base)
             fingers_curled = (
-                index_tip.y > index_mcp.y and      # Index curled
-                middle_tip.y > middle_base.y and   # Middle curled
-                ring_tip.y > ring_base.y and       # Ring curled
-                pinky_tip.y > pinky_base.y         # Pinky curled
+                index_down and      # Index curled
+                middle_down and     # Middle curled
+                ring_down and       # Ring curled
+                pinky_down          # Pinky curled
             )
             
             # Thumbs UP: thumb tip is much higher than index knuckle, fingers curled
             is_thumbs_up = thumb_tip.y < index_mcp.y - 0.08 and fingers_curled
             
             # Thumbs DOWN: thumb tip is much lower than thumb base, fingers curled  
-            is_thumbs_down = thumb_tip.y > thumb_base.y + 0.08 and fingers_curled
+            is_thumbs_down = thumb_tip.y > index_mcp.y + 0.08 and fingers_curled
             
-            # Continuous scroll while holding gesture (only when not listening)
-            if is_thumbs_up and not is_listening and not is_v_gesture:
-                pyautogui.scroll(50)  # Scroll UP continuously - FAST!
+            # TOGGLE scrolling with thumbs up/down (one gesture = start, stays on)
+            if is_thumbs_up and not is_listening and not is_scrolling:
+                is_scrolling = True
+                scroll_direction = 1  # UP
+                print("👍 THUMBS UP - Scrolling UP started!")
                 
-            if is_thumbs_down and not is_listening and not is_v_gesture:
-                pyautogui.scroll(-50)  # Scroll DOWN continuously - FAST!
+            if is_thumbs_down and not is_listening and not is_scrolling:
+                is_scrolling = True
+                scroll_direction = -1  # DOWN
+                print("👎 THUMBS DOWN - Scrolling DOWN started!")
+            
+            # Actually perform the continuous scrolling (every 5th frame to save CPU)
+            if is_scrolling and frame_count % 5 == 0:
+                pyautogui.scroll(scroll_direction * 50)  # Scroll speed
 
             # ======= Grab Logic ======= (State Machine)
 
@@ -298,14 +400,26 @@ while running :
                 card_x = cursor_x - card_width // 2 
                 card_y = cursor_y - card_height // 2
 
-            # Decrease V gesture cooldown timer 
+            # Decrease cooldown timers 
             if v_gesture_cooldown > 0:
                 v_gesture_cooldown -= 1
+            if open_palm_cooldown > 0:
+                open_palm_cooldown -= 1
         
     # ==== PROCESS VOICE COMMANDS ==== 
     if last_command:
         print(f"PROCESSING COMMAND: {last_command}")  # Debug
-        if "reset" in last_command:
+        
+        # ===== STOP COMMAND (Stops scrolling) =====
+        if last_command == "stop" or "stop scrolling" in last_command or "stop scroll" in last_command:
+            if is_scrolling:
+                is_scrolling = False
+                scroll_direction = 0
+                threading.Thread(target=speak, args=("Scrolling stopped!",), daemon=True).start()
+            else:
+                threading.Thread(target=speak, args=("Nothing to stop.",), daemon=True).start()
+        
+        elif "reset" in last_command:
             card_x = 400 
             card_y = 300 
             threading.Thread(target=speak, args=("Card reset!",), daemon=True).start()
@@ -452,26 +566,50 @@ while running :
     fps_text = font.render(f"FPS: {int(fps)}", True, (0, 255, 0)) 
     screen.blit(fps_text, (10, 10))  # blit = " copy this image onto the screen"
 
-    #7 show listening status
+    # ======= STATUS INDICATORS (top-right corner) =======
+    status_font = pygame.font.Font(None, 28)
+    status_y = 10
+    
+    # Help hint (always show)
+    hint_text = status_font.render("V = Voice | Palm = Stop", True, (150, 150, 150))  # Gray
+    screen.blit(hint_text, (WINDOW_WIDTH - 250, status_y))
+    
+    # Scrolling indicator
+    status_y += 25
+    if is_scrolling:
+        if scroll_direction > 0:
+            scroll_status = status_font.render("[SCROLL] UP ^", True, (0, 200, 255))  # Cyan
+        else:
+            scroll_status = status_font.render("[SCROLL] DOWN v", True, (255, 200, 0))  # Yellow
+        screen.blit(scroll_status, (WINDOW_WIDTH - 250, status_y))
+        status_y += 25
+    
+    # AI Speaking indicator
+    if is_ai_speaking:
+        ai_status = status_font.render("[AI] SPEAKING... (Palm=Stop)", True, (255, 100, 255))  # Pink
+        screen.blit(ai_status, (WINDOW_WIDTH - 250, status_y))
+    
+    #7 show listening status (center of screen when active)
     if is_listening:
         if ready_to_speak:
             # Big green "SPEAK NOW!" when ready
             big_font = pygame.font.Font(None, 72)
-            speak_text = big_font.render("SPEAK NOW!", True, (0, 255, 0))
+            speak_text = big_font.render(">>> SPEAK NOW! <<<", True, (0, 255, 0))
             # Center it on screen
             text_rect = speak_text.get_rect(center=(WINDOW_WIDTH // 2, 80))
             screen.blit(speak_text, text_rect)
         else:
             # Yellow "Preparing..." while adjusting for noise
             listening_text = font.render("Preparing mic...", True, (255, 255, 0))
-            screen.blit(listening_text, (10, 50))
+            screen.blit(listening_text, (WINDOW_WIDTH // 2 - 80, 50))
 
     #7. Draw cursor dot 
     pygame.draw.circle(screen, (255,0,0), (cursor_x, cursor_y), 15) 
 
     #8. Update display
     pygame.display.flip() # update the display to show the new frame
-    clock.tick(FPS_CAP) 
+    clock.tick(FPS_CAP)
+    frame_count += 1  # Increment frame counter
 
 # ==============CLEAN UP============== 
 cap.release()

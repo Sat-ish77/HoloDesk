@@ -7,7 +7,7 @@ A **gesture-controlled AI desktop assistant** - like having Jarvis on your compu
 
 ---
 
-## Current Status: Step 5 COMPLETE ✅
+## Current Status: Step 5.5 COMPLETE ✅
 
 ---
 
@@ -171,7 +171,7 @@ is_v_gesture = index_up and middle_up and ring_down and pinky_down
 ```
 holodesk/
 ├── app/
-│   └── main.py              ← ALL the code (~485 lines)
+│   └── main.py              ← ALL the code (~630 lines)
 ├── audio/                    ← Empty (for future)
 ├── vision/                   ← Empty (for future)
 ├── storage/                  ← Empty (for future)
@@ -187,26 +187,27 @@ holodesk/
 
 # ALL VOICE COMMANDS
 
-| Command | What it does | Code location |
-|---------|--------------|---------------|
-| "reset" / "reset the card" | Move card to center | Line ~300 |
-| "color red/blue/green/yellow/purple/orange/white/black/pink" | Change card color | Line ~305 |
-| "color" (no specific color) | Random color | Line ~325 |
-| "scroll up" / "screw up" / "scrawl up" | Scroll page up | Line ~350 |
-| "scroll down" / "screw down" | Scroll page down | Line ~355 |
-| "scroll up/down a lot" | Big scroll | Same lines |
-| "open chrome" | Opens Chrome browser | Line ~365 |
-| "open facebook" | Opens Facebook in Chrome | Line ~370 |
-| "open youtube" | Opens YouTube in Chrome | Line ~375 |
-| "open netflix" | Opens Netflix in Chrome | Line ~380 |
-| "open notepad" | Opens Notepad | Line ~385 |
-| "minimize" / "minimize window" | Minimize current window | Line ~395 |
-| "close window" / "close this" / "close app" | Close current window | Line ~390 |
-| "hello" / "hi" | Greeting response | Line ~330 |
-| "bye" / "goodbye" | Farewell response | Line ~332 |
-| "help" | List commands | Line ~338 |
-| "thank you" / "thanks" | You're welcome | Line ~336 |
-| Anything else | Sent to AI for response | Line ~410 |
+| Command | What it does |
+|---------|--------------|
+| **"stop"** / "stop scrolling" | Stop scrolling |
+| "reset" / "reset the card" | Move card to center |
+| "color red/blue/green/yellow/purple/orange/white/black/pink" | Change card color |
+| "color" (no specific color) | Random color |
+| "scroll up" / "screw up" / "scrawl up" | Scroll page up |
+| "scroll down" / "screw down" | Scroll page down |
+| "scroll up/down a lot" | Big scroll |
+| "open chrome" | Opens Chrome browser |
+| "open facebook" | Opens Facebook in Chrome |
+| "open youtube" | Opens YouTube in Chrome |
+| "open netflix" | Opens Netflix in Chrome |
+| "open notepad" | Opens Notepad |
+| "minimize" / "minimize window" | Minimize current window |
+| "close window" / "close this" / "close app" | Close current window |
+| "hello" / "hi" | Greeting response |
+| "bye" / "goodbye" | Farewell response |
+| "help" | List commands |
+| "thank you" / "thanks" | You're welcome |
+| Anything else | Sent to AI for response |
 
 ---
 
@@ -216,9 +217,10 @@ holodesk/
 |---------|--------------|-----------------|
 | ☝️ Point (index finger) | Move cursor | Track landmark 8 position |
 | 🤏 Pinch (thumb + index close) | Grab/drag objects | Distance < 50 pixels |
-| ✌️ V sign (peace) | Activate voice listening | Index+Middle UP, Ring+Pinky DOWN |
-| 👍 Thumbs up | Scroll up continuously | Thumb UP, all fingers curled |
-| 👎 Thumbs down | Scroll down continuously | Thumb DOWN, all fingers curled |
+| ✌️ V-Gesture (peace sign) | Activate voice (single use) | Index+Middle CLEARLY UP, Ring+Pinky CLEARLY DOWN |
+| 👍 Thumbs up (once) | START scrolling up | Thumb UP, all fingers curled |
+| 👎 Thumbs down (once) | START scrolling down | Thumb DOWN, all fingers curled |
+| ✋ Open Palm | STOP scrolling + STOP AI speech | All 5 fingers extended |
 
 ---
 
@@ -231,6 +233,9 @@ holodesk/
 | "hi" triggers on "something" | Substring match | Changed to whole-word matching |
 | Voice not detected | Pygame using mic | Added `pygame.mixer.quit()` |
 | TTS no audio | pyttsx3 threading bug | Switched to Windows SAPI |
+| Call Me gesture = thumbs up | Gestures too similar | Removed Call Me, use V-gesture |
+| "holo on" doesn't work | Can't hear if mic is off! | Removed, use V-gesture instead |
+| Always-on mic unreliable | Background noise, CPU | Removed, single activation only |
 
 ---
 
@@ -242,9 +247,91 @@ python app/main.py
 ```
 
 Wait for "Whisper model loaded successfully!" then:
-- Show ✌️ to activate voice
-- Show 👍/👎 to scroll
+- Show ✌️ (V-gesture / peace sign) to activate voice → speak → auto off
+- Show 👍 (once) to START scrolling up
+- Show 👎 (once) to START scrolling down
+- Show ✋ (Open Palm) to STOP scrolling or STOP AI speech
 - Pinch to grab the card
+
+---
+
+## Step 5.5: Simplified Voice + Toggle Scroll + Palm Stop
+**What we did:** Simplified the UX after learning that "always-on mic" doesn't work well!
+
+### What we TRIED (and failed):
+- ❌ **Call Me gesture** = confused with thumbs up
+- ❌ **"holo on/off" commands** = can't say them if mic is off! (chicken-and-egg)
+- ❌ **Always-on listening** = background noise, unreliable
+
+### What we KEPT (works great!):
+
+#### 1. STRICT V-Gesture ✌️ (Single Voice Activation)
+**How to do it:** Index + Middle UP, Ring + Pinky DOWN (peace sign)
+
+**How it works:**
+- Show ✌️ → Mic ON → Speak command → Mic auto OFF
+- Show ✌️ again for next command
+- Simple and reliable!
+
+**Strict detection (avoids false triggers):**
+```python
+is_v_gesture = (
+    index_tip.y < index_mcp.y - 0.08 and   # Index CLEARLY up
+    middle_tip.y < middle_base.y - 0.08 and # Middle CLEARLY up
+    ring_tip.y > ring_base.y + 0.03 and    # Ring clearly down
+    pinky_tip.y > pinky_base.y + 0.03 and  # Pinky clearly down
+    not is_open_palm                        # NOT open palm!
+)
+```
+
+#### 2. Toggle Scrolling (Works Great!)
+- 👍 Thumbs up ONCE = START scrolling up
+- 👎 Thumbs down ONCE = START scrolling down
+- Keeps scrolling until stopped!
+
+#### 3. Open Palm ✋ (Stop Everything)
+- Stops scrolling
+- Stops AI speech
+- Universal "STOP" gesture
+
+#### 4. AI Speech Interruption
+- `speak()` runs asynchronously
+- Open palm sets `stop_speaking_flag = True`
+- AI stops immediately!
+
+---
+
+### What We Learned (Important!):
+
+| What we tried | Why it failed |
+|---------------|---------------|
+| "holo on" voice command | Can't hear it if mic is OFF! |
+| Always-on listening | Background noise, CPU usage, unreliable |
+| Call Me gesture 🤙 | Too similar to thumbs up, false triggers |
+| Continuous listening | Gaps between processing = missed commands |
+
+**Key Lesson:** Simple > Smart. Single activation is more reliable than always-on!
+
+---
+
+### Current State Variables:
+```python
+is_scrolling = False        # Toggle for continuous scrolling
+scroll_direction = 0        # 1=up, -1=down, 0=stopped
+v_gesture_cooldown = 0      # Prevents rapid V-gesture triggers
+open_palm_cooldown = 0      # Prevents rapid stop triggers
+is_ai_speaking = False      # Track if AI is talking
+stop_speaking_flag = False  # Signal to interrupt speech
+```
+
+---
+
+### Future Improvement (Paid):
+To enable "Hey Holo" wake word activation:
+- Use **Picovoice Porcupine** (wake word detection library)
+- Tiny model listens ONLY for "Hey Holo"
+- When detected → activate full Whisper
+- Requires paid API key
 
 ---
 
@@ -299,10 +386,10 @@ https://github.com/Sat-ish77/HoloDesk
 # FOR NEW CHAT SESSION
 
 When starting a new chat, say:
-> "Please read @PROJECT_STATE.md and help me continue building HoloDesk. We're on Step 5 complete, ready for Step 6."
+> "Please read @PROJECT_STATE.md and help me continue building HoloDesk. We're on Step 5.5 complete (simplified), ready for Step 6."
 
 ---
 
-**Last Updated:** Step 5 Complete
-**Lines of Code:** ~485
+**Last Updated:** Step 5.5 Complete (Simplified: V-gesture voice, toggle scroll, palm stop)
+**Lines of Code:** ~618
 **Author:** Satish Wagle

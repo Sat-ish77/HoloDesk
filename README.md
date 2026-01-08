@@ -25,12 +25,13 @@ This project was built **incrementally from scratch** as a learning journey into
 |---------|-------------|
 | ✋ **Hand Cursor** | Move cursor with your index finger |
 | 🤏 **Pinch to Grab** | Pinch gesture to grab and drag on-screen objects |
-| ✌️ **V-Gesture Voice** | Show peace sign (V) to activate voice commands |
-| 🎙️ **Voice Commands** | "scroll down", "open chrome", "change color to red" |
+| ✌️ **V-Gesture Voice** | Show peace sign → speak command → auto off |
+| 🎙️ **Voice Commands** | "scroll down", "open chrome", "change color", etc. |
 | 🧠 **AI Conversations** | Ask anything - powered by Groq LLM (Llama 3.1) |
-| 👆👇 **Gesture Scroll** | Thumbs up/down for continuous scrolling |
+| 👍👎 **Toggle Scroll** | Thumbs up/down ONCE = continuous scrolling |
+| ✋ **Open Palm Stop** | Stop scrolling OR stop AI speech instantly |
 | 🖥️ **App Control** | Open Chrome, Notepad, Facebook, YouTube, Netflix |
-| 🔊 **Text-to-Speech** | AI speaks responses back to you |
+| 🔊 **Interruptible TTS** | AI speaks - but you can stop it with palm! |
 
 ---
 
@@ -43,7 +44,8 @@ This project was built **incrementally from scratch** as a learning journey into
 | Step 2 | ✅ Done | Pinch gesture → grab & drag virtual card |
 | Step 3 | ✅ Done | Voice commands with Whisper STT + Windows SAPI TTS |
 | Step 4 | ✅ Done | AI agent integration (Groq LLM API) |
-| Step 5 | ✅ Done | Desktop control (scroll, apps, V-gesture activation) |
+| Step 5 | ✅ Done | Desktop control (scroll, apps, gesture activation) |
+| Step 5.5 | ✅ Done | Simplified: V-gesture voice, toggle scroll, palm stop |
 
 ---
 
@@ -110,13 +112,15 @@ python app/main.py
 
 | Input | Action |
 |-------|--------|
-| ✌️ V-Gesture | Activate voice command |
+| ✌️ **V-Gesture (peace sign)** | Start voice command (auto-off after) |
 | 🤏 Pinch | Grab/release objects |
-| 👆 Thumbs Up | Scroll up continuously |
-| 👇 Thumbs Down | Scroll down continuously |
+| 👍 Thumbs Up (once) | START scrolling up |
+| 👎 Thumbs Down (once) | START scrolling down |
+| ✋ **Open Palm** | STOP scrolling / STOP AI speech |
 
 ### Voice Commands
 
+- `"stop"` - Stop scrolling
 - `"hello"` - Greeting
 - `"change color to [red/blue/green/purple/yellow]"` - Change card color
 - `"reset"` - Reset card position and color
@@ -156,6 +160,10 @@ Key concepts explored in this project:
 3. **Coordinate Systems** - Transforming hand positions to screen coordinates
 4. **API Integration** - Connecting to LLM services for AI responses
 5. **Desktop Automation** - Controlling OS-level actions from Python
+6. **Toggle States** - Scroll mode persists until palm stop
+7. **Async Speech** - Interruptible text-to-speech using Windows SAPI
+8. **Gesture Recognition** - V-gesture, thumbs up/down, open palm
+9. **UX Iteration** - Learned that "always-on mic" causes more problems than it solves!
 
 ---
 
