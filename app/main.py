@@ -14,13 +14,66 @@ from faster_whisper import WhisperModel
 import tempfile 
 import wave 
 import pyautogui 
+# ===== STEP 6: WINDOW TRANSPARENCY IMPORTS =====
+try: 
+    import win32gui      # Access Windows window management
+    import win32con      # Windows constants (flags)
+    import win32api      # Windows API functions (RGB color conversion)
+    WIN32_AVAILABLE = True
+    print("[OK] Windows API loaded - Transparency enabled!")
+except ImportError:
+    WIN32_AVAILABLE = False
+    print("[WARNING] pywin32 not installed. Run: pip install pywin32")
 
 # Disable pyautogui's built-in delay (default is 0.1 sec between actions = SLOW!)
 pyautogui.PAUSE = 0
 pyautogui.FAILSAFE = False  # Disable fail-safe (moving mouse to corner won't crash)
 
+
+
 #====AI SETUP====
 grok_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+# ===== STEP 6: TRANSPARENCY SETUP FUNCTION =====
+def setup_transparent_window(hwnd):
+    """
+    Makes the Pygame window transparent and always-on-top.
+    
+    What this does:
+    1. Adds WS_EX_LAYERED flag (enables transparency support)
+    2. Sets color key transparency (black = invisible)
+    3. Makes window always-on-top (stays above all apps)
+    """
+    if not WIN32_AVAILABLE:
+        return
+    
+    try:
+        # Step 1: Get current window style
+        current_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+        
+        # Step 2: Add WS_EX_LAYERED flag (enables transparency)
+        new_style = current_style | win32con.WS_EX_LAYERED
+        win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, new_style)
+        
+        # Step 3: Set color key transparency (black becomes invisible)
+        win32gui.SetLayeredWindowAttributes(
+            hwnd,
+            win32api.RGB(0, 0, 0),  # Black color = transparent
+            0,                      # Alpha value (not used with color key)
+            win32con.LWA_COLORKEY   # Use color key mode
+        )
+        
+        # Step 4: Make window always-on-top
+        win32gui.SetWindowPos(
+            hwnd,
+            win32con.HWND_TOPMOST,
+            0, 0, 0, 0,
+            win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
+        )
+        
+        print("[OK] Window is now transparent and always-on-top!")
+    except Exception as e:
+        print(f"[WARNING] Transparency setup failed: {e}")
 
 def ask_ai(question):
     '''Ask the AI a question and get a response'''
@@ -49,8 +102,23 @@ FPS_CAP = 60 # frames per second
 # SETUP 
 pygame.init()  #  start pygame engine 
 pygame.mixer.quit() # disable audio mixer to free microphone. 
-screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT)) #create window 
-pygame.display.set_caption("HoloDesk - Step 5.5: V-Gesture Voice + Toggle Scroll") #window title 
+
+# ===== STEP 6: CREATE BORDERLESS WINDOW =====
+# pygame.NOFRAME = removes title bar, minimize/maximize buttons, borders
+screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.NOFRAME)
+pygame.display.set_caption("HoloDesk - Step 6: Transparent Overlay")
+
+# ===== STEP 6: GET WINDOW HANDLE (HWND) AND APPLY TRANSPARENCY =====
+hwnd = None
+if WIN32_AVAILABLE:
+    try:
+        pygame_window_info = pygame.display.get_wm_info()
+        hwnd = pygame_window_info['window']
+        print(f"[OK] Window Handle (HWND): {hwnd}")
+        setup_transparent_window(hwnd)
+    except Exception as e:
+        print(f"[WARNING] Could not get window handle: {e}")
+
 clock = pygame.time.Clock()  # controls timing 
 cap = cv2.VideoCapture(0) # open webcam ( 0= default camera)
 
@@ -114,6 +182,7 @@ open_palm_cooldown = 0      # Prevents rapid stop triggers
 is_ai_speaking = False      # Track if AI is currently talking
 stop_speaking_flag = False  # Signal to stop speech
 frame_count = 0             # Frame counter for throttling operations
+is_v_gesture_active = False # Track V-gesture state (for UI display)
 
 # Global speaker object for interruption support
 sapi_speaker = None
@@ -235,8 +304,13 @@ while running :
         if event.type == pygame.QUIT: 
             running = False 
 
+        # ===== STEP 6: ESC KEY TO EXIT (no title bar = no X button!) =====
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:  # ESC key pressed
+                print("ESC pressed - Exiting HoloDesk...")
+                running = False
 
-        # 2 Press spacebar to toggle voice command 
+        # 2 Press spacebar to toggle voice command (still works as backup)
         if event.type == pygame.KEYDOWN: 
             if event.key == pygame.K_SPACE and not is_listening:
                 # start listening in background thread 
@@ -332,6 +406,9 @@ while running :
                 threading.Thread(target=listen_for_command, daemon=True).start()
                 v_gesture_cooldown = 90  # 1.5 second cooldown (longer to prevent re-trigger)
             
+            # Update global V-gesture state (for UI display)
+            is_v_gesture_active = is_v_gesture
+            
             # ======= OPEN PALM ✋ (Stop scrolling + Stop AI speech) =======
             # All 5 fingers extended (already checked above as is_open_palm_check)
             is_open_palm = is_open_palm_check and thumb_out
@@ -381,7 +458,7 @@ while running :
             
             # Actually perform the continuous scrolling (every 5th frame to save CPU)
             if is_scrolling and frame_count % 5 == 0:
-                pyautogui.scroll(scroll_direction * 50)  # Scroll speed
+                pyautogui.scroll(scroll_direction * 200)  # Scroll speed
 
             # ======= Grab Logic ======= (State Machine)
 
@@ -405,6 +482,9 @@ while running :
                 v_gesture_cooldown -= 1
             if open_palm_cooldown > 0:
                 open_palm_cooldown -= 1
+    else:
+        # No hand detected - reset V-gesture state
+        is_v_gesture_active = False
         
     # ==== PROCESS VOICE COMMANDS ==== 
     if last_command:
@@ -457,7 +537,7 @@ while running :
         elif "thank you" in last_command or "thanks" in last_command:
             threading.Thread(target=speak, args=("You're welcome!",),daemon=True).start()
         elif "help" in last_command:
-            threading.Thread(target=speak, args=("I can help you with the following commands: reset, color, hello, bye, thanks",), daemon=True).start()
+            threading.Thread(target=speak, args=("I can help you with any questions you have. I can also open desktop apps or webpages like Facebook, YouTube, or Netflix. Just ask me anything!",), daemon=True).start()
         
         #==== SCROLL COMMAND ==== (with spelling variations for Whisper mishearing)
         elif "scroll up" in last_command or "scrawl up" in last_command or "screw up" in last_command or "scroll all up" in last_command:
@@ -538,73 +618,90 @@ while running :
 
 
 
-    # Rotate for pygame display (pygame.surfarray needs rotated data)
-    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+    # ===== STEP 6: DON'T DRAW WEBCAM (process in background only) =====
+    # We still process the frame for hand tracking above, but don't display it!
+    # Black fill becomes transparent (color key mode)
+    screen.fill((0, 0, 0))  # Fill entire screen with black (transparent)
 
-    # Create pygame surface from the frame 
-    frame_surface = pygame.surfarray.make_surface(frame)
-
-    # Scale to fit window 
-    frame_surface = pygame.transform.scale(frame_surface, (WINDOW_WIDTH, WINDOW_HEIGHT))
+    # ===== STEP 6: CUSTOM UI ELEMENTS (ONLY VISIBLE PARTS) =====
     
-    # Mirror horizontally AND flip vertically to correct orientation
-    frame_surface = pygame.transform.flip(frame_surface, True, True)
-
-    #4. DRAW EVERYTHING 
-    screen.blit(frame_surface, (0,0))
-
-    #5. Draw Draggable Card 
-    pygame.draw.rect(screen, card_color, (card_x, card_y, card_width, card_height))
-
-    #Draw border ( thicker when grabbing)
-    border_color = (255, 255, 0 ) if is_grabbing else (255, 255, 255)
-    border_width = 5 if is_grabbing else 2
-    pygame.draw.rect(screen, border_color, (card_x, card_y, card_width, card_height), border_width)
-    #6. Calculate and display FPS 
-    fps = clock.get_fps()
-    font = pygame.font.Font(None, 36) 
-    fps_text = font.render(f"FPS: {int(fps)}", True, (0, 255, 0)) 
-    screen.blit(fps_text, (10, 10))  # blit = " copy this image onto the screen"
-
-    # ======= STATUS INDICATORS (top-right corner) =======
-    status_font = pygame.font.Font(None, 28)
+    # Check if hand is detected (for cursor visibility)
+    hand_detected = results.multi_hand_landmarks is not None
+    
+    # ===== 1. GLOWING CURSOR (when hand detected) =====
+    if hand_detected:
+        # Draw multiple circles for "glow" effect (makes cursor visible on any background)
+        pygame.draw.circle(screen, (100, 200, 255), (cursor_x, cursor_y), 25)      # Outer glow (light blue)
+        pygame.draw.circle(screen, (0, 150, 255), (cursor_x, cursor_y), 18, 3)     # Middle ring (blue)
+        pygame.draw.circle(screen, (255, 255, 255), (cursor_x, cursor_y), 8)       # Center dot (white)
+    
+    # ===== 2. GESTURE INDICATORS (top-right corner) =====
+    status_font = pygame.font.Font(None, 32)
     status_y = 10
     
-    # Help hint (always show)
-    hint_text = status_font.render("V = Voice | Palm = Stop", True, (150, 150, 150))  # Gray
-    screen.blit(hint_text, (WINDOW_WIDTH - 250, status_y))
-    
-    # Scrolling indicator
-    status_y += 25
     if is_scrolling:
         if scroll_direction > 0:
-            scroll_status = status_font.render("[SCROLL] UP ^", True, (0, 200, 255))  # Cyan
+            gesture_text = status_font.render("👍 SCROLLING UP", True, (0, 255, 100))  # Green
         else:
-            scroll_status = status_font.render("[SCROLL] DOWN v", True, (255, 200, 0))  # Yellow
-        screen.blit(scroll_status, (WINDOW_WIDTH - 250, status_y))
-        status_y += 25
+            gesture_text = status_font.render("👎 SCROLLING DOWN", True, (255, 100, 100))  # Red
+        screen.blit(gesture_text, (WINDOW_WIDTH - 280, status_y))
+        status_y += 30
     
-    # AI Speaking indicator
-    if is_ai_speaking:
-        ai_status = status_font.render("[AI] SPEAKING... (Palm=Stop)", True, (255, 100, 255))  # Pink
-        screen.blit(ai_status, (WINDOW_WIDTH - 250, status_y))
+    if is_v_gesture_active and is_listening:
+        gesture_text = status_font.render("✌️ VOICE ACTIVE", True, (255, 255, 0))  # Yellow
+        screen.blit(gesture_text, (WINDOW_WIDTH - 250, status_y))
+        status_y += 30
     
-    #7 show listening status (center of screen when active)
+    # ===== 3. VOICE LISTENING INDICATOR (center of screen) =====
     if is_listening:
         if ready_to_speak:
-            # Big green "SPEAK NOW!" when ready
-            big_font = pygame.font.Font(None, 72)
-            speak_text = big_font.render(">>> SPEAK NOW! <<<", True, (0, 255, 0))
+            # Big pulsing "SPEAK NOW!" when ready
+            big_font = pygame.font.Font(None, 80)
+            speak_text = big_font.render(">>> SPEAK NOW! <<<", True, (0, 255, 0))  # Green
             # Center it on screen
-            text_rect = speak_text.get_rect(center=(WINDOW_WIDTH // 2, 80))
+            text_rect = speak_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
             screen.blit(speak_text, text_rect)
         else:
-            # Yellow "Preparing..." while adjusting for noise
-            listening_text = font.render("Preparing mic...", True, (255, 255, 0))
-            screen.blit(listening_text, (WINDOW_WIDTH // 2 - 80, 50))
+            # Yellow "Preparing mic..." while adjusting for noise
+            prep_font = pygame.font.Font(None, 48)
+            listening_text = prep_font.render("Preparing mic...", True, (255, 255, 0))  # Yellow
+            text_rect = listening_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
+            screen.blit(listening_text, text_rect)
+    
+    # ===== 4. AI SPEAKING INDICATOR =====
+    if is_ai_speaking:
+        ai_font = pygame.font.Font(None, 28)
+        ai_status = ai_font.render("🎤 AI Speaking... (Palm=Stop)", True, (255, 100, 255))  # Pink
+        screen.blit(ai_status, (WINDOW_WIDTH - 300, WINDOW_HEIGHT - 40))
+    
+    # ===== 5. STATUS DOT (bottom-left: green = working, red = no hand) =====
+    status_dot_color = (0, 255, 0) if hand_detected else (255, 0, 0)  # Green or red
+    pygame.draw.circle(screen, status_dot_color, (20, WINDOW_HEIGHT - 20), 8)
+    
+    # ===== 6. FPS COUNTER (optional, top-left, small) =====
+    fps = clock.get_fps()
+    small_font = pygame.font.Font(None, 24)
+    fps_text = small_font.render(f"FPS: {int(fps)}", True, (150, 150, 150))  # Gray
+    screen.blit(fps_text, (10, 10))
+    
+    # ===== 7. ESC KEY HINT (bottom-right) =====
+    hint_font = pygame.font.Font(None, 20)
+    esc_hint = hint_font.render("Press ESC to exit", True, (100, 100, 100))  # Dark gray
+    screen.blit(esc_hint, (WINDOW_WIDTH - 150, WINDOW_HEIGHT - 25)) 
 
-    #7. Draw cursor dot 
-    pygame.draw.circle(screen, (255,0,0), (cursor_x, cursor_y), 15) 
+    # ===== STEP 6: RE-ASSERT ALWAYS-ON-TOP (every 60 frames = once per second) =====
+    # Windows might try to remove always-on-top when other apps request focus
+    # So we re-apply it periodically to ensure it stays on top!
+    if WIN32_AVAILABLE and hwnd and frame_count % 60 == 0:
+        try:
+            win32gui.SetWindowPos(
+                hwnd,
+                win32con.HWND_TOPMOST,
+                0, 0, 0, 0,
+                win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
+            )
+        except Exception:
+            pass  # Silently fail if window handle is invalid
 
     #8. Update display
     pygame.display.flip() # update the display to show the new frame

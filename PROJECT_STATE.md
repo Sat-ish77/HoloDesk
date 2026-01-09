@@ -7,7 +7,7 @@ A **gesture-controlled AI desktop assistant** - like having Jarvis on your compu
 
 ---
 
-## Current Status: Step 5.5 COMPLETE ✅
+## Current Status: Step 6 COMPLETE ✅
 
 ---
 
@@ -205,7 +205,7 @@ holodesk/
 | "close window" / "close this" / "close app" | Close current window |
 | "hello" / "hi" | Greeting response |
 | "bye" / "goodbye" | Farewell response |
-| "help" | List commands |
+| "help" | AI explains what it can do (questions, open apps/webpages) |
 | "thank you" / "thanks" | You're welcome |
 | Anything else | Sent to AI for response |
 
@@ -335,12 +335,67 @@ To enable "Hey Holo" wake word activation:
 
 ---
 
-# FUTURE ROADMAP
+## Step 6: Transparent Overlay ✅ COMPLETE
+**What we did:** Made the HoloDesk window transparent and always-on-top, so it floats above all apps like a HUD overlay.
 
-### Step 6: Transparent Overlay
-- Make HoloDesk see-through
-- Float on top of other apps
-- Only show cursor and UI elements
+**Key concepts:**
+- **Windows API (win32gui, win32con, win32api):** Direct access to Windows window management
+- **HWND (Window Handle):** Unique identifier for the window
+- **WS_EX_LAYERED:** Windows flag that enables transparency
+- **Color Key Transparency:** Black pixels become invisible (see-through)
+- **HWND_TOPMOST:** Keeps window above all other windows
+
+**How it works:**
+1. Get the Pygame window's HWND (Windows handle)
+2. Add `WS_EX_LAYERED` style flag (enables transparency)
+3. Set color key: black (0,0,0) = transparent
+4. Set window to `HWND_TOPMOST` (always on top)
+5. Draw UI elements in colors (not black) so they're visible
+
+**Code logic:**
+```python
+# Get window handle from Pygame
+pygame_window_info = pygame.display.get_wm_info()
+hwnd = pygame_window_info['window']
+
+# Enable transparency
+current_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
+new_style = current_style | win32con.WS_EX_LAYERED
+win32gui.SetWindowLong(hwnd, win32con.GWL_EXSTYLE, new_style)
+
+# Black = transparent
+win32gui.SetLayeredWindowAttributes(
+    hwnd,
+    win32api.RGB(0, 0, 0),  # Black becomes invisible
+    0,
+    win32con.LWA_COLORKEY
+)
+
+# Always on top
+win32gui.SetWindowPos(
+    hwnd,
+    win32con.HWND_TOPMOST,
+    0, 0, 0, 0,
+    win32con.SWP_NOMOVE | win32con.SWP_NOSIZE
+)
+```
+
+**What you see:**
+- Window has no title bar (borderless)
+- Black background is transparent (you see desktop through it)
+- Blue glowing cursor is visible (not black, so it shows)
+- Status indicators (FPS, gestures) are visible
+- Window stays on top of Chrome, Notepad, etc.
+
+**Dependencies added:**
+- `pywin32` - Windows API access
+
+**Known issues:**
+- Emoji characters (✅, ⚠️) don't work in Windows console → replaced with `[OK]` and `[WARNING]`
+
+---
+
+# FUTURE ROADMAP
 
 ### Step 7: AI Vision
 - Take screenshot of screen
@@ -390,6 +445,6 @@ When starting a new chat, say:
 
 ---
 
-**Last Updated:** Step 5.5 Complete (Simplified: V-gesture voice, toggle scroll, palm stop)
-**Lines of Code:** ~618
+**Last Updated:** Step 6 Complete (Transparent overlay - always-on-top, see-through window)
+**Lines of Code:** ~718
 **Author:** Satish Wagle

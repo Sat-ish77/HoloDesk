@@ -32,6 +32,7 @@ This project was built **incrementally from scratch** as a learning journey into
 | ✋ **Open Palm Stop** | Stop scrolling OR stop AI speech instantly |
 | 🖥️ **App Control** | Open Chrome, Notepad, Facebook, YouTube, Netflix |
 | 🔊 **Interruptible TTS** | AI speaks - but you can stop it with palm! |
+| 👻 **Transparent Overlay** | See-through window that floats above all apps |
 
 ---
 
@@ -46,6 +47,7 @@ This project was built **incrementally from scratch** as a learning journey into
 | Step 4 | ✅ Done | AI agent integration (Groq LLM API) |
 | Step 5 | ✅ Done | Desktop control (scroll, apps, gesture activation) |
 | Step 5.5 | ✅ Done | Simplified: V-gesture voice, toggle scroll, palm stop |
+| Step 6 | ✅ Done | Transparent overlay - always-on-top, see-through window |
 
 ---
 
@@ -55,7 +57,6 @@ This project was built **incrementally from scratch** as a learning journey into
 |---------|-------------|
 | 🔐 **User Authentication** | Email signup + OTP verification |
 | 👤 **Face Recognition** | Login with face detection |
-| 🪟 **Transparent Overlay** | Always-on-top gesture control layer |
 | ♿ **Accessibility Mode** | Full voice-only or gesture-only operation |
 | 🌐 **Multi-language** | Support for non-English speakers |
 | 📊 **Screen Analysis** | AI describes what's on screen (for visually impaired) |
@@ -75,6 +76,7 @@ This project was built **incrementally from scratch** as a learning journey into
 | **Windows SAPI** | Text-to-speech output |
 | **Groq API** | LLM reasoning (Llama 3.1 70B) |
 | **PyAutoGUI** | Desktop automation (scroll, click, hotkeys) |
+| **pywin32** | Windows API for transparent, always-on-top window |
 
 ---
 
