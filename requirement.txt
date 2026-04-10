@@ -1,13 +1,32 @@
-# HOLODESK DEPENDENCIES 
-pygame==2.5.2   # open windows, draw shapes, handles game loop 
-opencv-python==4.9.0.80 #reads webcam, processes images
-mediapipe # Google's hand tracking 
-numpy==1.26.4 # Math operations on arrays (used by opencv)
-SpeechRecognition # captures audio from microphone
-pyttsx3 # makes computer speak ( text to voice) 
-pyaudio # Access the microphone
-faster-whisper # OpenAI Whisper for accurate speech-to-text (better than Google!)
-comtypes # Windows SAPI for reliable text-to-speech
-groq # AI API client
-python-dotenv # Load API keys from .env file
-pywin32 # Windows API access for transparency and always-on-top 
+# HOLODESK DEPENDENCIES
+# Install all: pip install -r requirement.txt
+
+# --- Core UI & Vision ---
+pygame==2.5.2           # overlay window, drawing, game loop
+opencv-python==4.9.0.80 # webcam capture, frame processing
+mediapipe               # Google hand tracking (21 landmarks)
+numpy==1.26.4           # array math used by opencv + gesture math
+
+# --- Voice ---
+SpeechRecognition       # microphone audio capture
+faster-whisper          # local Whisper STT (no API cost, works offline)
+pyaudio                 # low-level microphone access
+comtypes                # Windows SAPI text-to-speech (reliable)
+pyttsx3                 # TTS fallback
+
+# --- AI & APIs ---
+groq                    # Groq API client (Llama 3 — fast, cheap)
+openai                  # GPT-4o Vision for screen analysis (Step 7)
+
+# --- Desktop Control ---
+pyautogui               # scroll, hotkeys, screenshot capture
+Pillow                  # image resizing before API calls (saves cost)
+
+# --- Storage & Memory ---
+psutil                  # read active process name for memory logger
+
+# --- Windows System ---
+pywin32                 # win32gui/win32api — transparency, always-on-top, window titles
+
+# --- Utilities ---
+python-dotenv           # loads API keys from .env file

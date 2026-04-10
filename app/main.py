@@ -1,5 +1,7 @@
 import pygame #window + drawing
-import os 
+import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
 #load api key from .env file 
 load_dotenv() 
@@ -13,7 +15,18 @@ import threading
 from faster_whisper import WhisperModel
 import tempfile 
 import wave 
-import pyautogui 
+import pyautogui
+
+# ===== SCREEN VISION (Step 7) =====
+# Add project root to path so agents/ and connectors/ are importable
+sys.path.insert(0, str(Path(__file__).parent.parent))
+try:
+    from agents.screen_agent import screen_agent
+    SCREEN_VISION_AVAILABLE = True
+    print("[OK] Screen vision loaded - say 'what's on my screen' to use it!")
+except Exception as e:
+    SCREEN_VISION_AVAILABLE = False
+    print(f"[INFO] Screen vision not available: {e}") 
 # ===== STEP 6: WINDOW TRANSPARENCY IMPORTS =====
 try: 
     import win32gui      # Access Windows window management
@@ -184,6 +197,11 @@ stop_speaking_flag = False  # Signal to stop speech
 frame_count = 0             # Frame counter for throttling operations
 is_v_gesture_active = False # Track V-gesture state (for UI display)
 
+# ===== SCREEN VISION STATE (Step 7) =====
+is_analyzing_screen = False   # True while GPT-4o Vision call is in flight
+screen_status_text = ""       # Short status shown on overlay ("Analyzing screen...")
+screen_status_timer = 0       # Frames remaining to show screen_status_text
+
 # Global speaker object for interruption support
 sapi_speaker = None
 
@@ -291,6 +309,61 @@ def listen_for_command():
             is_listening = False 
             ready_to_speak = False
             # Mic automatically turns OFF after processing - use V gesture to listen again! 
+
+
+# ===== SCREEN VISION HELPER (Step 7) =====
+def analyze_screen(question: str = "What is on this screen? Explain it clearly."):
+    """
+    Run GPT-4o Vision in a background thread so the UI never freezes.
+    Notifies the user before sending (privacy transparency).
+    Speaks the result when done.
+    """
+    global is_analyzing_screen, screen_status_text, screen_status_timer
+
+    if not SCREEN_VISION_AVAILABLE:
+        threading.Thread(
+            target=speak,
+            args=("Screen vision is not set up yet. Add your OpenAI API key to the .env file.",),
+            daemon=True
+        ).start()
+        return
+
+    if is_analyzing_screen:
+        return  # Already analyzing — don't stack calls
+
+    def _run():
+        global is_analyzing_screen, screen_status_text, screen_status_timer
+        is_analyzing_screen = True
+        screen_status_text = "Reading screen..."
+        screen_status_timer = 300  # Show for ~5 seconds at 60fps
+
+        # Tell the user we're about to capture — privacy transparency
+        threading.Thread(
+            target=speak,
+            args=("Reading your screen now.",),
+            daemon=True
+        ).start()
+
+        result = screen_agent.execute(question=question)
+
+        if result["success"]:
+            response = result["response"]
+            screen_status_text = "Done."
+            screen_status_timer = 180
+        elif result.get("blocked"):
+            response = result["response"]
+            screen_status_text = "Blocked window."
+            screen_status_timer = 180
+        else:
+            response = result["response"]
+            screen_status_text = "Error."
+            screen_status_timer = 180
+
+        is_analyzing_screen = False
+        # Speak the answer (runs async — UI keeps rendering)
+        threading.Thread(target=speak, args=(response,), daemon=True).start()
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 #============MAIN LOOP============== 
@@ -609,9 +682,38 @@ while running :
                     except:
                         threading.Thread(target=speak, args=(f"Sorry, I couldn't open {app_name}",), daemon=True).start()
 
-        
+        # ===== SCREEN VISION COMMANDS (Step 7) =====
+        elif any(kw in last_command for kw in [
+            "what's on my screen", "whats on my screen",
+            "what is on my screen", "read my screen", "read the screen",
+            "explain this", "explain my screen", "what do you see",
+            "analyze screen", "analyse screen", "screen analysis",
+            "what is this", "explain what's on screen",
+        ]):
+            analyze_screen(question=last_command if len(last_command) > 10 else
+                           "What is on this screen? Explain it clearly.")
+
+        elif any(kw in last_command for kw in [
+            "explain this error", "what's this error", "whats this error",
+            "what is this error", "debug this", "what went wrong",
+        ]):
+            analyze_screen(
+                question="There is an error or bug on this screen. "
+                         "What is it, what caused it, and how do I fix it? "
+                         "Be specific and concise."
+            )
+
+        elif any(kw in last_command for kw in [
+            "explain this code", "what does this code do",
+            "explain the code", "what is this code",
+        ]):
+            analyze_screen(
+                question="Explain what this code does in plain English. "
+                         "Focus on purpose, not syntax. Two sentences max."
+            )
+
         else: 
-            #If no soecific command, ask AI 
+            #If no specific command, ask AI 
             ai_response = ask_ai( last_command )
             threading.Thread(target=speak, args=(ai_response,), daemon=True).start()
         last_command = "" 
@@ -671,8 +773,22 @@ while running :
     # ===== 4. AI SPEAKING INDICATOR =====
     if is_ai_speaking:
         ai_font = pygame.font.Font(None, 28)
-        ai_status = ai_font.render("🎤 AI Speaking... (Palm=Stop)", True, (255, 100, 255))  # Pink
+        ai_status = ai_font.render("AI Speaking... (Palm=Stop)", True, (255, 100, 255))  # Pink
         screen.blit(ai_status, (WINDOW_WIDTH - 300, WINDOW_HEIGHT - 40))
+
+    # ===== 4b. SCREEN VISION STATUS (Step 7) =====
+    if screen_status_timer > 0:
+        screen_status_timer -= 1
+        sv_font = pygame.font.Font(None, 30)
+        if is_analyzing_screen:
+            # Pulsing cyan while GPT-4o is thinking
+            pulse = abs((frame_count % 60) - 30) / 30  # 0.0 to 1.0
+            r = int(0 + 100 * pulse)
+            sv_color = (r, 220, 255)
+        else:
+            sv_color = (100, 255, 180)  # Green when done
+        sv_text = sv_font.render(f"[Vision] {screen_status_text}", True, sv_color)
+        screen.blit(sv_text, (10, WINDOW_HEIGHT - 65))
     
     # ===== 5. STATUS DOT (bottom-left: green = working, red = no hand) =====
     status_dot_color = (0, 255, 0) if hand_detected else (255, 0, 0)  # Green or red
