@@ -9,4 +9,5 @@ pyaudio # Access the microphone
 faster-whisper # OpenAI Whisper for accurate speech-to-text (better than Google!)
 comtypes # Windows SAPI for reliable text-to-speech
 groq # AI API client
-python-dotenv # Load API keys from .env file 
+python-dotenv # Load API keys from .env file
+pywin32 # Windows API access for transparency and always-on-top 
