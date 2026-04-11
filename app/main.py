@@ -1,25 +1,29 @@
-import pygame #window + drawing
+import pygame
 import os
 import sys
+import queue
 from pathlib import Path
 from dotenv import load_dotenv
-#load api key from .env file 
-load_dotenv() 
+load_dotenv()
 from groq import Groq
-import cv2  #webcam 
-import time 
-import mediapipe as mp
+import time
 import speech_recognition as sr
 import pyttsx3
-import threading 
+import threading
 from faster_whisper import WhisperModel
-import tempfile 
-import wave 
+import tempfile
+import wave
 import pyautogui
 
-# ===== SCREEN VISION (Step 7) =====
-# Add project root to path so agents/ and connectors/ are importable
+# Add project root to path so agents/, connectors/, core/, vision/ are importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# ===== THREADING REFACTOR (Step 8) =====
+from core.queues import frame_queue, landmark_queue, gesture_queue
+from core.camera_thread import CameraThread
+from core.vision_thread import VisionThread
+
+# ===== SCREEN VISION (Step 7) =====
 try:
     from agents.screen_agent import screen_agent
     SCREEN_VISION_AVAILABLE = True
@@ -109,7 +113,7 @@ def ask_ai(question):
 #settings 
 WINDOW_WIDTH = 1280 # width of window 
 WINDOW_HEIGHT = 720 # height of window 
-FPS_CAP = 60 # frames per second 
+FPS_CAP = 30  # 30fps — matches camera thread rate, UI has no reason to run faster
 
 
 # SETUP 
@@ -132,24 +136,16 @@ if WIN32_AVAILABLE:
     except Exception as e:
         print(f"[WARNING] Could not get window handle: {e}")
 
-clock = pygame.time.Clock()  # controls timing 
-cap = cv2.VideoCapture(0) # open webcam ( 0= default camera)
+clock = pygame.time.Clock()
 
-
-# reduce webcam resolution to speed up processing 
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640) 
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) 
-
-
-#-----------HAND TRACKING SETUP------------ 
-mp_hands = mp.solutions.hands.Hands(
-    static_image_mode=False,  #False= video mode ( faster ) 
-    max_num_hands=1, #only track one hand 
-    min_detection_confidence=0.5, # confidence threshold for hand detection
-    min_tracking_confidence = 0.5 # confidence threshold for hand tracking 
-
-)
-mp_draw = mp.solutions.drawing_utils # for drawing hand skeleton
+# ===== START BACKGROUND THREADS =====
+# Camera and MediaPipe run on their own threads — main loop never blocks
+camera_thread = CameraThread()
+vision_thread = VisionThread()
+camera_thread.start()
+vision_thread.start()
+print("[OK] Camera thread started")
+print("[OK] Vision thread started")
 
 
 #------cursor position setup------ 
@@ -190,8 +186,8 @@ ready_to_speak = False  # Shows "SPEAK NOW!" on screen
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling
 scroll_direction = 0        # 1 = up, -1 = down, 0 = stopped
-v_gesture_cooldown = 0      # Prevents rapid V-gesture triggers
-open_palm_cooldown = 0      # Prevents rapid stop triggers
+v_gesture_cooldown = 0      # Prevents rapid V-gesture triggers (recalibrated for 30fps)
+open_palm_cooldown = 0      # Prevents rapid stop triggers (recalibrated for 30fps)
 is_ai_speaking = False      # Track if AI is currently talking
 stop_speaking_flag = False  # Signal to stop speech
 frame_count = 0             # Frame counter for throttling operations
@@ -201,6 +197,15 @@ is_v_gesture_active = False # Track V-gesture state (for UI display)
 is_analyzing_screen = False   # True while GPT-4o Vision call is in flight
 screen_status_text = ""       # Short status shown on overlay ("Analyzing screen...")
 screen_status_timer = 0       # Frames remaining to show screen_status_text
+
+# ===== THREADING STATE (Step 8) =====
+latest_landmarks = None   # Most recent hand landmarks from vision thread (or None)
+is_pinching = False       # Tracked here; reset when no hand detected
+
+# Thumbs debounce — require 5 consecutive frames to prevent accidental scroll start
+thumbs_up_frames   = 0
+thumbs_down_frames = 0
+THUMBS_REQUIRED_FRAMES = 5
 
 # Global speaker object for interruption support
 sapi_speaker = None
@@ -389,175 +394,124 @@ while running :
                 # start listening in background thread 
                 threading.Thread(target=listen_for_command, daemon=True).start()
     
-    #2. Read webcam frame (this is where the webcam image is read)
-    success, frame = cap.read()
-    if not success: 
-        continue 
+    # ===== STEP 8: READ FROM QUEUES (non-blocking — never waits) =====
 
-    #3. Convert frame for pygame 
-    #opencv uses BGR (blue, green, red) but pygame uses RGB (red, green, blue) - so we flip the colors. 
-    frame= cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) 
+    # Pull latest hand landmarks from vision thread
+    try:
+        latest_landmarks = landmark_queue.get_nowait()
+    except queue.Empty:
+        pass  # Keep last known value — cursor stays in place
 
-    #-------------HAND TRACKING------------- 
-    #process the frame to find hands 
-    results = mp_hands.process(frame)
+    # Process any confirmed gesture events (V_GESTURE / OPEN_PALM)
+    try:
+        gesture = gesture_queue.get_nowait()
 
-    # if a hand is detected 
-    if results.multi_hand_landmarks:
-        for hand_landmarks in results.multi_hand_landmarks:
-            #get index finger tip ( landmark 8)
-            index_tip = hand_landmarks.landmark[8]
+        if gesture == "V_GESTURE" and not is_listening and v_gesture_cooldown <= 0:
+            print("[GESTURE] V_GESTURE — starting voice...")
+            threading.Thread(target=listen_for_command, daemon=True).start()
+            v_gesture_cooldown = 45   # 1.5s at 30fps
+            is_v_gesture_active = True
 
-            #convert from 0-1 range to screen coordinates
-            cursor_x = int((1 - index_tip.x) * WINDOW_WIDTH) 
-            cursor_y = int(index_tip.y * WINDOW_HEIGHT)
+        elif gesture == "OPEN_PALM" and open_palm_cooldown <= 0:
+            if is_scrolling:
+                is_scrolling = False
+                scroll_direction = 0
+                print("[GESTURE] OPEN_PALM — scrolling stopped")
+            if is_ai_speaking:
+                stop_ai_speech()
+                print("[GESTURE] OPEN_PALM — speech stopped")
+            open_palm_cooldown = 15   # 0.5s at 30fps
 
-            # Detect pinch gesture (thumb and index finger distance)
-            thumb_tip = hand_landmarks.landmark[4]
-            thumb_x = int((1 - thumb_tip.x) * WINDOW_WIDTH)
-            thumb_y = int(thumb_tip.y * WINDOW_HEIGHT)
+    except queue.Empty:
+        pass
 
-            # Calculate the distance between the thumb and index finger 
-            distance = ((cursor_x - thumb_x) ** 2 + (cursor_y - thumb_y) ** 2) ** 0.5 
+    # ===== CURSOR + PINCH + THUMBS (from latest_landmarks) =====
+    # These stay in the main loop — they depend on cursor screen coords,
+    # not on debounced gesture detection. PRESERVED from original code.
+    if latest_landmarks is not None:
+        lm = latest_landmarks.landmark
 
-            # If distance is small = pinching gesture
-            pinch_threshold = 50  # pixels 
-            is_pinching = distance < pinch_threshold 
+        # Cursor position from index fingertip (landmark 8)
+        # NOTE: CameraThread already flips the frame with cv2.flip(frame, 1)
+        # so landmarks are pre-mirrored. Do NOT do (1 - x) — that was the old
+        # compensation for an unflipped frame and now reverses the mirror.
+        index_tip = lm[8]
+        cursor_x = int(index_tip.x * WINDOW_WIDTH)
+        cursor_y = int(index_tip.y * WINDOW_HEIGHT)
 
-            # ======= Finger Landmarks (used for all gestures) ======= 
-            middle_tip = hand_landmarks.landmark[12]   # middle finger tip 
-            middle_base = hand_landmarks.landmark[9]   # middle finger base
-            ring_tip = hand_landmarks.landmark[16]     # ring finger tip
-            ring_base = hand_landmarks.landmark[13]    # ring finger base
-            pinky_tip = hand_landmarks.landmark[20]    # pinky finger tip
-            pinky_base = hand_landmarks.landmark[17]   # pinky finger base
-            index_mcp = hand_landmarks.landmark[5]     # index finger knuckle
-            
-            # ======= Check which fingers are UP or DOWN =======
-            # STRICT thresholds to avoid false triggers!
-            index_up = index_tip.y < index_mcp.y - 0.08      # index CLEARLY up
-            middle_up = middle_tip.y < middle_base.y - 0.08  # middle CLEARLY up
-            ring_up = ring_tip.y < ring_base.y               # ring up?
-            pinky_up = pinky_tip.y < pinky_base.y            # pinky up?
-            thumb_out = abs(thumb_tip.x - index_mcp.x) > 0.1  # thumb sticking out sideways?
-            
-            index_down = index_tip.y > index_mcp.y + 0.05    # index CLEARLY curled
-            middle_down = middle_tip.y > middle_base.y + 0.05  # middle CLEARLY curled
-            ring_down = ring_tip.y > ring_base.y + 0.03      # ring curled
-            pinky_down = pinky_tip.y > pinky_base.y + 0.03   # pinky curled
+        # Pinch: distance between thumb tip (4) and index tip (8)
+        thumb_tip = lm[4]
+        thumb_x = int(thumb_tip.x * WINDOW_WIDTH)
+        thumb_y = int(thumb_tip.y * WINDOW_HEIGHT)
+        distance = ((cursor_x - thumb_x) ** 2 + (cursor_y - thumb_y) ** 2) ** 0.5
+        is_pinching = distance < 50
 
-            # ======= STRICT V-GESTURE ✌️ (Single Voice Activation) =======
-            # Index VERY high + Middle VERY high + Ring CLEARLY down + Pinky CLEARLY down
-            is_v_gesture = (
-                index_up and            # Index finger clearly UP
-                middle_up and           # Middle finger clearly UP  
-                ring_down and           # Ring finger clearly DOWN
-                pinky_down and          # Pinky finger clearly DOWN
-                not is_open_palm        # Make sure it's not open palm (add this check below)
-            )
-            
-            # First check for open palm (before V-gesture to avoid conflict)
-            is_open_palm_check = (
-                index_tip.y < index_mcp.y and 
-                middle_tip.y < middle_base.y and 
-                ring_tip.y < ring_base.y and 
-                pinky_tip.y < pinky_base.y
-            )
-            
-            # Re-evaluate V-gesture with palm check
-            is_v_gesture = (
-                index_up and            
-                middle_up and           
-                ring_down and           
-                pinky_down and          
-                not is_open_palm_check  # NOT open palm!
-            )
-            
-            # Activate voice with V gesture (single activation - not toggle!)
-            if is_v_gesture and not is_listening and v_gesture_cooldown <= 0:
-                print("✌️ V-GESTURE detected! Starting voice...")
-                threading.Thread(target=listen_for_command, daemon=True).start()
-                v_gesture_cooldown = 90  # 1.5 second cooldown (longer to prevent re-trigger)
-            
-            # Update global V-gesture state (for UI display)
-            is_v_gesture_active = is_v_gesture
-            
-            # ======= OPEN PALM ✋ (Stop scrolling + Stop AI speech) =======
-            # All 5 fingers extended (already checked above as is_open_palm_check)
-            is_open_palm = is_open_palm_check and thumb_out
-            
-            # Open palm stops everything!
-            if is_open_palm and open_palm_cooldown <= 0:
-                # Stop scrolling
-                if is_scrolling:
-                    is_scrolling = False
-                    scroll_direction = 0
-                    print("✋ OPEN PALM - Scrolling stopped!")
-                
-                # Stop AI speech
-                if is_ai_speaking:
-                    stop_ai_speech()
-                    print("✋ OPEN PALM - AI speech stopped!")
-                
-                open_palm_cooldown = 30  # 0.5 second cooldown
+        # Finger state flags (needed for thumbs up/down detection)
+        index_mcp  = lm[5]
+        middle_tip = lm[12];  middle_base = lm[9]
+        ring_tip   = lm[16];  ring_base   = lm[13]
+        pinky_tip  = lm[20];  pinky_base  = lm[17]
 
-            # ======= THUMBS UP/DOWN for TOGGLE Scrolling =======
-            thumb_base = hand_landmarks.landmark[2]   # Thumb base (near palm)
-            
-            # Check if fingers are curled (fist shape - all fingertips below their base)
-            fingers_curled = (
-                index_down and      # Index curled
-                middle_down and     # Middle curled
-                ring_down and       # Ring curled
-                pinky_down          # Pinky curled
-            )
-            
-            # Thumbs UP: thumb tip is much higher than index knuckle, fingers curled
-            is_thumbs_up = thumb_tip.y < index_mcp.y - 0.08 and fingers_curled
-            
-            # Thumbs DOWN: thumb tip is much lower than thumb base, fingers curled  
-            is_thumbs_down = thumb_tip.y > index_mcp.y + 0.08 and fingers_curled
-            
-            # TOGGLE scrolling with thumbs up/down (one gesture = start, stays on)
-            if is_thumbs_up and not is_listening and not is_scrolling:
+        # Thresholds deliberately loose so thumb gestures work without
+        # requiring a perfect fist — index/middle just need to be past base
+        index_down  = index_tip.y  > index_mcp.y   + 0.02
+        middle_down = middle_tip.y > middle_base.y  + 0.02
+        ring_down   = ring_tip.y   > ring_base.y    + 0.01
+        pinky_down  = pinky_tip.y  > pinky_base.y   + 0.01
+        fingers_curled = index_down and middle_down and ring_down and pinky_down
+
+        # ======= THUMBS UP / DOWN — toggle scroll (5-frame debounce) =======
+        is_thumbs_up   = thumb_tip.y < index_mcp.y - 0.08 and fingers_curled
+        is_thumbs_down = thumb_tip.y > index_mcp.y + 0.08 and fingers_curled
+
+        if is_thumbs_up:
+            thumbs_up_frames += 1
+            thumbs_down_frames = 0
+            if thumbs_up_frames >= THUMBS_REQUIRED_FRAMES and not is_listening and not is_scrolling:
                 is_scrolling = True
-                scroll_direction = 1  # UP
-                print("👍 THUMBS UP - Scrolling UP started!")
-                
-            if is_thumbs_down and not is_listening and not is_scrolling:
+                scroll_direction = 1
+                thumbs_up_frames = 0
+                print("[GESTURE] THUMBS UP — scrolling up")
+        elif is_thumbs_down:
+            thumbs_down_frames += 1
+            thumbs_up_frames = 0
+            if thumbs_down_frames >= THUMBS_REQUIRED_FRAMES and not is_listening and not is_scrolling:
                 is_scrolling = True
-                scroll_direction = -1  # DOWN
-                print("👎 THUMBS DOWN - Scrolling DOWN started!")
-            
-            # Actually perform the continuous scrolling (every 5th frame to save CPU)
-            if is_scrolling and frame_count % 5 == 0:
-                pyautogui.scroll(scroll_direction * 200)  # Scroll speed
+                scroll_direction = -1
+                thumbs_down_frames = 0
+                print("[GESTURE] THUMBS DOWN — scrolling down")
+        else:
+            thumbs_up_frames = 0
+            thumbs_down_frames = 0
 
-            # ======= Grab Logic ======= (State Machine)
+        # Perform continuous scroll (every 3rd frame at 30fps ≈ 10 events/sec)
+        if is_scrolling and frame_count % 3 == 0:
+            pyautogui.scroll(scroll_direction * 200)
 
-            # Check if cursor is over the card 
-            cursor_over_card = (card_x < cursor_x < card_x + card_width and 
-                               card_y < cursor_y < card_y + card_height)
+        # ======= PINCH / GRAB — drag card (PRESERVED) =======
+        cursor_over_card = (card_x < cursor_x < card_x + card_width and
+                            card_y < cursor_y < card_y + card_height)
+        if is_pinching and cursor_over_card:
+            is_grabbing = True
+        elif not is_pinching:
+            is_grabbing = False
+        if is_grabbing:
+            card_x = cursor_x - card_width // 2
+            card_y = cursor_y - card_height // 2
 
-            # Grab Logic 
-            if is_pinching and cursor_over_card:
-                is_grabbing = True
-            elif not is_pinching:
-                is_grabbing = False
+        # Cooldown timers decrement once per frame
+        if v_gesture_cooldown > 0:
+            v_gesture_cooldown -= 1
+        if open_palm_cooldown > 0:
+            open_palm_cooldown -= 1
 
-            # If grabbing, move the card with the cursor 
-            if is_grabbing: 
-                card_x = cursor_x - card_width // 2 
-                card_y = cursor_y - card_height // 2
-
-            # Decrease cooldown timers 
-            if v_gesture_cooldown > 0:
-                v_gesture_cooldown -= 1
-            if open_palm_cooldown > 0:
-                open_palm_cooldown -= 1
     else:
-        # No hand detected - reset V-gesture state
+        # No hand in frame — release grab, reset all debounce counters
+        is_pinching = False
+        is_grabbing = False
         is_v_gesture_active = False
+        thumbs_up_frames = 0
+        thumbs_down_frames = 0
         
     # ==== PROCESS VOICE COMMANDS ==== 
     if last_command:
@@ -727,8 +681,8 @@ while running :
 
     # ===== STEP 6: CUSTOM UI ELEMENTS (ONLY VISIBLE PARTS) =====
     
-    # Check if hand is detected (for cursor visibility)
-    hand_detected = results.multi_hand_landmarks is not None
+    # Hand detected = vision thread sent us real landmarks (not None)
+    hand_detected = latest_landmarks is not None
     
     # ===== 1. GLOWING CURSOR (when hand detected) =====
     if hand_detected:
@@ -824,9 +778,10 @@ while running :
     clock.tick(FPS_CAP)
     frame_count += 1  # Increment frame counter
 
-# ==============CLEAN UP============== 
-cap.release()
-pygame.quit() 
+# ==============CLEAN UP==============
+camera_thread.stop()
+vision_thread.stop()
+pygame.quit()
 
 
 

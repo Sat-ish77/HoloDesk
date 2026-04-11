@@ -1,5 +1,8 @@
 data/
 models/
 .env
+!.env.example
 __pycache__/
 *.pyc
+*.db
+holodesk.log
