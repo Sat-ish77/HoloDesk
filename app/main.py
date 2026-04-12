@@ -14,6 +14,7 @@ from faster_whisper import WhisperModel
 import tempfile
 import wave
 import pyautogui
+import audioop
 
 # Add project root to path so agents/, connectors/, core/, vision/ are importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -28,7 +29,7 @@ DEMO_MODE = "--demo" in sys.argv
 on_startup(DEMO_MODE)
 
 # ===== THREADING REFACTOR (Step 8) =====
-from core.queues import frame_queue, landmark_queue, gesture_queue
+from core.queues import frame_queue, landmark_queue, gesture_queue, response_queue
 from core.camera_thread import CameraThread
 from core.vision_thread import VisionThread
 
@@ -101,8 +102,11 @@ def setup_transparent_window(hwnd):
     except Exception as e:
         print(f"[WARNING] Transparency setup failed: {e}")
 
+last_ai_response_cache = "I'm having trouble answering that right now."
+
 def ask_ai(question):
     '''Ask the AI a question and get a response'''
+    global last_ai_response_cache
     try: 
         response = grok_client.chat.completions.create(
             model = "llama-3.1-8b-instant",
@@ -112,10 +116,11 @@ def ask_ai(question):
             ],
             max_tokens = 100,
         )
-        return response.choices[0].message.content
+        last_ai_response_cache = response.choices[0].message.content
+        return last_ai_response_cache
     except Exception as e:
         print(f"AI ERROR: {e}")
-        return "I'm having trouble answering that. Please try again."
+        return f"{last_ai_response_cache} I'm having connection issues."
 
 
 
@@ -174,9 +179,16 @@ is_grabbing = False
 
 # (V-gesture replaced with Call Me gesture 🤙) 
 
-#=============VOICE SETUP============== 
+#=============VOICE SETUP==============
 recognizer = sr.Recognizer()
-mic = sr.Microphone()
+mic = None
+voice_available = True
+
+try:
+    mic = sr.Microphone()
+except Exception as e:
+    voice_available = False
+    print(f"[WARNING] Microphone unavailable: {e}")
 
 #Text-to-Speech engine 
 tts_engine = pyttsx3.init()
@@ -187,10 +199,12 @@ print("Loading Whisper model....please wait...")
 whisper_model = WhisperModel("small", device = "cpu", compute_type = "int8")  # "small" is more accurate than "base" 
 print("Whisper model loaded successfully!")
 
-#Variable to store last voice command 
+# Variable to store last voice command
 last_command = ""
-is_listening = False
-ready_to_speak = False  # Shows "SPEAK NOW!" on screen
+voice_ui_state = "IDLE"   # IDLE | WAKE | LISTENING | PROCESSING | SPEAKING | UNAVAILABLE
+audio_level = 0.0
+last_exchange = ""
+followup_context = ""
 
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling
@@ -229,6 +243,10 @@ def speak(text):
         return
         
     is_ai_speaking = True
+    try:
+        response_queue.put_nowait({"type": "VOICE_STATE", "state": "SPEAKING"})
+    except queue.Full:
+        pass
     print(f"SPEAKING: {text}")  # Debug
     try:
         import comtypes.client  # Windows COM interface
@@ -265,6 +283,10 @@ def speak(text):
     finally:
         is_ai_speaking = False
         stop_speaking_flag = False
+        try:
+            response_queue.put_nowait({"type": "VOICE_STATE", "state": "IDLE"})
+        except queue.Full:
+            pass
 
 def stop_ai_speech():
     """Stop the AI from speaking immediately"""
@@ -272,57 +294,152 @@ def stop_ai_speech():
     stop_speaking_flag = True
     print(">>> STOP SPEECH SIGNAL SENT <<<")
 
-#Function to listen for voice commands ( runs in the background)
-# Single activation: V-gesture → listen → process → auto OFF
-def listen_for_command():
-    global last_command, is_listening, ready_to_speak
+class VoiceAssistantThread(threading.Thread):
+    FILLER_WORDS = {"um", "uh", "like", "you know"}
 
-    is_listening = True
-    ready_to_speak = False
-    print("Adjusting for noise...")
-    
-    with mic as source: 
-        recognizer.adjust_for_ambient_noise(source, duration=0.5)  # Longer calibration
-        recognizer.energy_threshold = 300  # Lower threshold for quieter speech
-        ready_to_speak = True  # NOW the user can speak
-        print(">>> NOW SPEAK! <<<")  # Clear signal to speak
-    
-        try: 
-            # timeout=5: wait 5 sec max for speech to start
-            # phrase_time_limit=5: max 5 sec of speech (shorter for commands)
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)
+    def __init__(self):
+        super().__init__(daemon=True)
+        self.running = True
+        self.force_wake = threading.Event()
+        self.redirect_listen = threading.Event()
+        self.followup_until = 0
+        self.auto_relisten_done = False
 
-            # save audio to temporary WAV file for whisper 
+    def request_wake(self):
+        self.force_wake.set()
+
+    def request_redirect_listen(self):
+        self.redirect_listen.set()
+
+    def push_state(self, state, level=None):
+        payload = {"type": "VOICE_STATE", "state": state}
+        if level is not None:
+            payload["level"] = level
+        try:
+            response_queue.put_nowait(payload)
+        except queue.Full:
+            pass
+
+    def transcribe_audio(self, wav_path):
+        try:
+            segments, _ = whisper_model.transcribe(wav_path, beam_size=5, language="en")
+            text = " ".join(seg.text for seg in segments).strip().lower()
+            return text
+        except Exception as e:
+            print(f"[WARNING] Whisper failed, fallback STT: {e}")
+            with sr.AudioFile(wav_path) as source:
+                audio_data = recognizer.record(source)
+            try:
+                return recognizer.recognize_google(audio_data).strip().lower()
+            except Exception:
+                return ""
+
+    def strip_fillers(self, text):
+        cleaned = text
+        for filler in self.FILLER_WORDS:
+            cleaned = cleaned.replace(f" {filler} ", " ")
+            if cleaned.startswith(f"{filler} "):
+                cleaned = cleaned[len(filler) + 1:]
+        return " ".join(cleaned.split())
+
+    def record_with_vad(self, source, max_seconds=15.0):
+        chunk_ms = 100
+        rate = source.SAMPLE_RATE
+        chunk_size = int(rate * (chunk_ms / 1000.0))
+        bytes_per_chunk = chunk_size * source.SAMPLE_WIDTH
+        silence_chunks_needed = int(1500 / chunk_ms)
+        silence_count = 0
+        frames = []
+        started = False
+        start = time.time()
+        self.push_state("LISTENING")
+        while time.time() - start < max_seconds:
+            raw = source.stream.read(chunk_size, exception_on_overflow=False)
+            if len(raw) < bytes_per_chunk:
+                continue
+            rms = audioop.rms(raw, source.SAMPLE_WIDTH)
+            level = min(1.0, rms / 1500.0)
+            self.push_state("LISTENING", level=level)
+            if rms >= 300:
+                started = True
+                silence_count = 0
+            elif started:
+                silence_count += 1
+            frames.append(raw)
+            if started and silence_count >= silence_chunks_needed:
+                break
+        if not frames:
+            return None
+        temp_wav = tempfile.mktemp(suffix=".wav")
+        with wave.open(temp_wav, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(source.SAMPLE_WIDTH)
+            wf.setframerate(rate)
+            wf.writeframes(b"".join(frames))
+        return temp_wav
+
+    def detect_wake_word(self):
+        if self.force_wake.is_set():
+            self.force_wake.clear()
+            return True
+        if self.followup_until > time.time():
+            return True
+        try:
+            with mic as source:
+                recognizer.energy_threshold = 300
+                audio = recognizer.listen(source, timeout=0.8, phrase_time_limit=1.8)
             temp_path = tempfile.mktemp(suffix=".wav")
             with open(temp_path, "wb") as f:
-                # Convert to 16kHz sample rate for Whisper
                 f.write(audio.get_wav_data(convert_rate=16000, convert_width=2))
+            text = self.transcribe_audio(temp_path)
+            return "hey desk" in text
+        except Exception:
+            time.sleep(0.2)
+            return False
 
-            # transcribe audio using whisper (force English language)
-            segments, info = whisper_model.transcribe(
-                temp_path, 
-                beam_size=5,
-                language="en"  # Force English to avoid hallucinations
-            )
-            command = ""
-            for segment in segments: 
-                command += segment.text
-            command = command.strip().lower() 
+    def run(self):
+        if not voice_available or mic is None:
+            self.push_state("UNAVAILABLE")
+            return
+        while self.running:
+            if self.redirect_listen.is_set():
+                self.redirect_listen.clear()
+                self.followup_until = time.time() + 3
+                self.force_wake.set()
+            if not self.detect_wake_word():
+                self.push_state("IDLE")
+                continue
+            self.push_state("WAKE")
+            with mic as source:
+                wav_path = self.record_with_vad(source, max_seconds=15.0)
+            self.push_state("PROCESSING")
+            if not wav_path:
+                self.push_state("IDLE")
+                continue
+            text = self.strip_fillers(self.transcribe_audio(wav_path))
+            if len(text.split()) < 3:
+                if not self.auto_relisten_done:
+                    self.auto_relisten_done = True
+                    try:
+                        response_queue.put_nowait({"type": "VOICE_RETRY"})
+                    except queue.Full:
+                        pass
+                    self.followup_until = time.time() + 0.2
+                    continue
+                self.auto_relisten_done = False
+                self.push_state("IDLE")
+                continue
+            self.auto_relisten_done = False
+            try:
+                response_queue.put_nowait({"type": "VOICE_COMMAND", "command": text})
+            except queue.Full:
+                pass
+            self.followup_until = time.time() + 4
 
-            if command: 
-                print(f"You said: {command}")
-                last_command = command
-            else: 
-                print(" No speech detected ")
-            
-        except sr.WaitTimeoutError:
-            print("No voice input detected")
-        except Exception as e:
-            print(f"Error : {e}")
-        finally: 
-            is_listening = False 
-            ready_to_speak = False
-            # Mic automatically turns OFF after processing - use V gesture to listen again! 
+
+voice_thread = VoiceAssistantThread()
+voice_thread.start()
+print("[OK] Voice thread started")
 
 
 # ===== SCREEN VISION HELPER (Step 7) =====
@@ -399,9 +516,8 @@ while running :
 
         # 2 Press spacebar to toggle voice command (still works as backup)
         if event.type == pygame.KEYDOWN: 
-            if event.key == pygame.K_SPACE and not is_listening:
-                # start listening in background thread 
-                threading.Thread(target=listen_for_command, daemon=True).start()
+            if event.key == pygame.K_SPACE:
+                voice_thread.request_wake()
     
     # ===== MORNING BRIEFING — speak once on the first frame =====
     if frame_count == 1:
@@ -423,9 +539,9 @@ while running :
     try:
         gesture = gesture_queue.get_nowait()
 
-        if gesture == "V_GESTURE" and not is_listening and v_gesture_cooldown <= 0:
+        if gesture == "V_GESTURE" and v_gesture_cooldown <= 0:
             print("[GESTURE] V_GESTURE — starting voice...")
-            threading.Thread(target=listen_for_command, daemon=True).start()
+            voice_thread.request_wake()
             v_gesture_cooldown = 45   # 1.5s at 30fps
             is_v_gesture_active = True
 
@@ -437,10 +553,29 @@ while running :
             if is_ai_speaking:
                 stop_ai_speech()
                 print("[GESTURE] OPEN_PALM — speech stopped")
+                voice_thread.request_redirect_listen()
             open_palm_cooldown = 15   # 0.5s at 30fps
 
     except queue.Empty:
         pass
+
+    # Voice thread -> main loop events
+    while True:
+        try:
+            voice_event = response_queue.get_nowait()
+        except queue.Empty:
+            break
+
+        if voice_event.get("type") == "VOICE_COMMAND":
+            incoming = voice_event.get("command", "").strip()
+            if incoming:
+                last_command = incoming
+        elif voice_event.get("type") == "VOICE_RETRY":
+            threading.Thread(target=speak, args=("I didn't catch that",), daemon=True).start()
+            voice_thread.request_wake()
+        elif voice_event.get("type") == "VOICE_STATE":
+            voice_ui_state = voice_event.get("state", voice_ui_state)
+            audio_level = voice_event.get("level", audio_level)
 
     # ===== CURSOR + PINCH + THUMBS (from latest_landmarks) =====
     # These stay in the main loop — they depend on cursor screen coords,
@@ -484,7 +619,7 @@ while running :
         if is_thumbs_up:
             thumbs_up_frames += 1
             thumbs_down_frames = 0
-            if thumbs_up_frames >= THUMBS_REQUIRED_FRAMES and not is_listening and not is_scrolling:
+            if thumbs_up_frames >= THUMBS_REQUIRED_FRAMES and not is_scrolling:
                 is_scrolling = True
                 scroll_direction = 1
                 thumbs_up_frames = 0
@@ -492,7 +627,7 @@ while running :
         elif is_thumbs_down:
             thumbs_down_frames += 1
             thumbs_up_frames = 0
-            if thumbs_down_frames >= THUMBS_REQUIRED_FRAMES and not is_listening and not is_scrolling:
+            if thumbs_down_frames >= THUMBS_REQUIRED_FRAMES and not is_scrolling:
                 is_scrolling = True
                 scroll_direction = -1
                 thumbs_down_frames = 0
@@ -533,6 +668,8 @@ while running :
     # ==== PROCESS VOICE COMMANDS ==== 
     if last_command:
         print(f"PROCESSING COMMAND: {last_command}")  # Debug
+        voice_ui_state = "PROCESSING"
+        current_command = last_command
         
         # ===== STOP COMMAND (Stops scrolling) =====
         if last_command == "stop" or "stop scrolling" in last_command or "stop scroll" in last_command:
@@ -685,8 +822,13 @@ while running :
 
         else: 
             #If no specific command, ask AI 
-            ai_response = ask_ai( last_command )
+            prompt = current_command
+            if followup_context:
+                prompt = f"Previous exchange: {followup_context}\nUser follow-up: {current_command}"
+            ai_response = ask_ai(prompt)
             threading.Thread(target=speak, args=(ai_response,), daemon=True).start()
+        last_exchange = f"user: {current_command}"
+        followup_context = last_exchange
         last_command = "" 
 
 
@@ -720,34 +862,35 @@ while running :
         screen.blit(gesture_text, (WINDOW_WIDTH - 280, status_y))
         status_y += 30
     
-    if is_v_gesture_active and is_listening:
+    if is_v_gesture_active and voice_ui_state in ("WAKE", "LISTENING", "PROCESSING"):
         gesture_text = status_font.render("✌️ VOICE ACTIVE", True, (255, 255, 0))  # Yellow
         screen.blit(gesture_text, (WINDOW_WIDTH - 250, status_y))
         status_y += 30
     
-    # ===== 3. VOICE LISTENING INDICATOR (center of screen) =====
-    if is_listening:
-        if ready_to_speak:
-            # Big pulsing "SPEAK NOW!" when ready
-            big_font = pygame.font.Font(None, 80)
-            speak_text = big_font.render(">>> SPEAK NOW! <<<", True, (0, 255, 0))  # Green
-            # Center it on screen
-            text_rect = speak_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
-            screen.blit(speak_text, text_rect)
-        else:
-            # Yellow "Preparing mic..." while adjusting for noise
-            prep_font = pygame.font.Font(None, 48)
-            listening_text = prep_font.render("Preparing mic...", True, (255, 255, 0))  # Yellow
-            text_rect = listening_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2))
-            screen.blit(listening_text, text_rect)
-    
-    # ===== 4. AI SPEAKING INDICATOR =====
-    if is_ai_speaking:
-        ai_font = pygame.font.Font(None, 28)
-        ai_status = ai_font.render("AI Speaking... (Palm=Stop)", True, (255, 100, 255))  # Pink
-        screen.blit(ai_status, (WINDOW_WIDTH - 300, WINDOW_HEIGHT - 40))
+    # ===== 3. VOICE OVERLAY STATE =====
+    overlay_font = pygame.font.Font(None, 48)
+    small_overlay_font = pygame.font.Font(None, 30)
+    pulse = abs((frame_count % 40) - 20) / 20
+    mic_color = (120, 120, 120) if voice_ui_state == "IDLE" else (0, 200 + int(55 * pulse), 0)
+    pygame.draw.circle(screen, mic_color, (80, WINDOW_HEIGHT - 80), 22, 3)
 
-    # ===== 4b. SCREEN VISION STATUS (Step 7) =====
+    if voice_ui_state in ("WAKE", "LISTENING"):
+        listening_text = overlay_font.render("Listening...", True, (0, 255, 0))
+        screen.blit(listening_text, listening_text.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)))
+        bar_w = int(220 * max(0.1, audio_level))
+        pygame.draw.rect(screen, (0, 255, 120), (WINDOW_WIDTH // 2 - 110, WINDOW_HEIGHT // 2 + 35, bar_w, 12), border_radius=6)
+    elif voice_ui_state == "PROCESSING":
+        thinking = overlay_font.render("Thinking...", True, (120, 220, 255))
+        screen.blit(thinking, thinking.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)))
+        pygame.draw.circle(screen, (120, 220, 255), (WINDOW_WIDTH // 2 + 110, WINDOW_HEIGHT // 2), 8 + int(8 * pulse))
+    elif voice_ui_state == "SPEAKING":
+        speaking = small_overlay_font.render("HoloDesk speaking... (Palm to stop)", True, (255, 120, 255))
+        screen.blit(speaking, (WINDOW_WIDTH - 390, WINDOW_HEIGHT - 40))
+    elif voice_ui_state == "UNAVAILABLE":
+        unavailable = overlay_font.render("Voice unavailable", True, (255, 120, 120))
+        screen.blit(unavailable, unavailable.get_rect(center=(WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2)))
+
+    # ===== 4. SCREEN VISION STATUS (Step 7) =====
     if screen_status_timer > 0:
         screen_status_timer -= 1
         sv_font = pygame.font.Font(None, 30)
@@ -796,10 +939,7 @@ while running :
     frame_count += 1  # Increment frame counter
 
 # ==============CLEAN UP==============
+voice_thread.running = False
 camera_thread.stop()
 vision_thread.stop()
 pygame.quit()
-
-
-
-

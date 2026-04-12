@@ -20,3 +20,6 @@ landmark_queue = queue.Queue(maxsize=1)
 # Confirmed gesture strings: "V_GESTURE" | "OPEN_PALM"
 # Only fires after 8-frame debounce + intent zone check in GestureDetector
 gesture_queue = queue.Queue(maxsize=5)
+
+# Cross-thread status/response events (voice thread -> UI/main loop)
+response_queue = queue.Queue(maxsize=50)
