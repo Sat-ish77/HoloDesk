@@ -205,6 +205,7 @@ voice_ui_state = "IDLE"   # IDLE | WAKE | LISTENING | PROCESSING | SPEAKING | UN
 audio_level = 0.0
 last_exchange = ""
 followup_context = ""
+tts_active = threading.Event()
 
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling
@@ -212,8 +213,6 @@ scroll_direction = 0        # 1 = up, -1 = down, 0 = stopped
 v_gesture_cooldown = 0      # Prevents rapid V-gesture triggers (recalibrated for 30fps)
 open_palm_cooldown = 0      # Prevents rapid stop triggers (recalibrated for 30fps)
 is_ai_speaking = False      # Track if AI is currently talking
-is_speaking = False         # Global mic-mute gate while TTS is active
-last_speech_end_time = 0.0  # Enforce a short cool-down after TTS
 stop_speaking_flag = False  # Signal to stop speech
 frame_count = 0             # Frame counter for throttling operations
 is_v_gesture_active = False # Track V-gesture state (for UI display)
@@ -237,7 +236,7 @@ sapi_speaker = None
 
 #Function to speak using Windows SAPI directly (more reliable than pyttsx3)
 def speak(text): 
-    global is_ai_speaking, is_speaking, last_speech_end_time, stop_speaking_flag, sapi_speaker
+    global is_ai_speaking, stop_speaking_flag, sapi_speaker
     
     # Check if we should stop before even starting
     if stop_speaking_flag:
@@ -245,7 +244,7 @@ def speak(text):
         return
         
     is_ai_speaking = True
-    is_speaking = True
+    tts_active.set()
     try:
         response_queue.put_nowait({"type": "VOICE_STATE", "state": "SPEAKING"})
     except queue.Full:
@@ -285,8 +284,8 @@ def speak(text):
             print(f"FALLBACK SPEECH ERROR: {e2}")
     finally:
         is_ai_speaking = False
-        is_speaking = False
-        last_speech_end_time = time.time()
+        time.sleep(0.8)  # allow system audio tail to settle before reopening mic
+        tts_active.clear()
         stop_speaking_flag = False
         try:
             response_queue.put_nowait({"type": "VOICE_STATE", "state": "IDLE"})
@@ -301,6 +300,17 @@ def stop_ai_speech():
 
 class VoiceAssistantThread(threading.Thread):
     FILLER_WORDS = {"um", "uh", "like", "you know"}
+    HOLODESK_PHRASES = [
+        "i didn't catch that",
+        "try again",
+        "i'm doing great",
+        "ready to help",
+        "what's on your mind",
+        "that's wonderful",
+        "you're welcome",
+        "i'm always here",
+        "thanks for asking",
+    ]
 
     def __init__(self):
         super().__init__(daemon=True)
@@ -328,7 +338,12 @@ class VoiceAssistantThread(threading.Thread):
     def transcribe_audio(self, wav_path):
         try:
             segments, _ = whisper_model.transcribe(wav_path, beam_size=5, language="en")
-            text = " ".join(seg.text for seg in segments).strip().lower()
+            seg_list = list(segments)
+            if seg_list:
+                avg_logprob = sum(getattr(seg, "avg_logprob", -10.0) for seg in seg_list) / len(seg_list)
+                if avg_logprob < -1.0:
+                    return ""
+            text = " ".join(seg.text for seg in seg_list).strip().lower()
             return text
         except Exception as e:
             print(f"[WARNING] Whisper failed, fallback STT: {e}")
@@ -348,6 +363,8 @@ class VoiceAssistantThread(threading.Thread):
         return " ".join(cleaned.split())
 
     def record_with_vad(self, source, max_seconds=15.0):
+        if tts_active.is_set():
+            return None
         chunk_ms = 100
         rate = source.SAMPLE_RATE
         chunk_size = int(rate * (chunk_ms / 1000.0))
@@ -385,6 +402,8 @@ class VoiceAssistantThread(threading.Thread):
         return temp_wav
 
     def detect_wake_word(self):
+        if tts_active.is_set():
+            return None
         if self.force_wake.is_set():
             self.force_wake.clear()
             return True
@@ -412,10 +431,6 @@ class VoiceAssistantThread(threading.Thread):
             self.push_state("UNAVAILABLE")
             return
         while self.running:
-            if is_speaking or (time.time() - last_speech_end_time) < 0.5:
-                self.push_state("IDLE")
-                time.sleep(0.05)
-                continue
             if self.redirect_listen.is_set():
                 self.redirect_listen.clear()
                 self.followup_until = time.time() + 3
@@ -435,6 +450,10 @@ class VoiceAssistantThread(threading.Thread):
             finally:
                 if os.path.exists(wav_path):
                     os.unlink(wav_path)
+            transcript_lower = text.lower()
+            if any(phrase in transcript_lower for phrase in self.HOLODESK_PHRASES):
+                self.push_state("IDLE")
+                continue
             if len(text.split()) < 3:
                 if not self.auto_relisten_done:
                     self.auto_relisten_done = True
