@@ -354,7 +354,7 @@ class VoiceAssistantThread(threading.Thread):
         start = time.time()
         self.push_state("LISTENING")
         while time.time() - start < max_seconds:
-            raw = source.stream.read(chunk_size, exception_on_overflow=False)
+            raw = source.stream.read(chunk_size)
             if len(raw) < bytes_per_chunk:
                 continue
             rms = audioop.rms(raw, source.SAMPLE_WIDTH)
