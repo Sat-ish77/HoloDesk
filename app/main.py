@@ -17,6 +17,15 @@ import pyautogui
 
 # Add project root to path so agents/, connectors/, core/, vision/ are importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
+# app/ itself must also be on sys.path so startup.py can be imported as 'startup'
+sys.path.insert(0, str(Path(__file__).parent))
+
+# ===== MORNING BRIEFING STARTUP =====
+from startup import on_startup
+from storage.db import db as _db
+
+DEMO_MODE = "--demo" in sys.argv
+on_startup(DEMO_MODE)
 
 # ===== THREADING REFACTOR (Step 8) =====
 from core.queues import frame_queue, landmark_queue, gesture_queue
@@ -394,6 +403,14 @@ while running :
                 # start listening in background thread 
                 threading.Thread(target=listen_for_command, daemon=True).start()
     
+    # ===== MORNING BRIEFING — speak once on the first frame =====
+    if frame_count == 1:
+        _briefing = _db.get_pref("pending_briefing")
+        if _briefing:
+            _db.execute("DELETE FROM preferences WHERE key='pending_briefing'")
+            threading.Thread(target=speak, args=(_briefing,), daemon=True).start()
+            print(f"[Briefing] Speaking: {_briefing[:80]}...")
+
     # ===== STEP 8: READ FROM QUEUES (non-blocking — never waits) =====
 
     # Pull latest hand landmarks from vision thread
