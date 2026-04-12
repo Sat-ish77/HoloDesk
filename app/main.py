@@ -212,6 +212,8 @@ scroll_direction = 0        # 1 = up, -1 = down, 0 = stopped
 v_gesture_cooldown = 0      # Prevents rapid V-gesture triggers (recalibrated for 30fps)
 open_palm_cooldown = 0      # Prevents rapid stop triggers (recalibrated for 30fps)
 is_ai_speaking = False      # Track if AI is currently talking
+is_speaking = False         # Global mic-mute gate while TTS is active
+last_speech_end_time = 0.0  # Enforce a short cool-down after TTS
 stop_speaking_flag = False  # Signal to stop speech
 frame_count = 0             # Frame counter for throttling operations
 is_v_gesture_active = False # Track V-gesture state (for UI display)
@@ -235,7 +237,7 @@ sapi_speaker = None
 
 #Function to speak using Windows SAPI directly (more reliable than pyttsx3)
 def speak(text): 
-    global is_ai_speaking, stop_speaking_flag, sapi_speaker
+    global is_ai_speaking, is_speaking, last_speech_end_time, stop_speaking_flag, sapi_speaker
     
     # Check if we should stop before even starting
     if stop_speaking_flag:
@@ -243,6 +245,7 @@ def speak(text):
         return
         
     is_ai_speaking = True
+    is_speaking = True
     try:
         response_queue.put_nowait({"type": "VOICE_STATE", "state": "SPEAKING"})
     except queue.Full:
@@ -282,6 +285,8 @@ def speak(text):
             print(f"FALLBACK SPEECH ERROR: {e2}")
     finally:
         is_ai_speaking = False
+        is_speaking = False
+        last_speech_end_time = time.time()
         stop_speaking_flag = False
         try:
             response_queue.put_nowait({"type": "VOICE_STATE", "state": "IDLE"})
@@ -365,7 +370,8 @@ class VoiceAssistantThread(threading.Thread):
                 silence_count = 0
             elif started:
                 silence_count += 1
-            frames.append(raw)
+            if started:
+                frames.append(raw)
             if started and silence_count >= silence_chunks_needed:
                 break
         if not frames:
@@ -389,10 +395,14 @@ class VoiceAssistantThread(threading.Thread):
                 recognizer.energy_threshold = 300
                 audio = recognizer.listen(source, timeout=0.8, phrase_time_limit=1.8)
             temp_path = tempfile.mktemp(suffix=".wav")
-            with open(temp_path, "wb") as f:
-                f.write(audio.get_wav_data(convert_rate=16000, convert_width=2))
-            text = self.transcribe_audio(temp_path)
-            return "hey desk" in text
+            try:
+                with open(temp_path, "wb") as f:
+                    f.write(audio.get_wav_data(convert_rate=16000, convert_width=2))
+                text = self.transcribe_audio(temp_path)
+                return "hey desk" in text
+            finally:
+                if os.path.exists(temp_path):
+                    os.unlink(temp_path)
         except Exception:
             time.sleep(0.2)
             return False
@@ -402,6 +412,10 @@ class VoiceAssistantThread(threading.Thread):
             self.push_state("UNAVAILABLE")
             return
         while self.running:
+            if is_speaking or (time.time() - last_speech_end_time) < 0.5:
+                self.push_state("IDLE")
+                time.sleep(0.05)
+                continue
             if self.redirect_listen.is_set():
                 self.redirect_listen.clear()
                 self.followup_until = time.time() + 3
@@ -416,7 +430,11 @@ class VoiceAssistantThread(threading.Thread):
             if not wav_path:
                 self.push_state("IDLE")
                 continue
-            text = self.strip_fillers(self.transcribe_audio(wav_path))
+            try:
+                text = self.strip_fillers(self.transcribe_audio(wav_path))
+            finally:
+                if os.path.exists(wav_path):
+                    os.unlink(wav_path)
             if len(text.split()) < 3:
                 if not self.auto_relisten_done:
                     self.auto_relisten_done = True
@@ -827,8 +845,8 @@ while running :
                 prompt = f"Previous exchange: {followup_context}\nUser follow-up: {current_command}"
             ai_response = ask_ai(prompt)
             threading.Thread(target=speak, args=(ai_response,), daemon=True).start()
-        last_exchange = f"user: {current_command}"
-        followup_context = last_exchange
+            followup_context = f"user: {current_command}\nassistant: {ai_response}"
+            last_exchange = followup_context
         last_command = "" 
 
 
