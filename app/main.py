@@ -111,7 +111,7 @@ def ask_ai(question):
         response = grok_client.chat.completions.create(
             model = "llama-3.1-8b-instant",
             messages= [
-            { "role": "system", "content": "You are HoloDesk, a helpful AI assistant. Keep responses short and conversational (1-2 sentences max)."},
+            { "role": "system", "content": "You are HoloDesk, a helpful AI assistant on the user's Windows desktop. Keep responses short and conversational (2-3 sentences max). Always end with a brief, natural follow-up like 'Want to know more?' or 'Need help with anything else?' — vary it each time."},
             {"role": "user", "content": question}
             ],
             max_tokens = 100,
@@ -206,6 +206,10 @@ audio_level = 0.0
 last_exchange = ""
 followup_context = ""
 tts_active = threading.Event()
+# Main loop puts the response TEXT here after processing a voice command.
+# Voice thread reads it, then calls speak() itself — same thread that records
+# also speaks, so mic and TTS can never overlap. This is the production pattern.
+voice_reply_queue = queue.Queue(maxsize=1)
 
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling
@@ -238,7 +242,6 @@ sapi_speaker = None
 def speak(text): 
     global is_ai_speaking, stop_speaking_flag, sapi_speaker
     
-    # Check if we should stop before even starting
     if stop_speaking_flag:
         stop_speaking_flag = False
         return
@@ -284,7 +287,7 @@ def speak(text):
             print(f"FALLBACK SPEECH ERROR: {e2}")
     finally:
         is_ai_speaking = False
-        time.sleep(0.8)  # allow system audio tail to settle before reopening mic
+        time.sleep(0.8)
         tts_active.clear()
         stop_speaking_flag = False
         try:
@@ -299,32 +302,29 @@ def stop_ai_speech():
     print(">>> STOP SPEECH SIGNAL SENT <<<")
 
 class VoiceAssistantThread(threading.Thread):
+    """
+    Sequential state machine — the production pattern used by every working
+    voice assistant. The mic and TTS are in the SAME thread, so they can
+    never overlap. No flags, no events, no race conditions.
+
+    Flow per iteration:
+        detect_wake_word → record_with_vad → transcribe → dispatch →
+        BLOCK on voice_reply_queue.get() → speak() → set followup → loop
+    """
+
     FILLER_WORDS = {"um", "uh", "like", "you know"}
-    HOLODESK_PHRASES = [
-        "i didn't catch that",
-        "try again",
-        "i'm doing great",
-        "ready to help",
-        "what's on your mind",
-        "that's wonderful",
-        "you're welcome",
-        "i'm always here",
-        "thanks for asking",
-    ]
 
     def __init__(self):
         super().__init__(daemon=True)
         self.running = True
         self.force_wake = threading.Event()
-        self.redirect_listen = threading.Event()
-        self.followup_until = 0
-        self.auto_relisten_done = False
+        self._last_ai_response = ""
 
     def request_wake(self):
         self.force_wake.set()
 
     def request_redirect_listen(self):
-        self.redirect_listen.set()
+        pass
 
     def push_state(self, state, level=None):
         payload = {"type": "VOICE_STATE", "state": state}
@@ -362,20 +362,22 @@ class VoiceAssistantThread(threading.Thread):
                 cleaned = cleaned[len(filler) + 1:]
         return " ".join(cleaned.split())
 
-    def record_with_vad(self, source, max_seconds=15.0):
-        if tts_active.is_set():
-            return None
+    def record_with_vad(self, source, max_seconds=15.0, silence_ms=1500):
         chunk_ms = 100
         rate = source.SAMPLE_RATE
         chunk_size = int(rate * (chunk_ms / 1000.0))
         bytes_per_chunk = chunk_size * source.SAMPLE_WIDTH
-        silence_chunks_needed = int(1500 / chunk_ms)
+        silence_chunks_needed = int(silence_ms / chunk_ms)
         silence_count = 0
         frames = []
         started = False
         start = time.time()
         self.push_state("LISTENING")
+        wait_for_speech_timeout = 10.0
         while time.time() - start < max_seconds:
+            elapsed = time.time() - start
+            if not started and elapsed > wait_for_speech_timeout:
+                break
             raw = source.stream.read(chunk_size)
             if len(raw) < bytes_per_chunk:
                 continue
@@ -401,13 +403,9 @@ class VoiceAssistantThread(threading.Thread):
             wf.writeframes(b"".join(frames))
         return temp_wav
 
-    def detect_wake_word(self):
-        if tts_active.is_set():
-            return None
+    def detect_wake_word(self, _unused=0):
         if self.force_wake.is_set():
             self.force_wake.clear()
-            return True
-        if self.followup_until > time.time():
             return True
         try:
             with mic as source:
@@ -426,52 +424,163 @@ class VoiceAssistantThread(threading.Thread):
             time.sleep(0.2)
             return False
 
+    EXIT_PHRASES_EXACT = {
+        "no", "nah", "nope", "nothing", "bye", "goodbye", "bye bye",
+        "no thanks", "no thank you", "that's all", "that's it",
+        "nevermind", "never mind", "i'm good", "all good", "i'm done",
+    }
+    EXIT_KEYWORDS = [
+        "that's all", "that's it", "bye", "goodbye", "i'm done",
+        "have a good day", "have a nice day", "good night",
+        "thank you", "thanks", "see you later", "see you",
+        "talk to you later", "take care",
+    ]
+
+    CONVERSATION_WINDOW_SEC = 30
+    FOLLOWUP_LISTEN_SEC = 45.0
+    FOLLOWUP_SILENCE_MS = 5000
+
+    def _is_echo_of_ai(self, text):
+        """Detect if transcribed text is actually the AI's own speech (echo)."""
+        if not self._last_ai_response:
+            return False
+        t = text.lower().strip()
+        ai = self._last_ai_response.lower()
+        words = t.split()
+        if len(words) < 3:
+            return False
+        # Check if a 3+ word phrase from the transcription appears in AI's last response
+        for i in range(len(words) - 2):
+            phrase = " ".join(words[i:i+3])
+            if phrase in ai:
+                print(f"[VOICE] Echo detected — discarding: '{t[:50]}...'")
+                return True
+        return False
+
+    def _is_exit_phrase(self, text):
+        t = text.lower().strip().rstrip(".!?,")
+        if t in self.EXIT_PHRASES_EXACT:
+            return True
+        return any(kw in t for kw in self.EXIT_KEYWORDS)
+
+    def _dispatch_and_speak(self, text):
+        """Send command to main loop, wait for reply, speak it.
+        Returns the reply dict or None on failure."""
+        try:
+            response_queue.put_nowait({"type": "VOICE_COMMAND", "command": text})
+        except queue.Full:
+            return None
+
+        print(f"[VOICE] Dispatched: '{text}' — waiting for response...")
+        try:
+            reply = voice_reply_queue.get(timeout=60)
+        except queue.Empty:
+            print("[VOICE] Timeout waiting for reply")
+            return None
+
+        if reply is None or (isinstance(reply, dict) and reply.get("text") is None):
+            return None
+
+        reply_text = reply["text"] if isinstance(reply, dict) else reply
+
+        print(f"[VOICE] Speaking: {reply_text[:60]}...")
+        self._last_ai_response = reply_text
+        speak(reply_text)
+        time.sleep(1.5)
+        print("[VOICE] Speech done — mic safe")
+        return reply
+
     def run(self):
         if not voice_available or mic is None:
             self.push_state("UNAVAILABLE")
             return
+
         while self.running:
-            if self.redirect_listen.is_set():
-                self.redirect_listen.clear()
-                self.followup_until = time.time() + 3
-                self.force_wake.set()
-            if not self.detect_wake_word():
-                self.push_state("IDLE")
-                continue
-            self.push_state("WAKE")
-            with mic as source:
-                wav_path = self.record_with_vad(source, max_seconds=15.0)
-            self.push_state("PROCESSING")
-            if not wav_path:
-                self.push_state("IDLE")
-                continue
             try:
-                text = self.strip_fillers(self.transcribe_audio(wav_path))
-            finally:
-                if os.path.exists(wav_path):
-                    os.unlink(wav_path)
-            transcript_lower = text.lower()
-            if any(phrase in transcript_lower for phrase in self.HOLODESK_PHRASES):
-                self.push_state("IDLE")
-                continue
-            if len(text.split()) < 3:
-                if not self.auto_relisten_done:
-                    self.auto_relisten_done = True
-                    try:
-                        response_queue.put_nowait({"type": "VOICE_RETRY"})
-                    except queue.Full:
-                        pass
-                    self.followup_until = time.time() + 0.2
+                # --- STATE: IDLE / WAKE DETECTION ---
+                if not self.detect_wake_word(0):
+                    self.push_state("IDLE")
                     continue
-                self.auto_relisten_done = False
+
+                # --- STATE: LISTENING (record user speech) ---
+                self.push_state("WAKE")
+                with mic as source:
+                    wav_path = self.record_with_vad(source, max_seconds=45.0, silence_ms=5000)
+
+                # --- STATE: PROCESSING (transcribe) ---
+                self.push_state("PROCESSING")
+                if not wav_path:
+                    self.push_state("IDLE")
+                    continue
+                try:
+                    text = self.strip_fillers(self.transcribe_audio(wav_path))
+                finally:
+                    if os.path.exists(wav_path):
+                        os.unlink(wav_path)
+
+                if not text or len(text.split()) < 2:
+                    self.push_state("IDLE")
+                    continue
+
+                # --- DISPATCH, SPEAK, then CONVERSATION WINDOW ---
+                result = self._dispatch_and_speak(text)
+                if result is None:
+                    self.push_state("IDLE")
+                    continue
+
+                # --- 15-SECOND CONVERSATION WINDOW ---
+                # Loop listening for follow-ups. Each record_with_vad call
+                # listens for up to 5s. If the user stays silent for the
+                # full 15s window, conversation ends naturally.
+                conversation_end = time.time() + self.CONVERSATION_WINDOW_SEC
+                while time.time() < conversation_end and self.running:
+                    self.push_state("IDLE")
+                    with mic as source:
+                        followup_wav = self.record_with_vad(
+                            source,
+                            max_seconds=self.FOLLOWUP_LISTEN_SEC,
+                            silence_ms=self.FOLLOWUP_SILENCE_MS,
+                        )
+
+                    if not followup_wav:
+                        continue
+
+                    self.push_state("PROCESSING")
+                    try:
+                        followup_text = self.strip_fillers(
+                            self.transcribe_audio(followup_wav)
+                        )
+                    finally:
+                        if os.path.exists(followup_wav):
+                            os.unlink(followup_wav)
+
+                    if not followup_text:
+                        continue
+
+                    print(f"[VOICE] Follow-up heard: '{followup_text}'")
+
+                    if self._is_exit_phrase(followup_text):
+                        speak("Alright, I'm here if you need me.")
+                        break
+
+                    if len(followup_text.split()) < 2:
+                        continue
+
+                    if self._is_echo_of_ai(followup_text):
+                        continue
+
+                    result = self._dispatch_and_speak(followup_text)
+                    if result is None:
+                        break
+                    # Reset the window — each exchange gets another 15s
+                    conversation_end = time.time() + self.CONVERSATION_WINDOW_SEC
+
                 self.push_state("IDLE")
-                continue
-            self.auto_relisten_done = False
-            try:
-                response_queue.put_nowait({"type": "VOICE_COMMAND", "command": text})
-            except queue.Full:
-                pass
-            self.followup_until = time.time() + 4
+
+            except Exception as e:
+                print(f"[VOICE] Error in voice loop (recovering): {e}")
+                self.push_state("IDLE")
+                time.sleep(0.5)
 
 
 voice_thread = VoiceAssistantThread()
@@ -590,7 +699,6 @@ while running :
             if is_ai_speaking:
                 stop_ai_speech()
                 print("[GESTURE] OPEN_PALM — speech stopped")
-                voice_thread.request_redirect_listen()
             open_palm_cooldown = 15   # 0.5s at 30fps
 
     except queue.Empty:
@@ -608,7 +716,7 @@ while running :
             if incoming:
                 last_command = incoming
         elif voice_event.get("type") == "VOICE_RETRY":
-            threading.Thread(target=speak, args=("I didn't catch that",), daemon=True).start()
+            voice_reply_queue.put({"text": "I didn't catch that", "prompt": False})
             voice_thread.request_wake()
         elif voice_event.get("type") == "VOICE_STATE":
             voice_ui_state = voice_event.get("state", voice_ui_state)
@@ -708,22 +816,24 @@ while running :
         voice_ui_state = "PROCESSING"
         current_command = last_command
         
+        def _reply(text, prompt=False):
+            voice_reply_queue.put({"text": text, "prompt": prompt})
+
         # ===== STOP COMMAND (Stops scrolling) =====
         if last_command == "stop" or "stop scrolling" in last_command or "stop scroll" in last_command:
             if is_scrolling:
                 is_scrolling = False
                 scroll_direction = 0
-                threading.Thread(target=speak, args=("Scrolling stopped!",), daemon=True).start()
+                _reply("Scrolling stopped!")
             else:
-                threading.Thread(target=speak, args=("Nothing to stop.",), daemon=True).start()
+                _reply("Nothing to stop.")
         
         elif "reset" in last_command:
             card_x = 400 
             card_y = 300 
-            threading.Thread(target=speak, args=("Card reset!",), daemon=True).start()
+            _reply("Card reset!")
 
         elif "color" in last_command or "colour" in last_command:
-            # Smart color detection - parse the color from command!
             if "red" in last_command:
                 card_color = (255, 0, 0)
             elif "green" in last_command:
@@ -743,78 +853,72 @@ while running :
             elif "pink" in last_command:
                 card_color = (255, 105, 180)
             else:
-                # Random color if no specific color mentioned
                 import random
                 card_color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
-            threading.Thread(target=speak, args=("Card color changed!",), daemon=True).start()
+            _reply("Card color changed!")
 
         elif "hello" in last_command or " hi " in f" {last_command} " or last_command == "hi":
-            threading.Thread(target=speak, args=("Hello! How can I help you today?",), daemon=True).start()
+            _reply("Hello! How can I help you today?")
         elif "bye" in last_command or "goodbye" in last_command:
-            threading.Thread(target=speak, args=("Goodbye! Have a great day!",), daemon=True).start()
+            _reply("Goodbye! Have a great day!")
         elif "thank you" in last_command or "thanks" in last_command:
-            threading.Thread(target=speak, args=("You're welcome!",),daemon=True).start()
+            _reply("You're welcome!")
         elif "help" in last_command:
-            threading.Thread(target=speak, args=("I can help you with any questions you have. I can also open desktop apps or webpages like Facebook, YouTube, or Netflix. Just ask me anything!",), daemon=True).start()
+            _reply("I can help you with any questions you have. I can also open desktop apps or webpages like Facebook, YouTube, or Netflix. Just ask me anything!")
         
-        #==== SCROLL COMMAND ==== (with spelling variations for Whisper mishearing)
         elif "scroll up" in last_command or "scrawl up" in last_command or "screw up" in last_command or "scroll all up" in last_command:
             if "lot" in last_command or "more" in last_command:
-                pyautogui.scroll(1000)  # HUGE scroll
+                pyautogui.scroll(1000)
             else:
-                pyautogui.scroll(500)  # Normal scroll - BIG!
-            threading.Thread(target=speak, args=("Scrolling up!",), daemon=True).start()
+                pyautogui.scroll(500)
+            _reply("Scrolling up!")
         
         elif "scroll down" in last_command or "scrawl down" in last_command or "screw down" in last_command or "scroll all down" in last_command or "screw all down" in last_command or "screw it down" in last_command:
             if "lot" in last_command or "more" in last_command:
-                pyautogui.scroll(-1000)  # HUGE scroll
+                pyautogui.scroll(-1000)
             else:
-                pyautogui.scroll(-500)  # Normal scroll - BIG!
-            threading.Thread(target=speak, args=("Scrolling down!",), daemon=True).start()
+                pyautogui.scroll(-500)
+            _reply("Scrolling down!")
 
-        #==== APP COMMANDS ==== 
         elif "open chrome" in last_command:
             import subprocess
             subprocess.Popen('start chrome', shell=True)
-            threading.Thread(target=speak, args=("Opening Chrome...",), daemon=True).start()
+            _reply("Opening Chrome...")
 
         elif "open facebook" in last_command or "facebook" in last_command and "open" in last_command:
             import subprocess
             subprocess.Popen('start chrome https://facebook.com', shell=True)
-            threading.Thread(target=speak, args=("Opening Facebook...",), daemon=True).start()
+            _reply("Opening Facebook...")
 
         elif "open youtube" in last_command or "youtube" in last_command and "open" in last_command:
             import subprocess
             subprocess.Popen('start chrome https://youtube.com', shell=True)
-            threading.Thread(target=speak, args=("Opening YouTube...",), daemon=True).start()
+            _reply("Opening YouTube...")
 
         elif "open netflix" in last_command or "netflix" in last_command and "open" in last_command:
             import subprocess
             subprocess.Popen('start chrome https://netflix.com', shell=True)
-            threading.Thread(target=speak, args=("Opening Netflix...",), daemon=True).start()
+            _reply("Opening Netflix...")
 
         elif "open notepad" in last_command:
             import subprocess
             subprocess.Popen('start notepad', shell=True)
-            threading.Thread(target=speak, args=("Opening Notepad...",), daemon=True).start()
+            _reply("Opening Notepad...")
 
         elif "open notepad++" in last_command:
             import subprocess
             subprocess.Popen('start notepad++', shell=True)
-            threading.Thread(target=speak, args=("Opening Notepad++...",), daemon=True).start()
+            _reply("Opening Notepad++...")
 
         elif "close" in last_command and ("window" in last_command or "app" in last_command or "this" in last_command):
             pyautogui.hotkey('alt', 'F4')
-            threading.Thread(target=speak, args=("Closing window...",), daemon=True).start()
+            _reply("Closing window...")
 
         elif "minimize" in last_command:
-            pyautogui.hotkey('win', 'm')  # minimize current window
-            threading.Thread(target=speak, args=("Minimizing window...",), daemon=True).start()
+            pyautogui.hotkey('win', 'm')
+            _reply("Minimizing window...")
 
         elif "open" in last_command:
-            # Extract app name from command
-            # "open chrome" → "chrome"
-            # "open notepad" → "notepad"
             words = last_command.split()
             if "open" in words:
                 app_index = words.index("open") + 1
@@ -823,9 +927,9 @@ while running :
                     try:
                         import subprocess
                         subprocess.Popen(f'start {app_name}', shell=True)
-                        threading.Thread(target=speak, args=(f"Opening {app_name}",), daemon=True).start()
+                        _reply(f"Opening {app_name}")
                     except:
-                        threading.Thread(target=speak, args=(f"Sorry, I couldn't open {app_name}",), daemon=True).start()
+                        _reply(f"Sorry, I couldn't open {app_name}")
 
         # ===== SCREEN VISION COMMANDS (Step 7) =====
         elif any(kw in last_command for kw in [
@@ -837,6 +941,7 @@ while running :
         ]):
             analyze_screen(question=last_command if len(last_command) > 10 else
                            "What is on this screen? Explain it clearly.")
+            _reply(None)
 
         elif any(kw in last_command for kw in [
             "explain this error", "what's this error", "whats this error",
@@ -847,6 +952,7 @@ while running :
                          "What is it, what caused it, and how do I fix it? "
                          "Be specific and concise."
             )
+            _reply(None)
 
         elif any(kw in last_command for kw in [
             "explain this code", "what does this code do",
@@ -856,16 +962,16 @@ while running :
                 question="Explain what this code does in plain English. "
                          "Focus on purpose, not syntax. Two sentences max."
             )
+            _reply(None)
 
         else: 
-            #If no specific command, ask AI 
-            prompt = current_command
+            ai_prompt = current_command
             if followup_context:
-                prompt = f"Previous exchange: {followup_context}\nUser follow-up: {current_command}"
-            ai_response = ask_ai(prompt)
-            threading.Thread(target=speak, args=(ai_response,), daemon=True).start()
+                ai_prompt = f"Previous exchange: {followup_context}\nUser follow-up: {current_command}"
+            ai_response = ask_ai(ai_prompt)
             followup_context = f"user: {current_command}\nassistant: {ai_response}"
             last_exchange = followup_context
+            _reply(ai_response, prompt=True)
         last_command = "" 
 
 
