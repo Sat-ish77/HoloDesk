@@ -15,6 +15,7 @@ import tempfile
 import wave
 import pyautogui
 import audioop
+import re
 
 # Add project root to path so agents/, connectors/, core/, vision/ are importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -29,7 +30,14 @@ DEMO_MODE = "--demo" in sys.argv
 on_startup(DEMO_MODE)
 
 # ===== THREADING REFACTOR (Step 8) =====
-from core.queues import frame_queue, landmark_queue, gesture_queue, response_queue
+from core.queues import (
+    frame_queue,
+    landmark_queue,
+    gesture_queue,
+    response_queue,
+    command_queue,
+    voice_reply_queue,
+)
 from core.camera_thread import CameraThread
 from core.vision_thread import VisionThread
 
@@ -199,17 +207,36 @@ print("Loading Whisper model....please wait...")
 whisper_model = WhisperModel("small", device = "cpu", compute_type = "int8")  # "small" is more accurate than "base" 
 print("Whisper model loaded successfully!")
 
-# Variable to store last voice command
-last_command = ""
+# Optional Moonshine STT fallback (requires model download/config)
+ENABLE_MOONSHINE_FALLBACK = os.getenv("ENABLE_MOONSHINE_FALLBACK", "0").strip() == "1"
+MOONSHINE_MODEL_PATH = os.getenv("MOONSHINE_MODEL_PATH", "").strip()
+MOONSHINE_MODEL_ARCH = os.getenv("MOONSHINE_MODEL_ARCH", "").strip()
+_moonshine_transcriber = None
+
 voice_ui_state = "IDLE"   # IDLE | WAKE | LISTENING | PROCESSING | SPEAKING | UNAVAILABLE
 audio_level = 0.0
 last_exchange = ""
 followup_context = ""
 tts_active = threading.Event()
 # Main loop puts the response TEXT here after processing a voice command.
-# Voice thread reads it, then calls speak() itself — same thread that records
-# also speaks, so mic and TTS can never overlap. This is the production pattern.
-voice_reply_queue = queue.Queue(maxsize=1)
+# Orchestrator + Agents
+from agents.orchestrator import OrchestratorAgent
+from agents.task_agent import TaskAgent
+from agents.chat_agent import ChatAgent
+from agents.memory_agent import MemoryAgent
+
+# Instantiate agents (singletons for the app lifetime)
+memory_agent = MemoryAgent()
+chat_agent = ChatAgent()
+task_agent = TaskAgent(screen_agent=screen_agent if SCREEN_VISION_AVAILABLE else None)
+
+orchestrator = OrchestratorAgent(agents={
+    "screen_agent": screen_agent if SCREEN_VISION_AVAILABLE else None,
+    "task_agent": task_agent,
+    "memory_agent": memory_agent,
+    "chat_agent": chat_agent,
+})
+orchestrator.start()
 
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling
@@ -337,22 +364,106 @@ class VoiceAssistantThread(threading.Thread):
 
     def transcribe_audio(self, wav_path):
         try:
-            segments, _ = whisper_model.transcribe(wav_path, beam_size=5, language="en")
+            segments, _ = whisper_model.transcribe(
+                wav_path,
+                beam_size=5,
+                language="en",
+                temperature=0.0,
+                no_speech_threshold=0.6,
+                log_prob_threshold=-1.0,
+                compression_ratio_threshold=2.4,
+            )
             seg_list = list(segments)
             if seg_list:
                 avg_logprob = sum(getattr(seg, "avg_logprob", -10.0) for seg in seg_list) / len(seg_list)
                 if avg_logprob < -1.0:
+                    # low confidence: optionally try Moonshine fallback before giving up
+                    if ENABLE_MOONSHINE_FALLBACK:
+                        ms = self._moonshine_transcribe(wav_path)
+                        if ms:
+                            return self._normalize_transcript(ms)
                     return ""
             text = " ".join(seg.text for seg in seg_list).strip().lower()
+            text = self._normalize_transcript(text)
+            # If confidence is weak and transcript is long/fluently garbage-y, treat as non-speech
+            if seg_list:
+                avg_logprob = sum(getattr(seg, "avg_logprob", -10.0) for seg in seg_list) / len(seg_list)
+                if avg_logprob < -0.6 and len(text.split()) >= 8:
+                    return ""
             return text
         except Exception as e:
             print(f"[WARNING] Whisper failed, fallback STT: {e}")
             with sr.AudioFile(wav_path) as source:
                 audio_data = recognizer.record(source)
             try:
-                return recognizer.recognize_google(audio_data).strip().lower()
+                return self._normalize_transcript(recognizer.recognize_google(audio_data).strip().lower())
             except Exception:
+                if ENABLE_MOONSHINE_FALLBACK:
+                    ms = self._moonshine_transcribe(wav_path)
+                    if ms:
+                        return self._normalize_transcript(ms)
                 return ""
+
+    @staticmethod
+    def _normalize_transcript(text: str) -> str:
+        t = (text or "").lower().strip()
+        if not t:
+            return ""
+        # collapse punctuation to spaces
+        t = re.sub(r"[^a-z0-9\s'.:-]+", " ", t)
+        # collapse repeated whitespace
+        t = re.sub(r"\s+", " ", t).strip()
+        # remove immediate duplicate words: "can you can you" -> "can you"
+        parts = t.split()
+        out = []
+        for w in parts:
+            if out and out[-1] == w:
+                continue
+            out.append(w)
+        return " ".join(out)
+
+    def _moonshine_transcribe(self, wav_path: str) -> str:
+        """
+        Moonshine fallback transcription.
+        Requires:
+          ENABLE_MOONSHINE_FALLBACK=1
+          MOONSHINE_MODEL_PATH=<downloaded path>
+          MOONSHINE_MODEL_ARCH=<arch number or constant>
+        """
+        global _moonshine_transcriber
+        if not ENABLE_MOONSHINE_FALLBACK:
+            return ""
+        if not MOONSHINE_MODEL_PATH or not MOONSHINE_MODEL_ARCH:
+            return ""
+        try:
+            from moonshine_voice import Transcriber, load_wav_file
+        except Exception:
+            return ""
+        try:
+            if _moonshine_transcriber is None:
+                # model_arch is an integer in Moonshine CLI output; keep as int when possible
+                try:
+                    model_arch = int(MOONSHINE_MODEL_ARCH)
+                except Exception:
+                    model_arch = MOONSHINE_MODEL_ARCH
+                _moonshine_transcriber = Transcriber(model_path=MOONSHINE_MODEL_PATH, model_arch=model_arch)
+
+            audio_data, sample_rate = load_wav_file(wav_path)
+            transcript = _moonshine_transcriber.transcribe_without_streaming(audio_data, sample_rate)
+
+            # Try common shapes: transcript.lines[*].text OR transcript.get_text()
+            if hasattr(transcript, "get_text"):
+                return (transcript.get_text() or "").strip()
+            if hasattr(transcript, "lines"):
+                texts = []
+                for line in transcript.lines:
+                    txt = getattr(line, "text", "") or ""
+                    if txt.strip():
+                        texts.append(txt.strip())
+                return " ".join(texts).strip()
+            return ""
+        except Exception:
+            return ""
 
     def strip_fillers(self, text):
         cleaned = text
@@ -371,9 +482,13 @@ class VoiceAssistantThread(threading.Thread):
         silence_count = 0
         frames = []
         started = False
+        started_at = None
+        rms_sum = 0
+        rms_n = 0
         start = time.time()
         self.push_state("LISTENING")
         wait_for_speech_timeout = 10.0
+        start_threshold = 420  # raise to avoid breath/click false-starts
         while time.time() - start < max_seconds:
             elapsed = time.time() - start
             if not started and elapsed > wait_for_speech_timeout:
@@ -384,16 +499,25 @@ class VoiceAssistantThread(threading.Thread):
             rms = audioop.rms(raw, source.SAMPLE_WIDTH)
             level = min(1.0, rms / 1500.0)
             self.push_state("LISTENING", level=level)
-            if rms >= 300:
+            if rms >= start_threshold:
                 started = True
+                if started_at is None:
+                    started_at = time.time()
                 silence_count = 0
             elif started:
                 silence_count += 1
             if started:
                 frames.append(raw)
+                rms_sum += rms
+                rms_n += 1
             if started and silence_count >= silence_chunks_needed:
                 break
         if not frames:
+            return None
+        # False-start guard: if we only captured a tiny blip, do not transcribe (prevents hallucinations)
+        captured_seconds = (len(frames) * chunk_ms) / 1000.0
+        avg_rms = (rms_sum / rms_n) if rms_n else 0
+        if captured_seconds < 0.6 and avg_rms < (start_threshold + 80):
             return None
         temp_wav = tempfile.mktemp(suffix=".wav")
         with wave.open(temp_wav, "wb") as wf:
@@ -467,7 +591,7 @@ class VoiceAssistantThread(threading.Thread):
         """Send command to main loop, wait for reply, speak it.
         Returns the reply dict or None on failure."""
         try:
-            response_queue.put_nowait({"type": "VOICE_COMMAND", "command": text})
+            command_queue.put_nowait({"type": "USER_COMMAND", "text": text, "source": "voice", "ts": time.time()})
         except queue.Full:
             return None
 
@@ -704,23 +828,25 @@ while running :
     except queue.Empty:
         pass
 
-    # Voice thread -> main loop events
+    # Voice thread / background threads -> main loop events
     while True:
         try:
             voice_event = response_queue.get_nowait()
         except queue.Empty:
             break
 
-        if voice_event.get("type") == "VOICE_COMMAND":
-            incoming = voice_event.get("command", "").strip()
-            if incoming:
-                last_command = incoming
-        elif voice_event.get("type") == "VOICE_RETRY":
+        if voice_event.get("type") == "VOICE_RETRY":
             voice_reply_queue.put({"text": "I didn't catch that", "prompt": False})
             voice_thread.request_wake()
         elif voice_event.get("type") == "VOICE_STATE":
             voice_ui_state = voice_event.get("state", voice_ui_state)
             audio_level = voice_event.get("level", audio_level)
+        elif voice_event.get("type") == "TIMER_DONE":
+            # Deliver timer completion into the voice thread's request/response channel.
+            try:
+                voice_reply_queue.put_nowait({"text": voice_event.get("text", "Timer done."), "prompt": False})
+            except queue.Full:
+                pass
 
     # ===== CURSOR + PINCH + THUMBS (from latest_landmarks) =====
     # These stay in the main loop — they depend on cursor screen coords,
@@ -810,169 +936,7 @@ while running :
         thumbs_up_frames = 0
         thumbs_down_frames = 0
         
-    # ==== PROCESS VOICE COMMANDS ==== 
-    if last_command:
-        print(f"PROCESSING COMMAND: {last_command}")  # Debug
-        voice_ui_state = "PROCESSING"
-        current_command = last_command
-        
-        def _reply(text, prompt=False):
-            voice_reply_queue.put({"text": text, "prompt": prompt})
-
-        # ===== STOP COMMAND (Stops scrolling) =====
-        if last_command == "stop" or "stop scrolling" in last_command or "stop scroll" in last_command:
-            if is_scrolling:
-                is_scrolling = False
-                scroll_direction = 0
-                _reply("Scrolling stopped!")
-            else:
-                _reply("Nothing to stop.")
-        
-        elif "reset" in last_command:
-            card_x = 400 
-            card_y = 300 
-            _reply("Card reset!")
-
-        elif "color" in last_command or "colour" in last_command:
-            if "red" in last_command:
-                card_color = (255, 0, 0)
-            elif "green" in last_command:
-                card_color = (0, 255, 0)
-            elif "blue" in last_command:
-                card_color = (0, 0, 255)
-            elif "yellow" in last_command:
-                card_color = (255, 255, 0)
-            elif "purple" in last_command:
-                card_color = (128, 0, 128)
-            elif "orange" in last_command:
-                card_color = (255, 165, 0)
-            elif "white" in last_command:
-                card_color = (255, 255, 255)
-            elif "black" in last_command:
-                card_color = (0, 0, 0)
-            elif "pink" in last_command:
-                card_color = (255, 105, 180)
-            else:
-                import random
-                card_color = (random.randint(50, 255), random.randint(50, 255), random.randint(50, 255))
-            _reply("Card color changed!")
-
-        elif "hello" in last_command or " hi " in f" {last_command} " or last_command == "hi":
-            _reply("Hello! How can I help you today?")
-        elif "bye" in last_command or "goodbye" in last_command:
-            _reply("Goodbye! Have a great day!")
-        elif "thank you" in last_command or "thanks" in last_command:
-            _reply("You're welcome!")
-        elif "help" in last_command:
-            _reply("I can help you with any questions you have. I can also open desktop apps or webpages like Facebook, YouTube, or Netflix. Just ask me anything!")
-        
-        elif "scroll up" in last_command or "scrawl up" in last_command or "screw up" in last_command or "scroll all up" in last_command:
-            if "lot" in last_command or "more" in last_command:
-                pyautogui.scroll(1000)
-            else:
-                pyautogui.scroll(500)
-            _reply("Scrolling up!")
-        
-        elif "scroll down" in last_command or "scrawl down" in last_command or "screw down" in last_command or "scroll all down" in last_command or "screw all down" in last_command or "screw it down" in last_command:
-            if "lot" in last_command or "more" in last_command:
-                pyautogui.scroll(-1000)
-            else:
-                pyautogui.scroll(-500)
-            _reply("Scrolling down!")
-
-        elif "open chrome" in last_command:
-            import subprocess
-            subprocess.Popen('start chrome', shell=True)
-            _reply("Opening Chrome...")
-
-        elif "open facebook" in last_command or "facebook" in last_command and "open" in last_command:
-            import subprocess
-            subprocess.Popen('start chrome https://facebook.com', shell=True)
-            _reply("Opening Facebook...")
-
-        elif "open youtube" in last_command or "youtube" in last_command and "open" in last_command:
-            import subprocess
-            subprocess.Popen('start chrome https://youtube.com', shell=True)
-            _reply("Opening YouTube...")
-
-        elif "open netflix" in last_command or "netflix" in last_command and "open" in last_command:
-            import subprocess
-            subprocess.Popen('start chrome https://netflix.com', shell=True)
-            _reply("Opening Netflix...")
-
-        elif "open notepad" in last_command:
-            import subprocess
-            subprocess.Popen('start notepad', shell=True)
-            _reply("Opening Notepad...")
-
-        elif "open notepad++" in last_command:
-            import subprocess
-            subprocess.Popen('start notepad++', shell=True)
-            _reply("Opening Notepad++...")
-
-        elif "close" in last_command and ("window" in last_command or "app" in last_command or "this" in last_command):
-            pyautogui.hotkey('alt', 'F4')
-            _reply("Closing window...")
-
-        elif "minimize" in last_command:
-            pyautogui.hotkey('win', 'm')
-            _reply("Minimizing window...")
-
-        elif "open" in last_command:
-            words = last_command.split()
-            if "open" in words:
-                app_index = words.index("open") + 1
-                if app_index < len(words):
-                    app_name = words[app_index]
-                    try:
-                        import subprocess
-                        subprocess.Popen(f'start {app_name}', shell=True)
-                        _reply(f"Opening {app_name}")
-                    except:
-                        _reply(f"Sorry, I couldn't open {app_name}")
-
-        # ===== SCREEN VISION COMMANDS (Step 7) =====
-        elif any(kw in last_command for kw in [
-            "what's on my screen", "whats on my screen",
-            "what is on my screen", "read my screen", "read the screen",
-            "explain this", "explain my screen", "what do you see",
-            "analyze screen", "analyse screen", "screen analysis",
-            "what is this", "explain what's on screen",
-        ]):
-            analyze_screen(question=last_command if len(last_command) > 10 else
-                           "What is on this screen? Explain it clearly.")
-            _reply(None)
-
-        elif any(kw in last_command for kw in [
-            "explain this error", "what's this error", "whats this error",
-            "what is this error", "debug this", "what went wrong",
-        ]):
-            analyze_screen(
-                question="There is an error or bug on this screen. "
-                         "What is it, what caused it, and how do I fix it? "
-                         "Be specific and concise."
-            )
-            _reply(None)
-
-        elif any(kw in last_command for kw in [
-            "explain this code", "what does this code do",
-            "explain the code", "what is this code",
-        ]):
-            analyze_screen(
-                question="Explain what this code does in plain English. "
-                         "Focus on purpose, not syntax. Two sentences max."
-            )
-            _reply(None)
-
-        else: 
-            ai_prompt = current_command
-            if followup_context:
-                ai_prompt = f"Previous exchange: {followup_context}\nUser follow-up: {current_command}"
-            ai_response = ask_ai(ai_prompt)
-            followup_context = f"user: {current_command}\nassistant: {ai_response}"
-            last_exchange = followup_context
-            _reply(ai_response, prompt=True)
-        last_command = "" 
+    # Voice commands are routed through OrchestratorAgent via command_queue.
 
 
 

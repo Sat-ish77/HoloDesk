@@ -17,10 +17,14 @@ pyttsx3                 # TTS fallback
 # --- AI & APIs ---
 groq                    # Groq API client (Llama 3 — fast, cheap)
 openai                  # GPT-4o Vision for screen analysis (Step 7)
+moonshine-voice         # optional on-device STT fallback (requires model download)
+rapidfuzz               # entity resolution for app/site names in voice commands
 
 # --- Desktop Control ---
 pyautogui               # scroll, hotkeys, screenshot capture
 Pillow                  # image resizing before API calls (saves cost)
+pyperclip               # clipboard read/write for automation + copy answers
+requests                # web calls for future tool integrations
 
 # --- Storage & Memory ---
 psutil                  # read active process name for memory logger

@@ -11,6 +11,14 @@ Rules:
 
 import queue
 
+# Orchestrator command queue (voice/UI -> orchestrator)
+# Kept bounded so runaway loops can't eat RAM.
+command_queue = queue.Queue(maxsize=50)
+
+# Orchestrator replies (orchestrator -> voice thread)
+# maxsize=1 enforces strict request/response sequencing.
+voice_reply_queue = queue.Queue(maxsize=1)
+
 # Raw BGR frames from the camera (latest only — old frames discarded)
 frame_queue = queue.Queue(maxsize=1)
 
