@@ -2,6 +2,7 @@ import ctypes
 import os
 import queue
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -74,6 +75,32 @@ APP_MAP = {
     "calculator": "start calc",
     "file explorer": "start explorer",
     "task manager": "start taskmgr",
+}
+
+# Deterministic browser executable locations. We search these paths in order
+# and hand the URL to the exe as a process argument — this avoids:
+#   1. `start <name>` resolving to some other registered handler.
+#   2. `webbrowser.open` ignoring our browser choice and using the system default.
+# Expanded at class construction time so %LOCALAPPDATA% etc. get resolved.
+BROWSER_PATH_CANDIDATES: dict[str, list[str]] = {
+    "chrome": [
+        r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe",
+    ],
+    "brave": [
+        r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe",
+        r"C:\Program Files (x86)\BraveSoftware\Brave-Browser\Application\brave.exe",
+        r"%LOCALAPPDATA%\BraveSoftware\Brave-Browser\Application\brave.exe",
+    ],
+    "firefox": [
+        r"C:\Program Files\Mozilla Firefox\firefox.exe",
+        r"C:\Program Files (x86)\Mozilla Firefox\firefox.exe",
+    ],
+    "edge": [
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+    ],
 }
 
 WEBSITE_MAP = {
@@ -181,6 +208,20 @@ class TaskAgent:
                 return self.minimize_active_window()
             if action == "maximize":
                 return self.maximize_active_window()
+            if action == "shutdown":
+                return self.shutdown_with_confirm()
+            if action == "restart":
+                return self.restart_with_confirm()
+            if action == "declared_task_unsupported":
+                # The user clearly asked for an action but we have no handler.
+                # Be honest about it instead of letting chat_agent roleplay.
+                return {
+                    "success": False,
+                    "response": (
+                        "I heard you ask me to do something, but I can't do that "
+                        "reliably yet. I won't pretend I did."
+                    ),
+                }
 
             return {"success": False, "response": "I’m not sure how to do that yet."}
         except Exception as e:
@@ -319,9 +360,15 @@ class TaskAgent:
 
     def open_web_in_browser(self, target: str, browser: str, raw: str = "") -> dict:
         """
-        Two-step behavior:
-          1) open browser app
-          2) open URL in that browser
+        Deterministic two-step behavior:
+          1) resolve a real browser executable path (NOT the default handler)
+          2) launch that exe with the URL as a direct argv argument
+
+        Using `subprocess.Popen([exe, url])` with a resolved path guarantees we
+        actually open the URL in the browser the user asked for, regardless of
+        what the Windows default handler is set to. The old
+        `start <name> "<url>"` form silently fell back to the default browser
+        when the name didn't resolve to a registered app alias.
         """
         target_clean = self._sanitize_site_target(target, raw=raw)
         if not target_clean:
@@ -331,27 +378,54 @@ class TaskAgent:
         if not browser_clean:
             return {"success": False, "response": "Which browser should I use? Chrome or Brave?"}
 
-        # Resolve URL first
-        url = WEBSITE_MAP.get(target_clean.lower())
-        if not url:
-            if target_clean.startswith("http://") or target_clean.startswith("https://"):
-                url = target_clean
-            elif any(x in target_clean for x in [".com", ".org", ".net", ".io"]):
-                url = "https://" + target_clean
-            else:
-                url = "https://" + target_clean + ".com"
+        url = self._build_url_from_site_name(target_clean)
 
-        # Step 1: open browser app
-        self.open_app(browser_clean)
-        time.sleep(1.0)
+        exe_path = self._find_browser_executable(browser_clean)
+        if not exe_path:
+            # Be explicit about failure rather than silently falling back to
+            # webbrowser.open() (which would use the default browser — the
+            # exact roleplay/mismatch failure mode we're fixing).
+            return {
+                "success": False,
+                "response": (
+                    f"I couldn't find {browser_clean} installed on this PC, "
+                    f"so I didn't open {target_clean}. Install it or try a different browser."
+                ),
+            }
 
-        # Step 2: open url in that browser
         try:
-            # Windows 'start' can target a specific browser executable name.
-            subprocess.Popen(f'start {browser_clean} \"{url}\"', shell=True)
+            subprocess.Popen([exe_path, url])
             return {"success": True, "response": f"Opening {target_clean} in {browser_clean}."}
         except Exception as e:
             return {"success": False, "response": f"I couldn't open that in {browser_clean}: {e}"}
+
+    @staticmethod
+    def _build_url_from_site_name(target_clean: str) -> str:
+        """Turn 'facebook' / 'facebook.com' / 'https://...' into a usable URL."""
+        key = target_clean.lower()
+        if key in WEBSITE_MAP:
+            return WEBSITE_MAP[key]
+        if target_clean.startswith("http://") or target_clean.startswith("https://"):
+            return target_clean
+        if any(x in target_clean for x in [".com", ".org", ".net", ".io"]):
+            return "https://" + target_clean
+        return "https://" + target_clean + ".com"
+
+    @staticmethod
+    def _find_browser_executable(browser: str) -> str | None:
+        """
+        Resolve a browser name ('chrome', 'brave', ...) to an absolute exe path.
+        Checks known install locations first, then falls back to PATH lookup.
+        Returns None if the browser can't be found — caller must handle that.
+        """
+        for raw_path in BROWSER_PATH_CANDIDATES.get(browser, []):
+            path = os.path.expandvars(raw_path)
+            if os.path.isfile(path):
+                return path
+        # shutil.which handles the case where the browser was added to PATH
+        # (e.g. Chocolatey/Scoop installs) without us having to guess the dir.
+        which = shutil.which(browser) or shutil.which(f"{browser}.exe")
+        return which
 
     # ---------------------------
     # Interaction (basic)
@@ -548,6 +622,56 @@ class TaskAgent:
             return {"success": False, "response": f"I couldn't lock the screen: {e}"}
 
     # ---------------------------
+    # Shutdown / Restart — confirm-before with 10s cancel window
+    # ---------------------------
+    def shutdown_with_confirm(self) -> dict:
+        """
+        Two-stage safety:
+          1. First call arms the pending confirmation. User must say 'yes'
+             (handled in execute() via _looks_like_yes) before we do anything.
+          2. When confirmed, we schedule the actual shutdown 10 seconds out
+             and leave a cancel window — the user can still say 'cancel'
+             within that window to abort via _confirm_cancel().
+        """
+        return self._set_pending_confirm(
+            "I'm about to shut down this PC. Say 'yes' to confirm, or 'cancel' to stop.",
+            self._schedule_shutdown,
+            kind="shutdown",
+        )
+
+    def restart_with_confirm(self) -> dict:
+        return self._set_pending_confirm(
+            "I'm about to restart this PC. Say 'yes' to confirm, or 'cancel' to stop.",
+            self._schedule_restart,
+            kind="shutdown",
+        )
+
+    def _schedule_shutdown(self) -> dict:
+        return self._schedule_power_action("shutdown /s /t 0", "Shutting down in 10 seconds. Say 'cancel' to abort.")
+
+    def _schedule_restart(self) -> dict:
+        return self._schedule_power_action("shutdown /r /t 0", "Restarting in 10 seconds. Say 'cancel' to abort.")
+
+    def _schedule_power_action(self, shell_cmd: str, spoken: str) -> dict:
+        self._cancel_shutdown.clear()
+        # Re-arm the pending slot so the user saying 'cancel' during the
+        # 10-second window still routes through _confirm_cancel() and sets
+        # the event below.
+        self._set_pending_confirm(spoken, lambda: {"success": True, "response": "Already scheduled."}, kind="shutdown")
+
+        def _do_power_action():
+            # wait(10.0) returns True if cancel was signaled, False on timeout.
+            if self._cancel_shutdown.wait(10.0):
+                return
+            try:
+                subprocess.Popen(shell_cmd, shell=True)
+            except Exception:
+                pass
+
+        threading.Thread(target=_do_power_action, daemon=True).start()
+        return {"success": True, "response": spoken}
+
+    # ---------------------------
     # Window controls
     # ---------------------------
     def minimize_active_window(self) -> dict:
@@ -712,6 +836,32 @@ class TaskAgent:
         best, score, _ = match
         return best if score >= self.entity_min_score else ""
 
+    # Filler words/phrases that humans routinely tack onto voice commands.
+    # We strip these before resolving a site/app name so "facebook for me"
+    # resolves cleanly to "facebook" instead of failing.
+    _SPEECH_FILLER = (
+        "for me", "please", "can you", "could you", "would you",
+        "right now", "now", "up", "home", "homepage",
+    )
+
+    def _strip_speech_filler(self, text: str) -> str:
+        t = (text or "").lower().strip()
+        if not t:
+            return t
+        # Repeatedly trim trailing filler phrases (in order of length so
+        # multi-word filler like "for me" wins over single-word "me").
+        filler_sorted = sorted(self._SPEECH_FILLER, key=len, reverse=True)
+        changed = True
+        while changed:
+            changed = False
+            for f in filler_sorted:
+                if t.endswith(" " + f):
+                    t = t[: -(len(f) + 1)].strip()
+                    changed = True
+                elif t == f:
+                    return ""
+        return t.strip(" .,!?:;\"'")
+
     def _sanitize_site_target(self, target: str, raw: str = "") -> str:
         """
         Extract a usable site/url token from noisy speech like:
@@ -737,7 +887,12 @@ class TaskAgent:
             t = tok.strip(" .,!?:;\"'")
             if t in WEBSITE_MAP:
                 return t
-        return (target or "").strip().lower()
+
+        # Fall back to the trimmed target with filler removed. This is what
+        # lets "facebook for me" survive as "facebook" rather than failing
+        # entity resolution because "for me" was treated as part of the name.
+        fallback = self._strip_speech_filler((target or "").strip().lower())
+        return fallback
 
     @staticmethod
     def _list_running_process_basenames(limit: int = 100) -> list[str]:

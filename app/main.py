@@ -37,7 +37,16 @@ from core.queues import (
     response_queue,
     command_queue,
     voice_reply_queue,
+    record_tts_finished,
+    read_tts_state,
 )
+
+# Optional: rapidfuzz for echo similarity (already used in task_agent).
+try:
+    from rapidfuzz import fuzz as _rf_fuzz
+    _RAPIDFUZZ_AVAILABLE = True
+except Exception:
+    _RAPIDFUZZ_AVAILABLE = False
 from core.camera_thread import CameraThread
 from core.vision_thread import VisionThread
 
@@ -317,6 +326,9 @@ def speak(text):
         time.sleep(0.8)
         tts_active.clear()
         stop_speaking_flag = False
+        # Record exact end time so the echo guard can correlate TTS->mic
+        # by latency, not by fuzzy word-matching alone.
+        record_tts_finished(text)
         try:
             response_queue.put_nowait({"type": "VOICE_STATE", "state": "IDLE"})
         except queue.Full:
@@ -364,32 +376,60 @@ class VoiceAssistantThread(threading.Thread):
 
     def transcribe_audio(self, wav_path):
         try:
-            segments, _ = whisper_model.transcribe(
+            # Stricter no_speech_threshold + stricter log_prob gate. Whisper's
+            # 'small' will happily hallucinate fluent English out of room noise
+            # unless we raise the bar. These numbers were picked empirically to
+            # drop near-silence hallucinations without killing real speech.
+            segments, info = whisper_model.transcribe(
                 wav_path,
                 beam_size=5,
                 language="en",
                 temperature=0.0,
-                no_speech_threshold=0.6,
-                log_prob_threshold=-1.0,
+                no_speech_threshold=0.75,
+                log_prob_threshold=-0.8,
                 compression_ratio_threshold=2.4,
+                condition_on_previous_text=False,  # prevents drift between utterances
             )
             seg_list = list(segments)
-            if seg_list:
-                avg_logprob = sum(getattr(seg, "avg_logprob", -10.0) for seg in seg_list) / len(seg_list)
-                if avg_logprob < -1.0:
-                    # low confidence: optionally try Moonshine fallback before giving up
-                    if ENABLE_MOONSHINE_FALLBACK:
-                        ms = self._moonshine_transcribe(wav_path)
-                        if ms:
-                            return self._normalize_transcript(ms)
-                    return ""
+
+            # If Whisper itself flagged this as silence with high confidence, bail.
+            no_speech_prob = getattr(info, "no_speech_prob", 0.0) or 0.0
+            if no_speech_prob >= 0.75:
+                if ENABLE_MOONSHINE_FALLBACK:
+                    ms = self._moonshine_transcribe(wav_path)
+                    if ms:
+                        return self._normalize_transcript(ms)
+                return ""
+
+            if not seg_list:
+                return ""
+
+            avg_logprob = sum(getattr(seg, "avg_logprob", -10.0) for seg in seg_list) / len(seg_list)
+
+            # Hard confidence floor.
+            if avg_logprob < -0.9:
+                if ENABLE_MOONSHINE_FALLBACK:
+                    ms = self._moonshine_transcribe(wav_path)
+                    if ms:
+                        return self._normalize_transcript(ms)
+                return ""
+
             text = " ".join(seg.text for seg in seg_list).strip().lower()
             text = self._normalize_transcript(text)
-            # If confidence is weak and transcript is long/fluently garbage-y, treat as non-speech
-            if seg_list:
-                avg_logprob = sum(getattr(seg, "avg_logprob", -10.0) for seg in seg_list) / len(seg_list)
-                if avg_logprob < -0.6 and len(text.split()) >= 8:
-                    return ""
+
+            # Hallucination heuristic: low confidence + fluent multi-word output
+            # is almost always Whisper making things up from noise.
+            if avg_logprob < -0.55 and len(text.split()) >= 6:
+                return ""
+
+            # Common Whisper hallucinations from silence — drop them outright.
+            _HALLUCINATION_BLOCKLIST = {
+                "thank you.", "thanks for watching.", "thanks for watching",
+                "thank you", "bye.", "you", ".", "...",
+            }
+            if text.strip(" .!?") in _HALLUCINATION_BLOCKLIST:
+                return ""
+
             return text
         except Exception as e:
             print(f"[WARNING] Whisper failed, fallback STT: {e}")
@@ -485,10 +525,12 @@ class VoiceAssistantThread(threading.Thread):
         started_at = None
         rms_sum = 0
         rms_n = 0
+        voiced_chunks = 0  # count of chunks that were clearly above the speech floor
         start = time.time()
         self.push_state("LISTENING")
         wait_for_speech_timeout = 10.0
         start_threshold = 420  # raise to avoid breath/click false-starts
+        voiced_threshold = start_threshold + 120  # "definitely human speech" floor
         while time.time() - start < max_seconds:
             elapsed = time.time() - start
             if not started and elapsed > wait_for_speech_timeout:
@@ -510,14 +552,23 @@ class VoiceAssistantThread(threading.Thread):
                 frames.append(raw)
                 rms_sum += rms
                 rms_n += 1
+                if rms >= voiced_threshold:
+                    voiced_chunks += 1
             if started and silence_count >= silence_chunks_needed:
                 break
         if not frames:
             return None
-        # False-start guard: if we only captured a tiny blip, do not transcribe (prevents hallucinations)
+        # False-start guard: require enough real speech before we transcribe.
+        # Whisper hallucinates fluent English from tiny blips, so we demand:
+        #   - at least ~0.8s of captured audio, AND
+        #   - at least 0.4s of chunks that are clearly above the noise floor.
+        # Either failing means the recording is almost certainly not real speech.
         captured_seconds = (len(frames) * chunk_ms) / 1000.0
+        voiced_seconds = (voiced_chunks * chunk_ms) / 1000.0
         avg_rms = (rms_sum / rms_n) if rms_n else 0
-        if captured_seconds < 0.6 and avg_rms < (start_threshold + 80):
+        if captured_seconds < 0.8:
+            return None
+        if voiced_seconds < 0.4 and avg_rms < (start_threshold + 80):
             return None
         temp_wav = tempfile.mktemp(suffix=".wav")
         with wave.open(temp_wav, "wb") as wf:
@@ -564,21 +615,60 @@ class VoiceAssistantThread(threading.Thread):
     FOLLOWUP_LISTEN_SEC = 45.0
     FOLLOWUP_SILENCE_MS = 5000
 
+    # Echo guard tuning — deliberately conservative so real user speech survives.
+    ECHO_LATENCY_WINDOW_SEC = 2.5   # only within this window after TTS end
+    ECHO_SIMILARITY_CUTOFF = 86      # rapidfuzz token_set_ratio, 0..100
+    ECHO_PARTIAL_CUTOFF = 92         # partial_ratio for short echoes
+    ECHO_MAX_WORDS_FOR_PARTIAL = 12  # long transcripts are almost never echoes
+
     def _is_echo_of_ai(self, text):
-        """Detect if transcribed text is actually the AI's own speech (echo)."""
-        if not self._last_ai_response:
+        """
+        Detect if transcribed text is our own TTS bleeding back into the mic.
+        Strategy:
+          1. Must be within a small latency window of the last TTS ending.
+             (Speakers don't keep echoing for 10s.)
+          2. Must be highly similar to what we just spoke (rapidfuzz).
+          3. Short transcripts also check partial_ratio; long transcripts
+             require a high token_set_ratio to avoid discarding genuine
+             long utterances that happen to share a few words with the AI.
+        The old 3-word-substring match discarded real user speech as soon as
+        any 3-word chunk matched — that was way too loose.
+        """
+        t = (text or "").lower().strip()
+        if len(t.split()) < 3:
             return False
-        t = text.lower().strip()
-        ai = self._last_ai_response.lower()
-        words = t.split()
-        if len(words) < 3:
+
+        tts_text, tts_end_ts = read_tts_state()
+        if not tts_text or tts_end_ts <= 0.0:
             return False
-        # Check if a 3+ word phrase from the transcription appears in AI's last response
-        for i in range(len(words) - 2):
-            phrase = " ".join(words[i:i+3])
-            if phrase in ai:
-                print(f"[VOICE] Echo detected — discarding: '{t[:50]}...'")
+
+        latency = time.time() - tts_end_ts
+        if latency > self.ECHO_LATENCY_WINDOW_SEC:
+            return False
+
+        if not _RAPIDFUZZ_AVAILABLE:
+            # Fallback: only flag as echo if the transcribed text is contained
+            # almost entirely inside the AI response (very strict).
+            return len(t) >= 10 and t in tts_text
+
+        try:
+            token_set = _rf_fuzz.token_set_ratio(t, tts_text)
+        except Exception:
+            return False
+
+        if token_set >= self.ECHO_SIMILARITY_CUTOFF:
+            print(f"[VOICE] Echo detected (sim={token_set}, lat={latency:.2f}s) — discarding: '{t[:60]}...'")
+            return True
+
+        if len(t.split()) <= self.ECHO_MAX_WORDS_FOR_PARTIAL:
+            try:
+                partial = _rf_fuzz.partial_ratio(t, tts_text)
+            except Exception:
+                partial = 0
+            if partial >= self.ECHO_PARTIAL_CUTOFF:
+                print(f"[VOICE] Echo detected (partial={partial}, lat={latency:.2f}s) — discarding: '{t[:60]}...'")
                 return True
+
         return False
 
     def _is_exit_phrase(self, text):

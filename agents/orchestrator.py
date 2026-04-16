@@ -41,10 +41,47 @@ class OrchestratorAgent(threading.Thread):
             except Exception as e:
                 self._reply({"text": f"Something went wrong routing that: {e}", "prompt": False})
 
+    # Short yes/cancel words that should only be recognized as confirmation
+    # when a TaskAgent confirmation is actually pending.
+    _CONFIRM_WORDS = {
+        "yes", "yep", "yeah", "do it", "confirm", "okay", "ok",
+        "cancel", "stop", "no", "nope", "don't", "dont",
+    }
+
     def _process(self, command: str):
+        # If a TaskAgent confirmation is pending (e.g. an armed shutdown),
+        # short yes/cancel utterances MUST be delivered to TaskAgent so the
+        # scheduled action actually fires or aborts. Otherwise "cancel"
+        # would be classified as an EXIT phrase or fall through to chat.
+        task_agent = self.agents.get("task_agent")
+        if (
+            task_agent is not None
+            and getattr(task_agent, "_pending_confirm", None)
+            and command.lower().strip().rstrip(".!?,") in self._CONFIRM_WORDS
+        ):
+            result = task_agent.execute(action="__confirm_reply__", context={"raw": command})
+            self._reply({"text": result.get("response", "Okay."), "prompt": True})
+            return
+
         intents = self._detect_intents(command)
+
         if not intents:
-            intents = [("chat_agent", "chat", {"message": command})]
+            # Guard against the "roleplay" failure mode: if the user clearly
+            # declared an ACTION verb but we don't have a handler, DO NOT fall
+            # through to the chat model — it will cheerfully pretend it did the
+            # thing ("signed you in!", "maximized the window!"). Route to the
+            # TaskAgent's honest-refusal path instead.
+            if self._looks_like_declared_action(command):
+                intents = [("task_agent", "declared_task_unsupported", {"raw": command})]
+            else:
+                intents = [("chat_agent", "chat", {"message": command})]
+
+        # If any task-agent intent matched, drop chat_agent intents so the
+        # deterministic action speaks for itself (no "opening X" + chat reply
+        # about X). Screen/memory intents are preserved so combined commands
+        # like "open facebook and read my screen" still work.
+        if any(i[0] == "task_agent" for i in intents):
+            intents = [i for i in intents if i[0] != "chat_agent"]
 
         # Parallel dispatch only when user explicitly combines tasks.
         wants_parallel = self._looks_parallel(command) and len(intents) > 1
@@ -124,6 +161,22 @@ class OrchestratorAgent(threading.Thread):
             return "Here are a few habits I’ve noticed: " + "; ".join(parts) + "."
         return "I found some habit patterns, but couldn’t summarize them cleanly yet."
 
+    # Verbs that clearly describe a desktop/web ACTION the user wants performed.
+    # If any of these appear and no task handler matches, we refuse honestly
+    # rather than letting chat_agent pretend it performed the action.
+    DECLARED_ACTION_VERBS = (
+        "sign in", "log in", "log into", "login", "sign into",
+        "click", "submit", "press the", "tap the",
+        "maximize", "minimize", "shutdown", "shut down", "restart", "reboot",
+        "close all", "quit all",
+        "send the", "send this", "send an email",
+        "type this", "paste this",
+    )
+
+    def _looks_like_declared_action(self, command: str) -> bool:
+        c = (command or "").lower()
+        return any(v in c for v in self.DECLARED_ACTION_VERBS)
+
     def _detect_intents(self, command: str) -> list[tuple[str, str, dict]]:
         """
         Returns a list of (agent_name, action, context).
@@ -132,6 +185,7 @@ class OrchestratorAgent(threading.Thread):
         c = c.replace("hey holo", "").strip()
 
         intents: list[tuple[str, str, dict]] = []
+        matched_open_in_browser = False  # suppresses conflicting open_app/open_web/search
 
         # "open <site> in/using/with <browser>" (two-step browser open, then url)
         m = re.search(r"\bopen\s+(.+?)\s+(?:in|using|with)\s+(chrome|brave|firefox|edge)\b", c)
@@ -140,6 +194,13 @@ class OrchestratorAgent(threading.Thread):
             browser = (m.group(2) or "").strip()
             if target:
                 intents.append(("task_agent", "open_web_in_browser", {"target": target, "browser": browser, "raw": command}))
+                matched_open_in_browser = True
+
+        # Shutdown / restart — handed to TaskAgent which enforces confirm+cancel.
+        if re.search(r"\b(shut\s*down|power\s*off)\b", c):
+            intents.append(("task_agent", "shutdown", {"raw": command}))
+        elif re.search(r"\b(restart|reboot)\b", c):
+            intents.append(("task_agent", "restart", {"raw": command}))
 
         # Screen intents
         screen_phrases = [
@@ -174,7 +235,7 @@ class OrchestratorAgent(threading.Thread):
             intents.append(("task_agent", "lock_screen", {"raw": command}))
 
         # App launching / closing / window controls
-        if any(k in c for k in ["open ", "launch ", "start "]):
+        if not matched_open_in_browser and any(k in c for k in ["open ", "launch ", "start "]):
             app = self._extract_after_any(c, ["open ", "launch ", "start "])
             if app:
                 # Special-case common websites under open -> open_web
@@ -195,7 +256,11 @@ class OrchestratorAgent(threading.Thread):
 
         # Navigation / websites
         nav_phrases = ["go to ", "navigate to ", "visit ", "browse to ", "open "]
-        if any(p in c for p in nav_phrases) and self._looks_like_web_intent(c):
+        if (
+            not matched_open_in_browser
+            and any(p in c for p in nav_phrases)
+            and self._looks_like_web_intent(c)
+        ):
             target = self._extract_urlish(c)
             if target:
                 intents.append(("task_agent", "open_web", {"target": target, "raw": command}))
@@ -208,8 +273,14 @@ class OrchestratorAgent(threading.Thread):
         if any(p in c for p in ["draft an email", "write an email", "compose email", "send email to", "email to", "open gmail and"]):
             intents.append(("task_agent", "draft_email", {"raw": command}))
 
-        # Search
-        if any(p in c for p in ["search for", "google", "look up", "find", "search google for", "search youtube for"]):
+        # Search — but not when the user already asked to open a site in a
+        # specific browser. "open google in brave" must NOT trigger a search.
+        if (
+            not matched_open_in_browser
+            and any(p in c for p in ["search for", "look up", "find", "search google for", "search youtube for"])
+        ):
+            intents.append(("task_agent", "search", {"raw": command}))
+        elif not matched_open_in_browser and re.search(r"\bgoogle\s+\S", c) and "search" in c:
             intents.append(("task_agent", "search", {"raw": command}))
 
         # Scrolling
