@@ -221,6 +221,16 @@ ENABLE_MOONSHINE_FALLBACK = os.getenv("ENABLE_MOONSHINE_FALLBACK", "0").strip() 
 MOONSHINE_MODEL_PATH = os.getenv("MOONSHINE_MODEL_PATH", "").strip()
 MOONSHINE_MODEL_ARCH = os.getenv("MOONSHINE_MODEL_ARCH", "").strip()
 _moonshine_transcriber = None
+HOLODESK_VOICE_DEBUG = os.getenv("HOLODESK_VOICE_DEBUG", "0").strip() == "1"
+
+# Voice tuning knobs (per-mic). Defaults are chosen for typical laptop mics.
+HOLODESK_VAD_START_THRESHOLD = int(os.getenv("HOLODESK_VAD_START_THRESHOLD", "240"))
+HOLODESK_VAD_VOICED_DELTA = int(os.getenv("HOLODESK_VAD_VOICED_DELTA", "70"))
+HOLODESK_WHISPER_NO_SPEECH_THRESHOLD = float(os.getenv("HOLODESK_WHISPER_NO_SPEECH_THRESHOLD", "0.55"))
+HOLODESK_WHISPER_LOGPROB_THRESHOLD = float(os.getenv("HOLODESK_WHISPER_LOGPROB_THRESHOLD", "-1.20"))
+HOLODESK_INPUT_GAIN = float(os.getenv("HOLODESK_INPUT_GAIN", "1.0"))
+HOLODESK_AUTO_GAIN = os.getenv("HOLODESK_AUTO_GAIN", "1").strip() == "1"
+HOLODESK_AUTO_GAIN_TARGET_RMS = int(os.getenv("HOLODESK_AUTO_GAIN_TARGET_RMS", "220"))
 
 voice_ui_state = "IDLE"   # IDLE | WAKE | LISTENING | PROCESSING | SPEAKING | UNAVAILABLE
 audio_level = 0.0
@@ -385,8 +395,9 @@ class VoiceAssistantThread(threading.Thread):
                 beam_size=5,
                 language="en",
                 temperature=0.0,
-                no_speech_threshold=0.75,
-                log_prob_threshold=-0.8,
+                # Tunable via env vars for different mics / noise floors.
+                no_speech_threshold=HOLODESK_WHISPER_NO_SPEECH_THRESHOLD,
+                log_prob_threshold=HOLODESK_WHISPER_LOGPROB_THRESHOLD,
                 compression_ratio_threshold=2.4,
                 condition_on_previous_text=False,  # prevents drift between utterances
             )
@@ -394,7 +405,13 @@ class VoiceAssistantThread(threading.Thread):
 
             # If Whisper itself flagged this as silence with high confidence, bail.
             no_speech_prob = getattr(info, "no_speech_prob", 0.0) or 0.0
-            if no_speech_prob >= 0.75:
+            if HOLODESK_VOICE_DEBUG:
+                lang = getattr(info, "language", None)
+                dur = getattr(info, "duration", None)
+                print(f"[VOICE][debug] whisper info: no_speech_prob={no_speech_prob:.2f} duration={dur} lang={lang}")
+
+            # Only bail when Whisper is extremely confident this is silence.
+            if no_speech_prob >= 0.90:
                 if ENABLE_MOONSHINE_FALLBACK:
                     ms = self._moonshine_transcribe(wav_path)
                     if ms:
@@ -407,7 +424,7 @@ class VoiceAssistantThread(threading.Thread):
             avg_logprob = sum(getattr(seg, "avg_logprob", -10.0) for seg in seg_list) / len(seg_list)
 
             # Hard confidence floor.
-            if avg_logprob < -0.9:
+            if avg_logprob < (HOLODESK_WHISPER_LOGPROB_THRESHOLD - 0.15):
                 if ENABLE_MOONSHINE_FALLBACK:
                     ms = self._moonshine_transcribe(wav_path)
                     if ms:
@@ -416,10 +433,12 @@ class VoiceAssistantThread(threading.Thread):
 
             text = " ".join(seg.text for seg in seg_list).strip().lower()
             text = self._normalize_transcript(text)
+            if HOLODESK_VOICE_DEBUG:
+                print(f"[VOICE][debug] whisper: avg_logprob={avg_logprob:.2f} text={text!r}")
 
             # Hallucination heuristic: low confidence + fluent multi-word output
             # is almost always Whisper making things up from noise.
-            if avg_logprob < -0.55 and len(text.split()) >= 6:
+            if avg_logprob < -0.65 and len(text.split()) >= 9:
                 return ""
 
             # Common Whisper hallucinations from silence — drop them outright.
@@ -529,8 +548,9 @@ class VoiceAssistantThread(threading.Thread):
         start = time.time()
         self.push_state("LISTENING")
         wait_for_speech_timeout = 10.0
-        start_threshold = 420  # raise to avoid breath/click false-starts
-        voiced_threshold = start_threshold + 120  # "definitely human speech" floor
+        # Mic sensitivity is highly variable across devices; allow env overrides.
+        start_threshold = HOLODESK_VAD_START_THRESHOLD
+        voiced_threshold = start_threshold + HOLODESK_VAD_VOICED_DELTA  # "definitely human speech" floor
         while time.time() - start < max_seconds:
             elapsed = time.time() - start
             if not started and elapsed > wait_for_speech_timeout:
@@ -566,16 +586,49 @@ class VoiceAssistantThread(threading.Thread):
         captured_seconds = (len(frames) * chunk_ms) / 1000.0
         voiced_seconds = (voiced_chunks * chunk_ms) / 1000.0
         avg_rms = (rms_sum / rms_n) if rms_n else 0
-        if captured_seconds < 0.8:
+        if HOLODESK_VOICE_DEBUG:
+            print(
+                f"[VOICE][debug] capture: captured={captured_seconds:.2f}s voiced={voiced_seconds:.2f}s "
+                f"avg_rms={avg_rms:.0f} start_thr={start_threshold} voiced_thr={voiced_threshold}"
+            )
+        if captured_seconds < 0.45:
+            if HOLODESK_VOICE_DEBUG:
+                print(
+                    f"[VOICE][debug] discard: short capture "
+                    f"captured={captured_seconds:.2f}s voiced={voiced_seconds:.2f}s "
+                    f"avg_rms={avg_rms:.0f} voiced_chunks={voiced_chunks}"
+                )
             return None
-        if voiced_seconds < 0.4 and avg_rms < (start_threshold + 80):
+        if voiced_seconds < 0.18 and avg_rms < (start_threshold + 40):
+            if HOLODESK_VOICE_DEBUG:
+                print(
+                    f"[VOICE][debug] discard: weak capture "
+                    f"captured={captured_seconds:.2f}s voiced={voiced_seconds:.2f}s "
+                    f"avg_rms={avg_rms:.0f} voiced_chunks={voiced_chunks}"
+                )
             return None
         temp_wav = tempfile.mktemp(suffix=".wav")
+        # Optional input gain / auto-normalization for very quiet mics.
+        audio_bytes = b"".join(frames)
+        gain = max(0.1, HOLODESK_INPUT_GAIN)
+        if HOLODESK_AUTO_GAIN and avg_rms and avg_rms > 0:
+            auto = HOLODESK_AUTO_GAIN_TARGET_RMS / float(avg_rms)
+            # Cap so we don't explode noise on near-silence.
+            auto = max(0.5, min(auto, 8.0))
+            gain *= auto
+        gain = max(0.1, min(gain, 8.0))
+        if gain != 1.0:
+            try:
+                audio_bytes = audioop.mul(audio_bytes, source.SAMPLE_WIDTH, gain)
+                if HOLODESK_VOICE_DEBUG:
+                    print(f"[VOICE][debug] applied_gain={gain:.2f}")
+            except Exception:
+                pass
         with wave.open(temp_wav, "wb") as wf:
             wf.setnchannels(1)
             wf.setsampwidth(source.SAMPLE_WIDTH)
             wf.setframerate(rate)
-            wf.writeframes(b"".join(frames))
+            wf.writeframes(audio_bytes)
         return temp_wav
 
     def detect_wake_word(self, _unused=0):
