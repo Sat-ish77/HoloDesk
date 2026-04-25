@@ -13,9 +13,10 @@ faster-whisper          # local Whisper STT (no API cost, works offline)
 pyaudio                 # low-level microphone access
 comtypes                # Windows SAPI text-to-speech (reliable)
 pyttsx3                 # TTS fallback
+# pvporcupine           # optional wake-word engine; requires access key
 
 # --- AI & APIs ---
-groq                    # Groq API client (Llama 3 — fast, cheap)
+groq                    # Groq API client (Llama 3 - fast, cheap)
 openai                  # GPT-4o Vision for screen analysis (Step 7)
 moonshine-voice         # optional on-device STT fallback (requires model download)
 rapidfuzz               # entity resolution for app/site names in voice commands
@@ -30,7 +31,7 @@ requests                # web calls for future tool integrations
 psutil                  # read active process name for memory logger
 
 # --- Windows System ---
-pywin32                 # win32gui/win32api — transparency, always-on-top, window titles
+pywin32                 # win32gui/win32api - transparency, always-on-top, window titles
 
 # --- Utilities ---
 python-dotenv           # loads API keys from .env file
