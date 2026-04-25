@@ -1,20 +1,21 @@
 """
-Startup module — runs once before the Pygame overlay initialises.
+Startup module - runs once before the Pygame overlay initialises.
 
 Responsibilities:
   1. If --demo flag: seed 14 days of fake app_events into the DB (skipped
      if data already exists so re-runs don't duplicate rows).
   2. Call morning_briefing.generate_briefing() to build the spoken intro.
-  3. Persist the briefing text via db.set_pref("pending_briefing", …)
+  3. Persist the briefing text via db.set_pref("pending_briefing", ...)
      so main.py can read and speak it after the overlay is visible.
 
-The whole function is wrapped in try/except — a broken startup must NEVER
+The whole function is wrapped in try/except - a broken startup must NEVER
 prevent the overlay from launching.
 """
 
 import logging
 import sys
 import os
+
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -30,17 +31,17 @@ if _REPO_ROOT not in sys.path:
 # Demo dataset definition
 # ---------------------------------------------------------------------------
 #
-# 14 weekdays × 3 work apps + 14 days × spotify = 56 rows total.
+# 14 weekdays x 3 work apps + 14 days x spotify = 56 rows total.
 # Every timestamp is a real past datetime so detect_habits()'s
 # WHERE timestamp > datetime('now', '-14 days') filter passes.
 # 10+ rows per app/hour slot exceeds the HAVING frequency >= 5 threshold.
 
 _DEMO_APPS = [
     # (app_name, window_title, days_back_start, days_back_end, hour, weekdays_only)
-    ("Cursor.exe",  "Cursor — HoloDesk",       1, 14, 21, True),
-    ("brave.exe",   "New Tab - Brave",          1, 14,  9, True),
-    ("Code.exe",    "Visual Studio Code",       1, 14, 14, True),
-    ("spotify.exe", "Spotify",                  1, 14, 18, False),
+    ("Cursor.exe", "Cursor - HoloDesk", 1, 14, 21, True),
+    ("brave.exe", "New Tab - Brave", 1, 14, 9, True),
+    ("Code.exe", "Visual Studio Code", 1, 14, 14, True),
+    ("spotify.exe", "Spotify", 1, 14, 18, False),
 ]
 
 
@@ -51,11 +52,11 @@ def _insert_demo_data() -> None:
     """
     from storage.db import db
 
-    # Guard — don't double-insert
+    # Guard - don't double-insert
     count_row = db.query_one("SELECT COUNT(*) AS cnt FROM app_events")
     existing = count_row["cnt"] if count_row else 0
     if existing > 100:
-        logger.info("[Startup] Demo data already present (%d rows) — skipping", existing)
+        logger.info("[Startup] Demo data already present (%d rows) - skipping", existing)
         return
 
     logger.info("[Startup] Inserting demo data...")
@@ -85,17 +86,49 @@ def _insert_demo_data() -> None:
                 continue  # Skip weekends for work apps
 
             timestamp_str = event_dt.strftime("%Y-%m-%d %H:%M:%S")
-            db.insert("app_events", {
-                "session_id": fake_session_id,
-                "app_name":     app_name,
-                "window_title": window_title,
-                "timestamp":    timestamp_str,
-                "day_of_week":  event_dt.weekday(),
-                "hour_of_day":  hour,
-            })
+            db.insert(
+                "app_events",
+                {
+                    "session_id": fake_session_id,
+                    "app_name": app_name,
+                    "window_title": window_title,
+                    "timestamp": timestamp_str,
+                    "day_of_week": event_dt.weekday(),
+                    "hour_of_day": hour,
+                },
+            )
             rows_inserted += 1
 
-    logger.info("[Startup] Demo data ready — %d rows inserted", rows_inserted)
+    logger.info("[Startup] Demo data ready - %d rows inserted", rows_inserted)
+
+
+def _wake_keypress_callback() -> bool:
+    """Emit a synthetic SPACE key press so main.py reuses request_wake()."""
+    try:
+        import pygame
+    except Exception:
+        return False
+
+    try:
+        if not pygame.get_init():
+            return False
+        ev = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE)
+        pygame.event.post(ev)
+        logger.info("[WAKE] Posted synthetic SPACE key event.")
+        return True
+    except Exception as exc:
+        logger.warning("[WAKE] Could not post wake event: %s", exc)
+        return False
+
+
+def _start_optional_wake_word_listener() -> None:
+    """Boot optional wake-word listener. Safe no-op if disabled/missing deps."""
+    try:
+        from agents.wake_word_agent import launch_wake_word_listener
+
+        launch_wake_word_listener(_wake_keypress_callback)
+    except Exception as exc:
+        logger.warning("[WAKE] Wake-word listener unavailable: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -118,12 +151,16 @@ def on_startup(demo_mode: bool = False) -> None:
 
         logger.info("[Startup] Calling morning briefing generator...")
         from agents.morning_briefing import generate_briefing
+
         briefing = generate_briefing(demo_mode=demo_mode)
         logger.info("[Startup] Briefing ready: %s", briefing[:80])
 
         from storage.db import db
+
         db.set_pref("pending_briefing", briefing)
+
+        _start_optional_wake_word_listener()
 
     except Exception as e:
         logger.error("[Startup] Startup failed (non-fatal): %s", e)
-        # Don't re-raise — overlay must still launch even if briefing fails
+        # Don't re-raise - overlay must still launch even if briefing fails
