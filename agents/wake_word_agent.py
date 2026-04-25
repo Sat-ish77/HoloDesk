@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import os
-import queue
 import re
 import tempfile
 import threading
@@ -176,7 +175,7 @@ class WakeWordAdapter:
                 transcript = recognizer.recognize_google(audio)
                 if self._is_wake_phrase(transcript):
                     self._trigger(transcript)
-            except queue.Empty:
+            except sr.WaitTimeoutError:
                 continue
             except Exception:
                 continue
@@ -205,6 +204,8 @@ class WakeWordAdapter:
                         timeout=self.config.listen_timeout_s,
                         phrase_time_limit=self.config.phrase_limit_s,
                     )
+            except sr.WaitTimeoutError:
+                continue
             except Exception:
                 continue
 
@@ -284,9 +285,7 @@ class WakeWordAdapter:
 
             while not self._stop.is_set():
                 pcm = stream.read(porcupine.frame_length, exception_on_overflow=False)
-                keyword_index = porcupine.process(
-                    memoryview(pcm).cast("h")
-                )
+                keyword_index = porcupine.process(memoryview(pcm).cast("h"))
                 if keyword_index >= 0:
                     self._trigger(self.config.phrase)
         except Exception as exc:
