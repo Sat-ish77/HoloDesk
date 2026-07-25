@@ -50,7 +50,7 @@ class WakeWordConfig:
             logger.warning("[WAKE] Unknown engine '%s'. Falling back to 'simple'.", engine)
             engine = "simple"
 
-        phrase = _norm_text(os.getenv("HOLODESK_WAKE_WORD_PHRASE", "hey desk")) or "hey desk"
+        phrase = _norm_text(os.getenv("HOLODESK_WAKE_WORD_PHRASE", "hey holo")) or "hey holo"
 
         return cls(
             enabled=_env_flag("HOLODESK_WAKE_WORD_ENABLED", "0"),
@@ -76,6 +76,7 @@ class WakeWordAdapter:
 
     def start(self) -> bool:
         if not self.config.enabled:
+            print("[WAKE] Disabled. Set HOLODESK_WAKE_WORD_ENABLED=1 to listen for wake phrase.")
             logger.info("[WAKE] Wake-word disabled (HOLODESK_WAKE_WORD_ENABLED=0).")
             return False
         if self._thread and self._thread.is_alive():
@@ -83,6 +84,7 @@ class WakeWordAdapter:
 
         self._thread = threading.Thread(target=self._run, name="wake-word-listener", daemon=True)
         self._thread.start()
+        print(f"[WAKE] Listener started. engine={self.config.engine} phrase='{self.config.phrase}'")
         logger.info(
             "[WAKE] Wake-word listener started. engine=%s phrase='%s'",
             self.config.engine,
@@ -122,12 +124,15 @@ class WakeWordAdapter:
         if not self._should_trigger():
             return
 
+        print(f"[WAKE] Detected phrase: {transcript!r}")
         logger.info("[WAKE] Wake phrase detected: '%s'", transcript)
         try:
             ok = bool(self._callback())
             if not ok:
+                print("[WAKE] Wake callback returned false; app may not be ready yet.")
                 logger.debug("[WAKE] Wake callback returned false; app may not be ready yet.")
         except Exception as exc:
+            print(f"[WAKE] Wake callback failed: {exc}")
             logger.warning("[WAKE] Wake callback failed: %s", exc)
 
     def _is_wake_phrase(self, transcript: str) -> bool:
@@ -147,6 +152,7 @@ class WakeWordAdapter:
         try:
             import speech_recognition as sr
         except Exception:
+            print("[WAKE] speech_recognition is not available; simple wake engine cannot start.")
             logger.warning("[WAKE] speech_recognition not available; simple engine cannot start.")
             return
 
@@ -155,6 +161,7 @@ class WakeWordAdapter:
         try:
             mic = sr.Microphone()
         except Exception as exc:
+            print(f"[WAKE] Microphone unavailable for wake listener: {exc}")
             logger.warning("[WAKE] Microphone unavailable for wake-word listener: %s", exc)
             return
 
@@ -163,7 +170,12 @@ class WakeWordAdapter:
                 recognizer.adjust_for_ambient_noise(source, duration=0.5)
             except Exception:
                 pass
+        print(
+            f"[WAKE] Simple listener ready. Repeating {self.config.listen_timeout_s:.1f}s windows; "
+            f"cooldown={self.config.cooldown_s:.1f}s."
+        )
 
+        failures = 0
         while not self._stop.is_set():
             try:
                 with mic as source:
@@ -177,7 +189,10 @@ class WakeWordAdapter:
                     self._trigger(transcript)
             except sr.WaitTimeoutError:
                 continue
-            except Exception:
+            except Exception as exc:
+                failures += 1
+                if failures <= 3:
+                    print(f"[WAKE] Recognition skipped: {exc}")
                 continue
 
     def _run_whisper(self) -> bool:

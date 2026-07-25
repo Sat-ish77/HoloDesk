@@ -146,20 +146,27 @@ def on_startup(demo_mode: bool = False) -> None:
         demo_mode: If True, seed demo data first and skip the Day 1 check.
     """
     try:
+        briefing_enabled = os.getenv("HOLODESK_STARTUP_BRIEFING_ENABLED", "0").strip() == "1"
+
         if demo_mode:
             _insert_demo_data()
 
-        logger.info("[Startup] Calling morning briefing generator...")
-        from agents.morning_briefing import generate_briefing
+        if briefing_enabled or demo_mode:
+            logger.info("[Startup] Calling morning briefing generator...")
+            from agents.morning_briefing import generate_briefing
 
-        briefing = generate_briefing(demo_mode=demo_mode)
-        logger.info("[Startup] Briefing ready: %s", briefing[:80])
+            briefing = generate_briefing(demo_mode=demo_mode)
+            logger.info("[Startup] Briefing ready: %s", briefing[:80])
 
-        from storage.db import db
+            from storage.db import db
 
-        db.set_pref("pending_briefing", briefing)
+            db.set_pref("pending_briefing", briefing)
+        else:
+            logger.info("[Startup] Morning briefing disabled; skipping network startup call.")
 
-        _start_optional_wake_word_listener()
+        # Wake listening is started by main.py after the overlay/camera/voice
+        # stack is initialized. Starting it here is too early for the Pygame
+        # callback and can contend with startup hardware initialization.
 
     except Exception as e:
         logger.error("[Startup] Startup failed (non-fatal): %s", e)

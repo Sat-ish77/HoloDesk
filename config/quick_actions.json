@@ -1,0 +1,11 @@
+[
+  {"label": "Facebook", "command": "open facebook in chrome"},
+  {"label": "YouTube", "command": "open youtube in chrome"},
+  {"label": "Netflix", "command": "open netflix in chrome"},
+  {"label": "Gmail", "command": "open gmail in chrome"},
+  {"label": "Outlook", "command": "open outlook"},
+  {"label": "Chrome", "command": "open chrome"},
+  {"label": "Cursor", "command": "open cursor"},
+  {"label": "Games", "command": "game menu"},
+  {"label": "Mission", "command": "mission mode"}
+]

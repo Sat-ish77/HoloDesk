@@ -10,7 +10,24 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-import pyautogui
+class _LazyPyAutoGUI:
+    def __init__(self):
+        self._module = None
+
+    def _load(self):
+        if self._module is None:
+            import pyautogui as module
+            module.PAUSE = 0
+            module.FAILSAFE = False
+            self._module = module
+        return self._module
+
+    def __getattr__(self, name):
+        return getattr(self._load(), name)
+
+
+pyautogui = _LazyPyAutoGUI()
+PYAUTOGUI_AVAILABLE = True
 
 try:
     import pyperclip
@@ -37,6 +54,18 @@ try:
 except Exception:
     WIN32_AVAILABLE = False
 
+try:
+    import pywinauto  # noqa: F401
+    PYWINAUTO_AVAILABLE = True
+except Exception:
+    PYWINAUTO_AVAILABLE = False
+
+try:
+    import uiautomation as auto  # noqa: F401
+    UIAUTOMATION_AVAILABLE = True
+except Exception:
+    UIAUTOMATION_AVAILABLE = False
+
 from connectors.groq_client import GroqClient
 from connectors.openai_client import OpenAIClient
 from core.queues import response_queue
@@ -62,6 +91,7 @@ APP_MAP = {
     "chrome": "start chrome",
     "brave": "start brave",
     "firefox": "start firefox",
+    "outlook": "start outlook",
     "spotify": "start spotify",
     "vscode": "code .",
     "vs code": "code .",
@@ -105,6 +135,8 @@ BROWSER_PATH_CANDIDATES: dict[str, list[str]] = {
 
 WEBSITE_MAP = {
     "facebook": "https://facebook.com",
+    "messenger": "https://www.messenger.com",
+    "facebook messenger": "https://www.messenger.com",
     "instagram": "https://www.instagram.com",
     "youtube": "https://www.youtube.com",
     "netflix": "https://www.netflix.com",
@@ -116,7 +148,7 @@ WEBSITE_MAP = {
     "twitter": "https://www.twitter.com",
     "linkedin": "https://www.linkedin.com",
     "spotify web": "https://open.spotify.com",
-    "chatgpt": "https://chat.openai.com",
+    "chatgpt": "https://chatgpt.com",
     "claude": "https://claude.ai",
     "outlook": "https://outlook.live.com",
     "calendar": "https://calendar.google.com",
@@ -135,18 +167,17 @@ class TaskAgent:
       returns: {success: bool, response: str, data?: dict}
     """
 
-    def __init__(self, screen_agent=None):
+    def __init__(self, screen_agent=None, desktop_grounding_agent=None):
         self.screen_agent = screen_agent
+        self.desktop_grounding_agent = desktop_grounding_agent
         self.groq = GroqClient()
         self.openai = OpenAIClient()
         self._pending_confirm: dict | None = None
         self._confirm_lock = threading.Lock()
         self._active_timer: threading.Timer | None = None
         self._cancel_shutdown = threading.Event()
-
-        # pyautogui tuning
-        pyautogui.PAUSE = 0
-        pyautogui.FAILSAFE = False
+        self._scroll_stop = threading.Event()
+        self._scroll_thread: threading.Thread | None = None
 
         # Entity resolution tuning
         self.entity_min_score = 78  # conservative; reduces wrong app launches
@@ -172,7 +203,13 @@ class TaskAgent:
             if action == "open_app":
                 return self.open_app(context.get("app_name", ""))
             if action == "close_app":
-                return self.close_app(context.get("app_name", ""))
+                return self.close_app_with_confirm(context.get("app_name", ""), raw=raw)
+            if action == "close_browser_tab":
+                return self.close_browser_tab_with_confirm(
+                    target=context.get("target", ""),
+                    browser=context.get("browser", ""),
+                    raw=raw,
+                )
             if action == "open_web":
                 return self.open_website(context.get("target", ""), raw=raw)
             if action == "open_web_in_browser":
@@ -185,9 +222,18 @@ class TaskAgent:
                 return self.type_text(self._extract_text_payload(raw), send=False)
             if action == "draft_email":
                 return self.draft_email({"raw": raw})
+            if action == "draft_message":
+                return self.draft_message(raw)
+            if action == "media_control":
+                return self.media_control_from_raw(raw)
             if action == "search":
                 return self.search(self._extract_search_query(raw), engine=self._extract_search_engine(raw))
             if action == "scroll":
+                if "stop" in raw.lower():
+                    return self.stop_continuous_scroll()
+                if any(p in raw.lower() for p in ["keep scrolling", "scroll continuously", "start scrolling", "continue scrolling"]):
+                    direction, amount = self._parse_scroll(raw)
+                    return self.start_continuous_scroll(direction=direction, amount=amount)
                 direction, amount = self._parse_scroll(raw)
                 return self.scroll(direction=direction, amount=amount)
             if action == "clipboard":
@@ -195,6 +241,8 @@ class TaskAgent:
             if action == "ask_chatgpt":
                 prompt = context.get("prompt") or raw
                 return self.ask_chatgpt(prompt=prompt)
+            if action == "grounded_desktop":
+                return self.grounded_desktop_action(raw)
             if action == "take_screenshot_and_save":
                 return self.take_screenshot_and_save()
             if action == "set_timer":
@@ -226,6 +274,31 @@ class TaskAgent:
             return {"success": False, "response": "I’m not sure how to do that yet."}
         except Exception as e:
             return {"success": False, "response": f"That action failed: {e}"}
+
+    def grounded_desktop_action(self, raw: str) -> dict:
+        if self.desktop_grounding_agent is None:
+            return {"success": False, "response": "Desktop grounding is not available yet."}
+
+        preview = self.desktop_grounding_agent.plan(raw)
+        if not preview.get("safe", False):
+            return {
+                "success": False,
+                "response": preview.get("blocked_reason") or "That desktop action is blocked.",
+            }
+
+        if preview.get("requires_confirmation"):
+            return self._set_pending_confirm(
+                "That desktop action needs confirmation. Say 'yes' to continue, or 'cancel' to stop.",
+                lambda: self.desktop_grounding_agent.execute(
+                    action="execute_command",
+                    context={"raw": raw, "dry_run": False},
+                ),
+            )
+
+        return self.desktop_grounding_agent.execute(
+            action="execute_command",
+            context={"raw": raw, "dry_run": False},
+        )
 
     # ---------------------------
     # Safety helpers
@@ -333,6 +406,49 @@ class TaskAgent:
             return {"success": True, "response": f"Closed {target}."}
         return {"success": False, "response": f"I couldn’t find a running process for {target}."}
 
+    def close_app_with_confirm(self, app_name: str, raw: str = "") -> dict:
+        target_raw = (app_name or "").strip()
+        if not target_raw:
+            return {"success": False, "response": "Which app should I close?"}
+        if self._looks_like_misheard_site_close(target_raw, raw):
+            return self._set_pending_confirm(
+                "I heard something like Facebook in Chrome. Did you mean close the current Facebook tab in Chrome? Say yes or cancel.",
+                lambda: self._close_active_browser_tab("facebook", "chrome"),
+                kind="close",
+            )
+        return self._set_pending_confirm(
+            f"Close {target_raw}? Say yes to confirm, or cancel to stop.",
+            lambda: self.close_app(target_raw),
+            kind="close",
+        )
+
+    def close_browser_tab_with_confirm(self, target: str, browser: str, raw: str = "") -> dict:
+        target_clean = self._sanitize_site_target(target, raw=raw) or (target or "").strip()
+        browser_clean = self._resolve_browser_name(browser or raw) or (browser or "browser").strip()
+        if self._looks_like_misheard_site_close(target_clean, raw):
+            target_clean = "facebook"
+            browser_clean = "chrome"
+        return self._set_pending_confirm(
+            f"Close the current {target_clean} tab in {browser_clean}? Say yes to confirm, or cancel to stop.",
+            lambda: self._close_active_browser_tab(target_clean, browser_clean),
+            kind="close",
+        )
+
+    @staticmethod
+    def _looks_like_misheard_site_close(target: str, raw: str = "") -> bool:
+        text = f"{target or ''} {raw or ''}".lower()
+        return "facebooking" in text or ("facebook" in text and any(b in text for b in ("chrome", "brave", "edge", "firefox")))
+
+    def _close_active_browser_tab(self, target: str, browser: str) -> dict:
+        try:
+            pyautogui.hotkey("ctrl", "w")
+            return {
+                "success": True,
+                "response": f"Closed the current {target or 'browser'} tab. I did not terminate {browser or 'the browser'}.",
+            }
+        except Exception as e:
+            return {"success": False, "response": f"I couldn't close the browser tab: {e}"}
+
     def open_website(self, url_or_name: str, raw: str = "") -> dict:
         target_raw = self._sanitize_site_target(url_or_name, raw=raw)
         target = target_raw.lower()
@@ -433,6 +549,8 @@ class TaskAgent:
     def type_text(self, text: str, send: bool = False) -> dict:
         if not text.strip():
             return {"success": False, "response": "What should I type?"}
+        if not PYAUTOGUI_AVAILABLE:
+            return {"success": False, "response": "Typing requires pyautogui."}
         try:
             if PYPERCLIP_AVAILABLE:
                 pyperclip.copy(text)
@@ -444,6 +562,72 @@ class TaskAgent:
             return {"success": True, "response": "Done."}
         except Exception as e:
             return {"success": False, "response": f"I couldn't type that: {e}"}
+
+    def media_control_from_raw(self, raw: str) -> dict:
+        if not PYAUTOGUI_AVAILABLE:
+            return {"success": False, "response": "Media controls require pyautogui."}
+        t = (raw or "").lower()
+        try:
+            if any(k in t for k in ["next video", "next track", "skip"]):
+                pyautogui.press("nexttrack")
+                return {"success": True, "response": "Skipped."}
+            if any(k in t for k in ["previous video", "previous track", "go back"]):
+                pyautogui.press("prevtrack")
+                return {"success": True, "response": "Went back."}
+            # Space is the most reliable foreground-video toggle for YouTube,
+            # Netflix, browser players, and local media players.
+            pyautogui.press("space")
+            return {"success": True, "response": "Toggled playback."}
+        except Exception as e:
+            return {"success": False, "response": f"I couldn't control playback: {e}"}
+
+    def draft_message(self, raw: str) -> dict:
+        target = self._extract_message_target(raw)
+        payload = self._extract_message_payload(raw)
+        if not payload:
+            payload = raw
+
+        system = (
+            "You are HoloDesk writing a message draft. Return only the message text. "
+            "Be natural, concise, and keep the user's meaning. If the user asks to "
+            "translate romanized Nepali to English, write clear English."
+        )
+        prompt = f"Draft a message for {target or 'the current chat'}.\nUser request: {raw}\nMessage idea: {payload}"
+        try:
+            body = self.groq.complete(prompt=prompt, system=system, max_tokens=180).strip()
+        except Exception:
+            body = payload.strip()
+
+        if target in {"messenger", "facebook messenger"}:
+            try:
+                webbrowser.open(WEBSITE_MAP["messenger"])
+            except Exception:
+                pass
+        elif target in WEBSITE_MAP:
+            try:
+                webbrowser.open(WEBSITE_MAP[target])
+            except Exception:
+                pass
+
+        if PYPERCLIP_AVAILABLE:
+            try:
+                pyperclip.copy(body)
+            except Exception:
+                pass
+            return {
+                "success": True,
+                "response": (
+                    f"I drafted the message and copied it to your clipboard. "
+                    f"Review it before sending. Draft: {body}"
+                ),
+                "data": {"target": target, "body": body, "requires_send_confirmation": True},
+            }
+
+        return {
+            "success": True,
+            "response": f"I drafted this message. Review it before sending: {body}",
+            "data": {"target": target, "body": body, "requires_send_confirmation": True},
+        }
 
     # ---------------------------
     # Email drafting (v1: generate + open Gmail + copy)
@@ -511,6 +695,31 @@ class TaskAgent:
             return {"success": True, "response": ""}  # silent action
         except Exception as e:
             return {"success": False, "response": f"I couldn't scroll: {e}"}
+
+    def start_continuous_scroll(self, direction: str, amount: int = 5) -> dict:
+        if not PYAUTOGUI_AVAILABLE:
+            return {"success": False, "response": "Continuous scrolling requires pyautogui."}
+        self.stop_continuous_scroll(silent=True)
+        self._scroll_stop.clear()
+
+        def _loop():
+            step = max(1, int(amount)) * 80
+            delta = -step if direction == "down" else step
+            while not self._scroll_stop.wait(0.12):
+                try:
+                    pyautogui.scroll(delta)
+                except Exception:
+                    break
+
+        self._scroll_thread = threading.Thread(target=_loop, name="HoloDeskScroll", daemon=True)
+        self._scroll_thread.start()
+        return {"success": True, "response": f"Scrolling {direction}. Say 'stop scrolling' to stop."}
+
+    def stop_continuous_scroll(self, silent: bool = False) -> dict:
+        self._scroll_stop.set()
+        if not silent:
+            return {"success": True, "response": "Stopped scrolling."}
+        return {"success": True, "response": ""}
 
     def clipboard_action_from_raw(self, raw: str) -> dict:
         t = (raw or "").lower()
@@ -747,6 +956,36 @@ class TaskAgent:
     def _extract_subject(raw: str) -> str:
         m = re.search(r"\bsubject\s*:\s*(.+)$", raw, flags=re.IGNORECASE)
         return m.group(1).strip() if m else ""
+
+    @staticmethod
+    def _extract_message_target(raw: str) -> str:
+        t = (raw or "").lower()
+        if "instagram" in t:
+            return "instagram"
+        if "messenger" in t or "facebook message" in t or "facebook messenger" in t:
+            return "messenger"
+        if "facebook" in t:
+            return "facebook"
+        if "gmail" in t:
+            return "gmail"
+        if "outlook" in t:
+            return "outlook"
+        return ""
+
+    @staticmethod
+    def _extract_message_payload(raw: str) -> str:
+        text = raw or ""
+        lowered = text.lower()
+        markers = [
+            "saying that", "saying", "say that", "say",
+            "reply that", "reply", "message that", "message",
+            "dm that", "dm", "text that", "text",
+        ]
+        for marker in markers:
+            idx = lowered.find(marker)
+            if idx >= 0:
+                return text[idx + len(marker):].strip(" .,:;-\"'")
+        return ""
 
     # ---------------------------
     # Entity resolution helpers

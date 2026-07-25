@@ -14,7 +14,24 @@ from typing import Any
 import re
 import time
 
-import pyautogui
+class _LazyPyAutoGUI:
+    def __init__(self):
+        self._module = None
+
+    def _load(self):
+        if self._module is None:
+            import pyautogui as module
+            module.PAUSE = 0
+            module.FAILSAFE = False
+            self._module = module
+        return self._module
+
+    def __getattr__(self, name):
+        return getattr(self._load(), name)
+
+
+pyautogui = _LazyPyAutoGUI()
+PYAUTOGUI_AVAILABLE = True
 
 from connectors.openai_client import OpenAIClient
 from vision.ui_parser import UIElement, UIParserAdapter, build_default_parser
@@ -63,6 +80,8 @@ class GroundingSafetyPolicy:
 
     CONFIRM_KEYWORDS = (
         "send email",
+        "send message",
+        "send it",
         "delete file",
         "delete folder",
         "remove file",
@@ -75,6 +94,8 @@ class GroundingSafetyPolicy:
         text = (command or "").lower()
 
         if any(k in text for k in self.BLOCKED_KEYWORDS):
+            if any(action in text for action in ("click", "press", "tap")):
+                return True, None, True
             return False, "Blocked by safety policy (login/payment/banking/password flow).", False
 
         needs_confirm = any(k in text for k in self.CONFIRM_KEYWORDS)
@@ -97,12 +118,28 @@ class DesktopActionPlanner:
         steps: list[PlanStep] = []
         low = text.lower()
 
-        website_match = re.search(r"\bopen\s+(.+?)\s+(?:in|using|with)\s+(chrome|brave)\b", low)
+        website_match = re.search(r"\bopen\s+(.+?)\s+(?:in|inside|on|using|with)\s+(chrome|brave|firefox|edge)\b", low)
         if website_match:
             target = website_match.group(1).strip(" .,!?:;")
             browser = website_match.group(2).strip()
             steps.append(PlanStep("open_application", {"app_name": browser}))
             steps.append(PlanStep("open_website", {"target": target, "browser": browser}))
+            return ActionPlan(command=text, safe=True, blocked_reason=None, steps=steps)
+
+        facebook_message = self._parse_social_message(text)
+        if facebook_message:
+            site, person, message = facebook_message
+            steps.append(PlanStep("open_website", {"target": site, "browser": "chrome"}))
+            steps.append(PlanStep("wait", {"seconds": 2.0}))
+            steps.append(PlanStep("click_element_by_label", {"label": "Search|Search Facebook|Search Messenger|Search"}))
+            steps.append(PlanStep("type_text", {"text": person}))
+            steps.append(PlanStep("press_key", {"key": "enter"}))
+            steps.append(PlanStep("wait", {"seconds": 1.0}))
+            steps.append(PlanStep("click_element_by_label", {"label": person}))
+            steps.append(PlanStep("wait", {"seconds": 1.0}))
+            steps.append(PlanStep("click_element_by_label", {"label": "Message|Type a message|Aa|Write a message"}))
+            steps.append(PlanStep("type_text", {"text": message}))
+            steps.append(PlanStep("verify_draft", {"message": message, "person": person}))
             return ActionPlan(command=text, safe=True, blocked_reason=None, steps=steps)
 
         if low.startswith("open chrome"):
@@ -114,15 +151,39 @@ class DesktopActionPlanner:
             steps.append(PlanStep("open_folder", {"path": path or ""}))
         elif "open outlook" in low:
             steps.append(PlanStep("open_application", {"app_name": "outlook"}))
-        elif "search" in low and "outlook" in low:
-            query = self._extract_after(text, "search")
+        elif ("search" in low or "find" in low) and "outlook" in low:
+            key = "search" if "search" in low else "find"
+            query = self._clean_outlook_query(self._extract_after(text, key))
             steps.append(PlanStep("open_application", {"app_name": "outlook"}))
             steps.append(PlanStep("click_element_by_label", {"label": "Search"}))
             steps.append(PlanStep("type_text", {"text": query}))
-        elif "draft email" in low:
-            steps.append(PlanStep("open_application", {"app_name": "outlook"}))
-            steps.append(PlanStep("click_element_by_label", {"label": "New Mail"}))
-            steps.append(PlanStep("type_text", {"text": self._extract_after(text, "draft email") or ""}))
+        elif "gmail" in low and any(k in low for k in ("search", "find", "draft", "compose", "write email", "draft email")):
+            recipient = self._extract_gmail_recipient(text)
+            message = self._extract_email_draft_text(text)
+            steps.append(PlanStep("open_website", {"target": "gmail", "browser": "chrome"}))
+            steps.append(PlanStep("wait", {"seconds": 2.0}))
+            if recipient:
+                steps.append(PlanStep("click_element_by_label", {"label": "Search mail|Search"}))
+                steps.append(PlanStep("type_text", {"text": recipient}))
+                steps.append(PlanStep("press_key", {"key": "enter"}))
+                steps.append(PlanStep("wait", {"seconds": 1.0}))
+            if any(k in low for k in ("draft", "compose", "write email", "draft email")):
+                steps.append(PlanStep("click_element_by_label", {"label": "Compose|New Mail"}))
+                if recipient:
+                    steps.append(PlanStep("click_element_by_label", {"label": "To|Recipients"}))
+                    steps.append(PlanStep("type_text", {"text": recipient}))
+                    steps.append(PlanStep("press_key", {"key": "enter"}))
+                steps.append(PlanStep("click_element_by_label", {"label": "Message Body|Body|Compose"}))
+                steps.append(PlanStep("type_text", {"text": message}))
+                steps.append(PlanStep("verify_draft", {"message": message, "person": recipient}))
+        elif "draft email" in low or "draft an email" in low or "compose email" in low or "write email" in low or ("gmail" in low and "draft" in low):
+            if "gmail" in low:
+                steps.append(PlanStep("open_website", {"target": "gmail", "browser": "chrome"}))
+                steps.append(PlanStep("wait", {"seconds": 2.0}))
+            else:
+                steps.append(PlanStep("open_application", {"app_name": "outlook"}))
+            steps.append(PlanStep("click_element_by_label", {"label": "New Mail|Compose"}))
+            steps.append(PlanStep("type_text", {"text": self._extract_email_draft_text(text)}))
         elif "send email" in low:
             steps.append(
                 PlanStep(
@@ -139,12 +200,20 @@ class DesktopActionPlanner:
                     requires_confirmation=True,
                 )
             )
-        elif low.startswith("click "):
-            label = self._extract_after(text, "click")
+        elif low.startswith("click ") or low.startswith("press ") or low.startswith("tap "):
+            verb = low.split(maxsplit=1)[0]
+            label = self._extract_after(text, verb)
             steps.append(PlanStep("click_element_by_label", {"label": label}))
         elif low.startswith("type "):
             payload = self._extract_after(text, "type")
             steps.append(PlanStep("type_text", {"text": payload}))
+        elif "search" in low and any(site in low for site in ("facebook", "messenger", "instagram")):
+            query = self._extract_social_search_query(text)
+            site = "messenger" if "messenger" in low else "facebook"
+            steps.append(PlanStep("open_website", {"target": site, "browser": "chrome"}))
+            steps.append(PlanStep("click_element_by_label", {"label": "Search|Search Facebook|Search Messenger|Search"}))
+            steps.append(PlanStep("type_text", {"text": query}))
+            steps.append(PlanStep("press_key", {"key": "enter"}))
 
         if not steps:
             steps.append(PlanStep("noop", {"reason": "No supported grounded action parsed."}))
@@ -168,6 +237,84 @@ class DesktopActionPlanner:
         if m:
             return m.group(1).strip()
         return ""
+
+    @staticmethod
+    def _clean_outlook_query(text: str) -> str:
+        cleaned = re.sub(r"\b(in|inside|on)\s+outlook\b", "", text, flags=re.IGNORECASE)
+        return cleaned.strip(" .,:;") or text.strip(" .,:;")
+
+    def _extract_email_draft_text(self, text: str) -> str:
+        for key in ("saying", "that", "bhanera"):
+            payload = self._extract_after(text, key)
+            if payload:
+                return payload
+        for key in ("draft an email", "draft email", "compose email", "write email"):
+            payload = self._extract_after(text, key)
+            if payload:
+                return payload
+        return text.strip()
+
+    @staticmethod
+    def _extract_gmail_recipient(text: str) -> str:
+        patterns = [
+            r"\bsearch\s+(?:for\s+)?(.+?)\s+and\s+(?:draft|compose|write)\b",
+            r"\bsearch\s+(?:for\s+)?(.+?)\s+(?:in|on)\s+gmail\b",
+            r"\bfind\s+(.+?)\s+(?:in|on)\s+gmail\b",
+            r"\bgmail\s+ma\s+(.+?)\s+(?:bhanne|khoja|search|find)\b",
+            r"\b(.+?)\s+bhanne\s+manxe\s+khoja\b",
+            r"\bto\s+(.+?)\s+(?:saying|that)\b",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text, flags=re.IGNORECASE)
+            if m:
+                return m.group(1).strip(" .,:;")
+        return ""
+
+    def _parse_social_message(self, text: str) -> tuple[str, str, str] | None:
+        low = text.lower()
+        if not any(site in low for site in ("facebook", "messenger", "instagram")):
+            return None
+        if not any(k in low for k in ("tell ", "message ", "text ", "dm ", "say ")):
+            return None
+
+        site = "instagram" if "instagram" in low else "messenger"
+        person = self._extract_person_name(text)
+        message = self._extract_message_text(text)
+        if not person or not message:
+            return None
+        return site, person, message
+
+    @staticmethod
+    def _extract_person_name(text: str) -> str:
+        patterns = [
+            r"\bsearch\s+for\s+(.+?)\s+(?:and\s+)?(?:tell|message|text|dm|say)\b",
+            r"\bfind\s+(.+?)\s+(?:and\s+)?(?:tell|message|text|dm|say)\b",
+            r"\bto\s+(.+?)\s+(?:that|saying|say)\b",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text, flags=re.IGNORECASE)
+            if m:
+                return m.group(1).strip(" .,:;")
+        return ""
+
+    @staticmethod
+    def _extract_message_text(text: str) -> str:
+        patterns = [
+            r"\b(?:tell|message|text|dm)\s+(?:him|her|them|[A-Za-z .'-]+)?\s*(?:that|saying)?\s+(.+)$",
+            r"\bsay\s+(.+)$",
+        ]
+        for pattern in patterns:
+            m = re.search(pattern, text, flags=re.IGNORECASE)
+            if m:
+                return m.group(1).strip(" .,:;")
+        return ""
+
+    @staticmethod
+    def _extract_social_search_query(text: str) -> str:
+        m = re.search(r"\bsearch(?:\s+for)?\s+(.+?)(?:\s+inside|\s+in|\s+on)?\s+(?:facebook|messenger|instagram)\b", text, flags=re.IGNORECASE)
+        if m:
+            return m.group(1).strip(" .,:;")
+        return text.strip(" .,:;")
 
 
 class DesktopActionExecutor:
@@ -199,9 +346,28 @@ class DesktopActionExecutor:
             self._safe_screenshot(before)
 
             parse_result = self.parser.parse(str(before))
+            if (
+                not dry_run
+                and self.parser.parser_name == "mock"
+                and step.action in {"click_element_by_label", "type_text", "press_key", "verify_draft"}
+            ):
+                stopped_reason = (
+                    "Stopping before live UI targeting: OmniParser or another real parser is required. "
+                    "Mock parser is only for dry-runs."
+                )
+                logs.append(
+                    {
+                        "step": step.to_dict(),
+                        "status": "stopped",
+                        "reason": stopped_reason,
+                        "parser": parse_result.to_dict(),
+                    }
+                )
+                break
             if not parse_result.success and step.action in {
                 "click_element_by_label",
                 "type_text",
+                "verify_draft",
             }:
                 stopped_reason = (
                     f"Stopping at step {i}: parser unavailable/unclear ({'; '.join(parse_result.blockers)})."
@@ -253,6 +419,8 @@ class DesktopActionExecutor:
         if step.action == "open_application":
             if dry_run:
                 return {"success": True, "response": f"Dry-run: would open {step.args.get('app_name', '')}."}
+            if not PYAUTOGUI_AVAILABLE:
+                return {"success": False, "response": "Desktop control requires pyautogui."}
             pyautogui.hotkey("win", "r")
             time.sleep(0.2)
             pyautogui.write(step.args.get("app_name", ""), interval=0.01)
@@ -265,11 +433,19 @@ class DesktopActionExecutor:
             url = target if target.startswith("http") else f"https://{target}"
             if dry_run:
                 return {"success": True, "response": f"Dry-run: would open {url} in {browser}."}
+            if not PYAUTOGUI_AVAILABLE:
+                return {"success": False, "response": "Desktop control requires pyautogui."}
             pyautogui.hotkey("win", "r")
             time.sleep(0.2)
             pyautogui.write(f"{browser} {url}", interval=0.01)
             pyautogui.press("enter")
             return {"success": True, "response": "Website open sequence sent."}
+
+        if step.action == "wait":
+            seconds = float(step.args.get("seconds") or 0.5)
+            if not dry_run:
+                time.sleep(max(0.1, min(seconds, 5.0)))
+            return {"success": True, "response": f"Waited {seconds:.1f}s."}
 
         if step.action == "open_folder":
             folder = step.args.get("path", "")
@@ -277,6 +453,8 @@ class DesktopActionExecutor:
                 return {"success": False, "response": "Missing folder path."}
             if dry_run:
                 return {"success": True, "response": f"Dry-run: would open folder {folder}."}
+            if not PYAUTOGUI_AVAILABLE:
+                return {"success": False, "response": "Desktop control requires pyautogui."}
             pyautogui.hotkey("win", "r")
             time.sleep(0.2)
             pyautogui.write(folder, interval=0.01)
@@ -293,6 +471,8 @@ class DesktopActionExecutor:
                     "success": True,
                     "response": f"Dry-run: would click '{target.label}' ({target.confidence:.2f}).",
                 }
+            if not PYAUTOGUI_AVAILABLE:
+                return {"success": False, "response": "Desktop control requires pyautogui."}
             x = target.bbox["x"] + target.bbox["width"] // 2
             y = target.bbox["y"] + target.bbox["height"] // 2
             pyautogui.click(x=x, y=y)
@@ -304,8 +484,22 @@ class DesktopActionExecutor:
                 return {"success": False, "response": "No text to type."}
             if dry_run:
                 return {"success": True, "response": "Dry-run: would type text into focused field."}
+            if not PYAUTOGUI_AVAILABLE:
+                return {"success": False, "response": "Desktop control requires pyautogui."}
             pyautogui.write(text, interval=0.01)
             return {"success": True, "response": "Typed text."}
+
+        if step.action == "press_key":
+            key = step.args.get("key", "enter")
+            if dry_run:
+                return {"success": True, "response": f"Dry-run: would press {key}."}
+            if not PYAUTOGUI_AVAILABLE:
+                return {"success": False, "response": "Desktop control requires pyautogui."}
+            pyautogui.press(key)
+            return {"success": True, "response": f"Pressed {key}."}
+
+        if step.action == "verify_draft":
+            return {"success": True, "response": "Draft prepared. Review it on screen. Say 'yes, send it' only if you want me to send."}
 
         return {"success": False, "response": f"Unsupported step action: {step.action}"}
 
@@ -313,19 +507,100 @@ class DesktopActionExecutor:
     def _choose_element(elements: list[UIElement], wanted_label: str) -> UIElement | None:
         if not elements:
             return None
-        exact = [e for e in elements if e.label.lower() == wanted_label]
+        selector = DesktopActionExecutor._parse_selector(wanted_label)
+        wanted_labels = [p.strip() for p in selector["label"].split("|") if p.strip()]
+        exact = [e for e in elements if e.label.lower() in wanted_labels]
         if exact:
-            return sorted(exact, key=lambda e: e.confidence, reverse=True)[0]
+            return DesktopActionExecutor._select_ranked(exact, selector)
 
-        partial = [e for e in elements if wanted_label and wanted_label in e.label.lower()]
+        partial = [
+            e
+            for e in elements
+            if any(wanted and wanted in e.label.lower() for wanted in wanted_labels)
+        ]
         if partial:
-            return sorted(partial, key=lambda e: e.confidence, reverse=True)[0]
+            return DesktopActionExecutor._select_ranked(partial, selector)
+
+        if selector["ordinal"] or selector["spatial"]:
+            return DesktopActionExecutor._select_ranked(elements, selector)
 
         return None
 
     @staticmethod
+    def _parse_selector(wanted_label: str) -> dict[str, Any]:
+        raw = (wanted_label or "").lower().strip()
+        ordinal_index = None
+        ordinal_words = {
+            "first": 0, "1st": 0, "one": 0,
+            "second": 1, "2nd": 1, "two": 1,
+            "third": 2, "3rd": 2, "three": 2,
+            "fourth": 3, "4th": 3,
+        }
+        for word, idx in ordinal_words.items():
+            if re.search(rf"\b{word}\b", raw):
+                ordinal_index = idx
+                raw = re.sub(rf"\b{word}\b", " ", raw)
+                break
+
+        spatial = None
+        for phrase in ("top right", "top left", "bottom right", "bottom left", "nearest", "top", "bottom", "left", "right"):
+            if phrase in raw:
+                spatial = phrase
+                raw = raw.replace(phrase, " ")
+                break
+
+        label = re.sub(r"\s+", " ", raw).strip(" .,:;")
+        return {
+            "label": label,
+            "ordinal": ordinal_index is not None,
+            "ordinal_index": ordinal_index,
+            "spatial": spatial,
+        }
+
+    @staticmethod
+    def _rank_elements(elements: list[UIElement], selector: dict[str, Any]) -> list[UIElement]:
+        spatial = selector.get("spatial")
+
+        def center(e: UIElement) -> tuple[float, float]:
+            return (
+                e.bbox.get("x", 0) + e.bbox.get("width", 0) / 2,
+                e.bbox.get("y", 0) + e.bbox.get("height", 0) / 2,
+            )
+
+        if spatial == "top right":
+            return sorted(elements, key=lambda e: (center(e)[1], -center(e)[0], -e.confidence))
+        if spatial == "top left":
+            return sorted(elements, key=lambda e: (center(e)[1], center(e)[0], -e.confidence))
+        if spatial == "bottom right":
+            return sorted(elements, key=lambda e: (-center(e)[1], -center(e)[0], -e.confidence))
+        if spatial == "bottom left":
+            return sorted(elements, key=lambda e: (-center(e)[1], center(e)[0], -e.confidence))
+        if spatial == "top":
+            return sorted(elements, key=lambda e: (center(e)[1], -e.confidence))
+        if spatial == "bottom":
+            return sorted(elements, key=lambda e: (-center(e)[1], -e.confidence))
+        if spatial == "left":
+            return sorted(elements, key=lambda e: (center(e)[0], -e.confidence))
+        if spatial == "right":
+            return sorted(elements, key=lambda e: (-center(e)[0], -e.confidence))
+        return sorted(elements, key=lambda e: (center(e)[1], center(e)[0], -e.confidence))
+
+    @staticmethod
+    def _select_ranked(elements: list[UIElement], selector: dict[str, Any]) -> UIElement | None:
+        ranked = DesktopActionExecutor._rank_elements(elements, selector)
+        if not ranked:
+            return None
+        idx = selector.get("ordinal_index")
+        if idx is None:
+            idx = 0
+        return ranked[min(idx, len(ranked) - 1)]
+
+    @staticmethod
     def _safe_screenshot(path: Path) -> None:
         try:
+            if not PYAUTOGUI_AVAILABLE:
+                path.write_bytes(b"")
+                return
             img = pyautogui.screenshot()
             img.save(str(path))
         except Exception:
@@ -367,3 +642,126 @@ class VerifyWithChatGPTVision:
         import base64
 
         return base64.b64encode(path.read_bytes()).decode("utf-8")
+
+
+class DesktopGroundingAgent:
+    """Live agent wrapper used by the orchestrator/task flow."""
+
+    def __init__(
+        self,
+        planner: DesktopActionPlanner | None = None,
+        executor: DesktopActionExecutor | None = None,
+        verifier: VerifyWithChatGPTVision | None = None,
+        screenshot_dir: str = "artifacts/ui_grounding",
+    ) -> None:
+        self.planner = planner or DesktopActionPlanner()
+        self.executor = executor or DesktopActionExecutor()
+        self.verifier = verifier or VerifyWithChatGPTVision()
+        self.screenshot_dir = screenshot_dir
+
+    def plan(self, command: str) -> dict[str, Any]:
+        plan = self.planner.build_plan(command)
+        data = plan.to_dict()
+        data["requires_confirmation"] = any(step.requires_confirmation for step in plan.steps)
+        return data
+
+    def execute(self, action: str, context: dict | None = None) -> dict[str, Any]:
+        ctx = context or {}
+        raw = ctx.get("raw", "") or ""
+
+        if action == "execute_command":
+            return self.execute_command(raw, dry_run=bool(ctx.get("dry_run", False)))
+        if action == "analyze_screen":
+            return self.analyze_current_screen()
+        if action == "verify_screen":
+            question = ctx.get("question") or raw or "Verify the current desktop state."
+            return self.verify_current_screen(question)
+        if action == "test_parser":
+            return self.test_parser()
+
+        return {"success": False, "response": f"Unsupported grounding action: {action}"}
+
+    def execute_command(self, command: str, *, dry_run: bool = False) -> dict[str, Any]:
+        plan = self.planner.build_plan(command)
+        if not plan.safe:
+            return {"success": False, "response": plan.blocked_reason or "That action is blocked."}
+        if any(step.requires_confirmation for step in plan.steps):
+            return {
+                "success": False,
+                "response": "That desktop action requires confirmation before I run it.",
+                "data": {"plan": plan.to_dict(), "requires_confirmation": True},
+            }
+
+        result = self.executor.execute_plan(
+            plan,
+            dry_run=dry_run,
+            screenshot_dir=self.screenshot_dir,
+        )
+        if result.get("success"):
+            return {
+                "success": True,
+                "response": "Desktop grounding action completed." if not dry_run else "Desktop grounding dry-run completed.",
+                "data": result,
+            }
+
+        return {
+            "success": False,
+            "response": result.get("stopped_reason") or "Desktop grounding stopped safely.",
+            "data": result,
+        }
+
+    def analyze_current_screen(self) -> dict[str, Any]:
+        shot = self._capture_current_screen("analyze")
+        parse_result = self.executor.parser.parse(str(shot))
+        if not parse_result.success:
+            return {
+                "success": False,
+                "response": "I couldn't ground the current screen yet: " + "; ".join(parse_result.blockers),
+                "data": parse_result.to_dict(),
+            }
+
+        labels = [element.label for element in parse_result.elements[:8] if element.label]
+        if not labels:
+            return {"success": True, "response": "I captured the screen, but no UI labels were detected.", "data": parse_result.to_dict()}
+        return {
+            "success": True,
+            "response": "I found these UI elements: " + ", ".join(labels) + ".",
+            "data": parse_result.to_dict(),
+        }
+
+    def test_parser(self) -> dict[str, Any]:
+        shot = self._capture_current_screen("parser_test")
+        parse_result = self.executor.parser.parse(str(shot))
+        data = parse_result.to_dict()
+        data["screenshot"] = str(shot)
+        result_path = Path(self.screenshot_dir) / f"parser_test_{int(time.time())}.json"
+        try:
+            import json
+
+            result_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            data["result_path"] = str(result_path)
+        except Exception:
+            pass
+        if not parse_result.success:
+            return {
+                "success": False,
+                "response": f"{self.executor.parser.parser_name} is not ready: " + "; ".join(parse_result.blockers),
+                "data": data,
+            }
+        labels = [element.label for element in parse_result.elements[:10] if element.label]
+        return {
+            "success": True,
+            "response": f"{self.executor.parser.parser_name} detected {len(parse_result.elements)} UI elements. Top labels: " + ", ".join(labels),
+            "data": data,
+        }
+
+    def verify_current_screen(self, question: str) -> dict[str, Any]:
+        shot = self._capture_current_screen("verify")
+        return self.verifier.run(question=question, screenshot_path=str(shot))
+
+    def _capture_current_screen(self, prefix: str) -> Path:
+        out_dir = Path(self.screenshot_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"{prefix}_{int(time.time())}.png"
+        DesktopActionExecutor._safe_screenshot(path)
+        return path

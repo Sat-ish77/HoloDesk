@@ -27,7 +27,9 @@ voice_reply_queue = queue.Queue(maxsize=1)
 # Raw BGR frames from the camera (latest only — old frames discarded)
 frame_queue = queue.Queue(maxsize=1)
 
-# MediaPipe hand_landmarks object OR None when no hand detected (latest only)
+# Latest hand payload from MediaPipe. New shape is a list of
+# {"landmarks": hand_landmarks, "label": "Left"/"Right", "score": float}.
+# Older code may still treat the first hand as the primary hand.
 landmark_queue = queue.Queue(maxsize=1)
 
 # Confirmed gesture strings: "V_GESTURE" | "OPEN_PALM"

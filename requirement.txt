@@ -26,6 +26,10 @@ pyautogui               # scroll, hotkeys, screenshot capture
 Pillow                  # image resizing before API calls (saves cost)
 pyperclip               # clipboard read/write for automation + copy answers
 requests                # web calls for future tool integrations
+pywinauto               # Windows UI Automation fallback for real desktop controls
+uiautomation            # Windows UI Automation tree inspection/control
+dateparser              # natural-language reminder dates ("tomorrow at 5")
+# OmniParser            # optional UI grounding parser; install per official setup instructions
 
 # --- Storage & Memory ---
 psutil                  # read active process name for memory logger

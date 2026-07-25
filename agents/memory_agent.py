@@ -20,6 +20,7 @@ import logging
 import json
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ class MemoryAgent:
         """Close the current session. Call this on HoloDesk exit."""
         if self.session_id is None:
             return
+        closing_session_id = self.session_id
         start_row = db.query_one(
             "SELECT start_time FROM sessions WHERE id = ?", (self.session_id,)
         )
@@ -143,6 +145,10 @@ class MemoryAgent:
                 "id = ?",
                 (self.session_id,),
             )
+        try:
+            self.write_session_summary(closing_session_id)
+        except Exception as exc:
+            logger.debug("Could not write session summary: %s", exc)
         logger.info("Session ended: id=%d", self.session_id)
         self.session_id = None
 
@@ -311,6 +317,87 @@ class MemoryAgent:
             "agent_used": agent_used,
             "timestamp": datetime.now().isoformat(),
         })
+
+    def get_recent_voice_commands(self, limit: int = 10) -> list[dict]:
+        return db.query(
+            """
+            SELECT command_text, response_summary, agent_used, timestamp
+            FROM voice_commands
+            ORDER BY timestamp DESC
+            LIMIT ?
+            """,
+            (int(limit),),
+        )
+
+    def format_today_summary(self) -> str:
+        apps = self.get_todays_app_summary()
+        commands = self.get_recent_voice_commands(limit=5)
+
+        if not apps and not commands:
+            return "I do not have much logged for today yet."
+
+        parts = []
+        if apps:
+            top_apps = ", ".join(f"{a['app_name']} about {a['minutes_approx']} min" for a in apps[:5])
+            parts.append(f"Top apps today: {top_apps}.")
+        if commands:
+            top_commands = "; ".join(c["command_text"] for c in reversed(commands[-3:]))
+            parts.append(f"Recent commands: {top_commands}.")
+        return " ".join(parts)
+
+    def write_session_summary(self, session_id: int | None = None) -> Path:
+        sid = session_id or self.session_id
+        now = datetime.now()
+        out_dir = Path("data") / "memory" / now.strftime("%Y") / now.strftime("%m")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / f"{now.strftime('%Y-%m-%d')}.md"
+
+        apps = db.query(
+            """
+            SELECT app_name, COUNT(*) AS minutes_approx
+            FROM app_events
+            WHERE session_id = ?
+            GROUP BY app_name
+            ORDER BY minutes_approx DESC
+            LIMIT 10
+            """,
+            (sid,),
+        ) if sid is not None else []
+        commands = db.query(
+            """
+            SELECT command_text, response_summary, agent_used, timestamp
+            FROM voice_commands
+            WHERE session_id = ?
+            ORDER BY timestamp ASC
+            LIMIT 50
+            """,
+            (sid,),
+        ) if sid is not None else []
+
+        lines = [
+            f"# HoloDesk Session - {now.strftime('%Y-%m-%d')}",
+            "",
+            f"- Session id: {sid}",
+            f"- Updated: {now.isoformat(timespec='seconds')}",
+            "",
+            "## Apps",
+        ]
+        if apps:
+            lines.extend(f"- {row['app_name']}: about {row['minutes_approx']} min" for row in apps)
+        else:
+            lines.append("- No app activity logged.")
+
+        lines.extend(["", "## Voice Commands"])
+        if commands:
+            for row in commands:
+                response = row.get("response_summary") or ""
+                lines.append(f"- {row['timestamp']}: {row['command_text']} -> {response[:120]}")
+        else:
+            lines.append("- No voice commands logged.")
+
+        with open(out_path, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n\n")
+        return out_path
 
     def format_habits_for_prompt(self) -> str:
         """

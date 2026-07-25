@@ -17,8 +17,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    import cv2
-    import mediapipe as mp
+    cv2 = None
+    mp = None
     MEDIAPIPE_AVAILABLE = True
 except ImportError:
     MEDIAPIPE_AVAILABLE = False
@@ -38,11 +38,21 @@ class VisionThread(threading.Thread):
     def run(self):
         if not MEDIAPIPE_AVAILABLE:
             return
+        global cv2, mp
+        if cv2 is None or mp is None:
+            try:
+                import cv2 as _cv2
+                import mediapipe as _mp
+                cv2 = _cv2
+                mp = _mp
+            except Exception as exc:
+                logger.warning("mediapipe/opencv unavailable - VisionThread disabled: %s", exc)
+                return
 
         # Initialize MediaPipe on THIS thread (not the main thread)
         hands = mp.solutions.hands.Hands(
             static_image_mode=False,
-            max_num_hands=1,
+            max_num_hands=2,
             model_complexity=0,          # Faster than default (1), good enough for gestures
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
@@ -55,18 +65,18 @@ class VisionThread(threading.Thread):
                 frame = frame_queue.get(timeout=0.1)
             except queue.Empty:
                 # No frame yet — signal "no hand" so main loop cursor disappears
-                self._put_landmarks(None)
+                self._put_landmarks([])
                 continue
 
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb)
 
             if results.multi_hand_landmarks:
-                hand_lm = results.multi_hand_landmarks[0]
-                self._put_landmarks(hand_lm)
+                hands_payload = self._build_hands_payload(results)
+                self._put_landmarks(hands_payload)
 
                 # Run debounced gesture detector (intent zone + 8-frame buffer)
-                gesture = self._detector.detect(hand_lm)
+                gesture = self._detector.detect(hands_payload[0]["landmarks"])
                 if gesture is not None:
                     try:
                         gesture_queue.put_nowait(gesture)
@@ -74,7 +84,7 @@ class VisionThread(threading.Thread):
                     except queue.Full:
                         pass  # Drop if queue full — no backlog
             else:
-                self._put_landmarks(None)
+                self._put_landmarks([])
 
         hands.close()
 
@@ -88,6 +98,20 @@ class VisionThread(threading.Thread):
                 landmark_queue.put_nowait(landmarks)
             except Exception:
                 pass
+
+    @staticmethod
+    def _build_hands_payload(results):
+        payload = []
+        handedness = results.multi_handedness or []
+        for idx, hand_lm in enumerate(results.multi_hand_landmarks):
+            label = ""
+            score = 0.0
+            if idx < len(handedness) and handedness[idx].classification:
+                cls = handedness[idx].classification[0]
+                label = cls.label or ""
+                score = float(cls.score or 0.0)
+            payload.append({"landmarks": hand_lm, "label": label, "score": score})
+        return payload
 
     def stop(self):
         self._running = False
