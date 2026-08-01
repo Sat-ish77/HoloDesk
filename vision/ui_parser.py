@@ -147,11 +147,22 @@ class OmniParserServerAdapter(UIParserAdapter):
         if not self.base_url:
             return UIParseResult(False, self.parser_name, [], ["OMNIPARSER_SERVER_URL is not set."])
 
+        try:
+            from PIL import Image
+
+            with Image.open(shot) as img:
+                width, height = img.size
+        except Exception:
+            width, height = None, None
+
         errors = []
-        for endpoint in ("/parse/", "/process_image"):
+        for endpoint, post in (
+            ("/parse/", self._post_json),
+            ("/process_image", self._post_multipart),
+        ):
             try:
-                result = self._post_image(shot, endpoint)
-                elements = self._elements_from_response(result)
+                result = post(shot, endpoint)
+                elements = self._elements_from_response(result, width=width, height=height)
                 if elements:
                     return UIParseResult(True, self.parser_name, elements, [])
                 errors.append(f"{endpoint} returned no elements")
@@ -159,7 +170,16 @@ class OmniParserServerAdapter(UIParserAdapter):
                 errors.append(f"{endpoint} failed: {exc}")
         return UIParseResult(False, self.parser_name, [], errors)
 
-    def _post_image(self, shot: Path, endpoint: str) -> Any:
+    def _post_json(self, shot: Path, endpoint: str) -> Any:
+        # The Microsoft OmniParser server (`omniparserserver.py`) expects a
+        # JSON body with a base64-encoded image, not multipart form-data.
+        url = self.base_url + endpoint
+        image_b64 = base64.b64encode(shot.read_bytes()).decode("utf-8")
+        resp = requests.post(url, json={"base64_image": image_b64}, timeout=self.timeout_s)
+        resp.raise_for_status()
+        return resp.json()
+
+    def _post_multipart(self, shot: Path, endpoint: str) -> Any:
         url = self.base_url + endpoint
         with shot.open("rb") as f:
             files = {"image": (shot.name, f, "image/png")}
@@ -168,7 +188,9 @@ class OmniParserServerAdapter(UIParserAdapter):
         return resp.json()
 
     @staticmethod
-    def _elements_from_response(payload: Any) -> list[UIElement]:
+    def _elements_from_response(
+        payload: Any, *, width: int | None = None, height: int | None = None
+    ) -> list[UIElement]:
         if isinstance(payload, dict):
             candidates = (
                 payload.get("parsed_content_list")
@@ -196,7 +218,10 @@ class OmniParserServerAdapter(UIParserAdapter):
                 or ""
             )
             raw_box = item.get("box") or item.get("bbox") or item.get("coordinate") or item.get("coordinates")
-            bbox = _normalize_bbox(raw_box)
+            # The Microsoft OmniParser server returns boxes as [x1,y1,x2,y2]
+            # ratios (0-1) of the screenshot, so width/height must be passed
+            # through to scale them into pixel coordinates.
+            bbox = _normalize_bbox(raw_box, width=width, height=height)
             if not label or bbox is None:
                 continue
             elements.append(
