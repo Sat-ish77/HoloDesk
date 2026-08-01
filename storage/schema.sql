@@ -68,6 +68,16 @@ CREATE TABLE IF NOT EXISTS preferences (
     updated_at  TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS reminders (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    title           TEXT NOT NULL,
+    due_at          TEXT NOT NULL,
+    status          TEXT DEFAULT 'pending',
+    source_text     TEXT,
+    created_at      TEXT DEFAULT (datetime('now')),
+    completed_at    TEXT
+);
+
 -- Fast lookups for habit queries (app + time slot combinations)
 CREATE INDEX IF NOT EXISTS idx_app_events_app_time
     ON app_events(app_name, hour_of_day, day_of_week);
@@ -80,3 +90,6 @@ CREATE INDEX IF NOT EXISTS idx_app_events_timestamp
 
 CREATE INDEX IF NOT EXISTS idx_feedback_agent
     ON feedback_events(agent_used, user_accepted);
+
+CREATE INDEX IF NOT EXISTS idx_reminders_due
+    ON reminders(status, due_at);

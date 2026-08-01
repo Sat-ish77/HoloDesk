@@ -1,6 +1,7 @@
 import time
 from dataclasses import dataclass
 
+from connectors.openai_client import OpenAIClient
 from connectors.groq_client import GroqClient
 
 
@@ -14,12 +15,14 @@ class ChatAgent:
     """
     General conversation agent.
     - Keeps short rolling history (MAX_HISTORY turns).
-    - Uses Groq llama-3.3-70b-versatile for fast, high-quality replies.
+    - Uses OpenAI first for same-language replies and desktop planning context.
+    - Keeps Groq as an optional fallback.
     """
 
     MAX_HISTORY = 10
 
     def __init__(self):
+        self.openai = OpenAIClient()
         self.groq = GroqClient()
         # history entries: {"role": "user"|"assistant", "content": str}
         self.history: list[dict] = []
@@ -40,7 +43,8 @@ class ChatAgent:
             "on the user's Windows desktop. You are helpful, concise, and friendly. "
             "Keep responses to 2-3 sentences maximum. "
             "Never say 'As an AI language model'. "
-            "If asked to do something on the desktop, respond with what you'll do and keep it brief.\n\n"
+            "If asked to do something on the desktop, do not pretend it already happened. "
+            "Reply in the user's language when possible.\n\n"
             f"User habits (summary): {habits}\n"
             f"Today's context: {today_context}"
         )
@@ -50,9 +54,12 @@ class ChatAgent:
         prompt = self._build_prompt(message)
 
         try:
-            reply = self.groq.complete(prompt=prompt, system=system, max_tokens=220)
-        except Exception as e:
-            return {"success": False, "response": f"I couldn't reach the AI right now: {e}"}
+            reply = self.openai.text_query(prompt=prompt, system=system, max_tokens=220)
+        except Exception as openai_error:
+            try:
+                reply = self.groq.complete(prompt=prompt, system=system, max_tokens=220)
+            except Exception:
+                return {"success": False, "response": f"I couldn't reach the AI right now: {openai_error}"}
 
         self._append_turn(message, reply)
         return {"success": True, "response": reply}

@@ -3,6 +3,8 @@ import re
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from agents.command_normalizer import CommandNormalizer
+from agents.production_control import ProductionControlAgent
 from core.queues import command_queue, response_queue, voice_reply_queue
 
 
@@ -21,6 +23,8 @@ class OrchestratorAgent(threading.Thread):
         self.agents = agents
         self.thread_pool = ThreadPoolExecutor(max_workers=5)
         self.running = True
+        self.normalizer = CommandNormalizer()
+        self.production = ProductionControlAgent()
 
     def stop(self):
         self.running = False
@@ -34,12 +38,13 @@ class OrchestratorAgent(threading.Thread):
 
             try:
                 text = (item.get("text") if isinstance(item, dict) else str(item)) or ""
+                source = (item.get("source") if isinstance(item, dict) else "voice") or "voice"
                 text = text.strip()
                 if not text:
                     continue
-                self._process(text)
+                self._process(text, source=source)
             except Exception as e:
-                self._reply({"text": f"Something went wrong routing that: {e}", "prompt": False})
+                self._reply({"text": f"Something went wrong routing that: {e}", "prompt": False}, source="voice")
 
     # Short yes/cancel words that should only be recognized as confirmation
     # when a TaskAgent confirmation is actually pending.
@@ -48,7 +53,18 @@ class OrchestratorAgent(threading.Thread):
         "cancel", "stop", "no", "nope", "don't", "dont",
     }
 
-    def _process(self, command: str):
+    def _process(self, command: str, source: str = "voice"):
+        normalized = self.normalizer.normalize(command)
+        command_for_intent = normalized.text
+        if normalized.changed:
+            try:
+                response_queue.put_nowait({
+                    "type": "CHAT_REPLY",
+                    "text": f"Heard {normalized.language_hint}, normalized to: {command_for_intent}",
+                })
+            except queue.Full:
+                pass
+
         # If a TaskAgent confirmation is pending (e.g. an armed shutdown),
         # short yes/cancel utterances MUST be delivered to TaskAgent so the
         # scheduled action actually fires or aborts. Otherwise "cancel"
@@ -57,13 +73,32 @@ class OrchestratorAgent(threading.Thread):
         if (
             task_agent is not None
             and getattr(task_agent, "_pending_confirm", None)
-            and command.lower().strip().rstrip(".!?,") in self._CONFIRM_WORDS
+            and command_for_intent.lower().strip().rstrip(".!?,") in self._CONFIRM_WORDS
         ):
-            result = task_agent.execute(action="__confirm_reply__", context={"raw": command})
-            self._reply({"text": result.get("response", "Okay."), "prompt": True})
+            result = task_agent.execute(action="__confirm_reply__", context={"raw": command_for_intent, "original_raw": command})
+            self._reply({"text": result.get("response", "Okay."), "prompt": True}, source=source)
             return
 
-        intents = self._detect_intents(command)
+        production_route = self.production.route(command)
+        if production_route.intents:
+            intents = production_route.intents
+            command_for_intent = production_route.normalized_text or command_for_intent
+            if command_for_intent and command_for_intent.lower() != command.lower():
+                try:
+                    response_queue.put_nowait({
+                        "type": "CHAT_REPLY",
+                        "text": f"Production brain normalized to: {command_for_intent}",
+                    })
+                except queue.Full:
+                    pass
+        else:
+            intents = self._detect_intents(command_for_intent)
+
+        if normalized.changed and not production_route.intents:
+            intents = [
+                (agent, action, {**ctx, "original_raw": command, "normalized_raw": command_for_intent})
+                for agent, action, ctx in intents
+            ]
 
         if not intents:
             # Guard against the "roleplay" failure mode: if the user clearly
@@ -71,8 +106,8 @@ class OrchestratorAgent(threading.Thread):
             # through to the chat model — it will cheerfully pretend it did the
             # thing ("signed you in!", "maximized the window!"). Route to the
             # TaskAgent's honest-refusal path instead.
-            if self._looks_like_declared_action(command):
-                intents = [("task_agent", "declared_task_unsupported", {"raw": command})]
+            if self._looks_like_declared_action(command_for_intent):
+                intents = [("task_agent", "declared_task_unsupported", {"raw": command_for_intent, "original_raw": command})]
             else:
                 intents = [("chat_agent", "chat", {"message": command})]
 
@@ -84,7 +119,7 @@ class OrchestratorAgent(threading.Thread):
             intents = [i for i in intents if i[0] != "chat_agent"]
 
         # Parallel dispatch only when user explicitly combines tasks.
-        wants_parallel = self._looks_parallel(command) and len(intents) > 1
+        wants_parallel = self._looks_parallel(command_for_intent) and len(intents) > 1
 
         if wants_parallel:
             futures = []
@@ -97,9 +132,15 @@ class OrchestratorAgent(threading.Thread):
             results = [self._execute_one(*intents[0])]
 
         merged = self._merge_results(results)
-        self._reply({"text": merged, "prompt": True})
+        self._reply({"text": merged, "prompt": True}, source=source)
 
-    def _reply(self, payload: dict):
+    def _reply(self, payload: dict, source: str = "voice"):
+        if source == "chat_ui":
+            try:
+                response_queue.put_nowait({"type": "CHAT_REPLY", "text": payload.get("text", "")})
+            except queue.Full:
+                pass
+            return
         try:
             # voice thread expects dict: {"text": str, "prompt": bool}
             voice_reply_queue.put_nowait(payload)
@@ -121,16 +162,30 @@ class OrchestratorAgent(threading.Thread):
             if agent_name == "memory_agent":
                 # MemoryAgent: support a few queries via methods if they exist.
                 # Fall back to a friendly summary.
+                if hasattr(agent, "format_today_summary") and any(
+                    p in (ctx.get("raw", "") or "").lower()
+                    for p in ["what did i work on", "today", "what was i doing"]
+                ):
+                    return {"success": True, "response": agent.format_today_summary()}
                 if hasattr(agent, "detect_habits"):
                     habits = agent.detect_habits()
                     return {"success": True, "response": self._format_habits(habits)}
                 return {"success": True, "response": "I’m still learning your habits. Keep using HoloDesk and I’ll summarize your patterns soon."}
+
+            if agent_name == "reminder_agent":
+                return agent.execute(action=action, context=ctx)
+
+            if agent_name == "overlay_agent":
+                return agent.execute(action=action, context=ctx)
 
             if agent_name == "chat_agent":
                 message = ctx.get("message", "")
                 return agent.execute(message=message, context=ctx.get("context"))
 
             if agent_name == "task_agent":
+                return agent.execute(action=action, context=ctx)
+
+            if agent_name == "desktop_grounding_agent":
                 return agent.execute(action=action, context=ctx)
 
             # Unknown agent type
@@ -177,18 +232,101 @@ class OrchestratorAgent(threading.Thread):
         c = (command or "").lower()
         return any(v in c for v in self.DECLARED_ACTION_VERBS)
 
+    @staticmethod
+    def _clean_command(command: str) -> str:
+        c = (command or "").lower().strip()
+        c = re.sub(r"\bhey\s+(?:holo|halu|hello)\b", " ", c)
+        c = re.sub(r"\s+", " ", c).strip(" .,!?:;")
+        leading_fillers = (
+            "okay ", "ok ", "yeah ", "yes ", "please ",
+            "can you please ", "could you please ", "would you please ",
+            "can you ", "could you ", "would you ",
+            "i want you to ", "i need you to ", "i would like you to ",
+        )
+        changed = True
+        while changed:
+            changed = False
+            for filler in leading_fillers:
+                if c.startswith(filler):
+                    c = c[len(filler):].strip()
+                    changed = True
+        trailing_fillers = (" for me", " please", " right now", " now")
+        changed = True
+        while changed:
+            changed = False
+            for filler in trailing_fillers:
+                if c.endswith(filler):
+                    c = c[: -len(filler)].strip()
+                    changed = True
+        return c
+
     def _detect_intents(self, command: str) -> list[tuple[str, str, dict]]:
         """
         Returns a list of (agent_name, action, context).
         """
-        c = command.lower().strip()
-        c = c.replace("hey holo", "").strip()
+        c = self._clean_command(command)
 
         intents: list[tuple[str, str, dict]] = []
         matched_open_in_browser = False  # suppresses conflicting open_app/open_web/search
+        matched_grounding = False
+        matched_overlay = False
+
+        if any(p in c for p in ["open chat", "show chat", "expand chat", "chat panel", "expand orb", "open orb", "show menu", "hey orb expand"]):
+            intents.append(("overlay_agent", "open_chat", {"raw": command}))
+            matched_overlay = True
+        if any(p in c for p in ["game menu", "show games", "open games"]):
+            intents.append(("overlay_agent", "open_game_menu", {"raw": command}))
+            matched_overlay = True
+        if any(p in c for p in ["close chat", "hide chat", "close panel", "close the panel", "close holo panel", "close holodesk panel", "close the star panel"]):
+            intents.append(("overlay_agent", "close_overlay", {"raw": command}))
+            matched_overlay = True
+        if any(p in c for p in ["maximize chat", "maximize panel", "make chat bigger", "expand panel"]):
+            intents.append(("overlay_agent", "maximize_chat", {"raw": command}))
+            matched_overlay = True
+        if any(p in c for p in ["start mission mode", "mission mode", "show mission"]):
+            intents.append(("overlay_agent", "start_mission", {"raw": command}))
+            matched_overlay = True
+        if any(p in c for p in ["start laser hands", "laser hands", "laser game", "play laser"]):
+            intents.append(("overlay_agent", "start_laser_game", {"raw": command}))
+            matched_overlay = True
+        if any(p in c for p in ["tic tac toe", "tictactoe", "noughts and crosses"]):
+            intents.append(("overlay_agent", "start_tictactoe", {"raw": command}))
+            matched_overlay = True
+        place_match = re.search(r"\b(?:place|put|mark)\s+(top left|top center|top right|top|left|center|middle|right|bottom left|bottom center|bottom right|bottom|\d)\b", c)
+        if place_match:
+            intents.append(("overlay_agent", "place_tictactoe", {"raw": command, "cell": place_match.group(1)}))
+            matched_overlay = True
+        if any(p in c for p in ["test ui parser", "test omniparser", "show ui boxes", "show ui parser boxes"]):
+            intents.append(("desktop_grounding_agent", "test_parser", {"raw": command}))
+            matched_grounding = True
+
+        if any(p in c for p in ["verify current screen", "verify my screen", "verify screen"]):
+            intents.append(("desktop_grounding_agent", "verify_screen", {"raw": command, "question": command}))
+            matched_grounding = True
+
+        if any(p in c for p in ["analyze current screen", "analyze my screen", "analyze screen", "what ui elements"]):
+            intents.append(("desktop_grounding_agent", "analyze_screen", {"raw": command}))
+            matched_grounding = True
+
+        if re.match(r"^(click|press|tap)\s+", c):
+            intents.append(("task_agent", "grounded_desktop", {"raw": command}))
+            matched_grounding = True
+
+        if "outlook" in c and any(p in c for p in ["search", "find", "draft", "compose", "write email", "draft email"]):
+            intents.append(("task_agent", "grounded_desktop", {"raw": command}))
+            matched_grounding = True
+        if "gmail" in c and any(p in c for p in ["search", "find", "draft", "compose", "write email", "draft email", "email"]):
+            intents.append(("task_agent", "grounded_desktop", {"raw": command}))
+            matched_grounding = True
+
+        if any(site in c for site in ["facebook", "messenger", "instagram"]) and any(
+            p in c for p in ["search", "find", "tell", "dm", "reply"]
+        ):
+            intents.append(("task_agent", "grounded_desktop", {"raw": command}))
+            matched_grounding = True
 
         # "open <site> in/using/with <browser>" (two-step browser open, then url)
-        m = re.search(r"\bopen\s+(.+?)\s+(?:in|using|with)\s+(chrome|brave|firefox|edge)\b", c)
+        m = re.search(r"\bopen\s+(.+?)\s+(?:in|inside|on|using|with)\s+(chrome|brave|firefox|edge)\b", c)
         if m:
             target = (m.group(1) or "").strip(" .,!?:;")
             browser = (m.group(2) or "").strip()
@@ -197,10 +335,18 @@ class OrchestratorAgent(threading.Thread):
                 matched_open_in_browser = True
 
         # Shutdown / restart — handed to TaskAgent which enforces confirm+cancel.
-        if re.search(r"\b(shut\s*down|power\s*off)\b", c):
+        if re.search(r"\b(shut\s*down|shutdown|power\s*off|turn\s*off)\b", c):
             intents.append(("task_agent", "shutdown", {"raw": command}))
         elif re.search(r"\b(restart|reboot)\b", c):
             intents.append(("task_agent", "restart", {"raw": command}))
+
+        if any(p in c for p in ["pause video", "pause the video", "unpause", "resume video", "resume the video", "play video", "play the video"]):
+            intents.append(("task_agent", "media_control", {"raw": command}))
+
+        if any(p in c for p in ["remind me", "set a reminder", "set reminder"]):
+            intents.append(("reminder_agent", "set_reminder", {"raw": command}))
+        if any(p in c for p in ["what is due", "what's due", "due this week", "pending reminders", "my reminders", "list reminders"]):
+            intents.append(("reminder_agent", "list_reminders", {"raw": command}))
 
         # Screen intents
         screen_phrases = [
@@ -244,7 +390,18 @@ class OrchestratorAgent(threading.Thread):
                 else:
                     intents.append(("task_agent", "open_app", {"app_name": app, "raw": command}))
 
-        if "close " in c:
+        close_in_browser = re.search(r"\bclose\s+(.+?)\s+(?:in|inside|on)\s+(chrome|brave|firefox|edge)\b", c)
+        if close_in_browser:
+            intents.append((
+                "task_agent",
+                "close_browser_tab",
+                {
+                    "target": close_in_browser.group(1).strip(" .,!?:;"),
+                    "browser": close_in_browser.group(2).strip(),
+                    "raw": command,
+                },
+            ))
+        elif not matched_overlay and "close " in c:
             app = self._extract_after_any(c, ["close "])
             if app:
                 intents.append(("task_agent", "close_app", {"app_name": app, "raw": command}))
@@ -266,21 +423,29 @@ class OrchestratorAgent(threading.Thread):
                 intents.append(("task_agent", "open_web", {"target": target, "raw": command}))
 
         # Typing / messaging
-        if any(p in c for p in ["type ", "write ", "paste ", "send message", "draft", "compose", "text "]):
+        if not matched_grounding and any(p in c for p in ["draft a message", "write a message", "reply to", "message ", "dm "]):
+            intents.append(("task_agent", "draft_message", {"raw": command}))
+
+        if (
+            not matched_grounding
+            and not any(i[1] in {"draft_message", "draft_email"} for i in intents)
+            and any(p in c for p in ["type ", "write ", "paste ", "send message", "draft", "compose", "text "])
+        ):
             intents.append(("task_agent", "type_text", {"raw": command}))
 
         # Email
-        if any(p in c for p in ["draft an email", "write an email", "compose email", "send email to", "email to", "open gmail and"]):
+        if not matched_grounding and any(p in c for p in ["draft an email", "write an email", "compose email", "send email to", "email to", "open gmail and"]):
             intents.append(("task_agent", "draft_email", {"raw": command}))
 
         # Search — but not when the user already asked to open a site in a
         # specific browser. "open google in brave" must NOT trigger a search.
         if (
             not matched_open_in_browser
+            and not matched_grounding
             and any(p in c for p in ["search for", "look up", "find", "search google for", "search youtube for"])
         ):
             intents.append(("task_agent", "search", {"raw": command}))
-        elif not matched_open_in_browser and re.search(r"\bgoogle\s+\S", c) and "search" in c:
+        elif not matched_open_in_browser and not matched_grounding and re.search(r"\bgoogle\s+\S", c) and "search" in c:
             intents.append(("task_agent", "search", {"raw": command}))
 
         # Scrolling
@@ -357,13 +522,13 @@ class OrchestratorAgent(threading.Thread):
     @staticmethod
     def _looks_like_web_intent(text: str) -> bool:
         return any(x in text for x in [".com", ".org", ".net", "http://", "https://"]) or any(
-            site in text for site in ["instagram", "youtube", "netflix", "gmail", "github", "spotify", "reddit", "twitter", "claude", "chatgpt"]
+            site in text for site in ["instagram", "youtube", "netflix", "gmail", "github", "spotify", "reddit", "twitter", "claude", "chatgpt", "facebook", "messenger"]
         )
 
     @staticmethod
     def _looks_like_site_name_or_url(app: str) -> bool:
         return any(x in app for x in [".com", ".org", ".net", "http://", "https://"]) or app.strip().lower() in {
-            "instagram", "youtube", "netflix", "gmail", "github", "spotify", "reddit", "twitter", "claude", "chatgpt", "facebook"
+            "instagram", "youtube", "netflix", "gmail", "github", "spotify", "reddit", "twitter", "claude", "chatgpt", "facebook", "messenger"
         }
 
     @staticmethod
