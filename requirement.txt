@@ -30,6 +30,7 @@ pywinauto               # Windows UI Automation fallback for real desktop contro
 uiautomation            # Windows UI Automation tree inspection/control
 dateparser              # natural-language reminder dates ("tomorrow at 5")
 # OmniParser            # optional UI grounding parser; install per official setup instructions
+playwright              # real browser automation for Gmail/Facebook/Instagram (run `playwright install chromium` once)
 
 # --- Storage & Memory ---
 psutil                  # read active process name for memory logger

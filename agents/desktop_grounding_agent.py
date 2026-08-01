@@ -35,6 +35,26 @@ PYAUTOGUI_AVAILABLE = True
 
 from connectors.openai_client import OpenAIClient
 from vision.ui_parser import UIElement, UIParserAdapter, build_default_parser
+from browser import playwright_controller as browser_controller
+from browser.sites import facebook as site_facebook, gmail as site_gmail, instagram as site_instagram
+
+BROWSER_SITE_MODULES = {"gmail": site_gmail, "facebook": site_facebook, "instagram": site_instagram}
+
+
+def _detect_browser_target(command: str) -> str | None:
+    """Which real-browser adapter (if any) this command targets.
+
+    Kept as a plain function (not tied to safety/regex parsing above) so the
+    executor can check it without depending on DesktopActionPlanner.
+    """
+    low = (command or "").lower()
+    if "gmail" in low or "mail.google" in low:
+        return "gmail"
+    if "instagram" in low:
+        return "instagram"
+    if "messenger" in low or "facebook" in low:
+        return "facebook"
+    return None
 
 
 @dataclass
@@ -334,6 +354,11 @@ class DesktopActionExecutor:
         dry_run: bool = True,
         screenshot_dir: str = "artifacts/ui_grounding",
     ) -> dict[str, Any]:
+        if not dry_run:
+            browser_result = self._try_browser_send_flow(plan, screenshot_dir)
+            if browser_result is not None:
+                return browser_result
+
         out_dir = Path(screenshot_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -407,6 +432,84 @@ class DesktopActionExecutor:
             "dry_run": dry_run,
             "parser": self.parser.parser_name,
             "logs": logs,
+        }
+
+    def _try_browser_send_flow(self, plan: ActionPlan, screenshot_dir: str) -> dict[str, Any] | None:
+        """Real browser automation for Gmail/Facebook/Instagram drafts.
+
+        Returns None (meaning "fall through to the pixel/vision path below")
+        when browser automation is disabled, the command doesn't target one
+        of these sites, or too little was parsed out of the command to act
+        on. Otherwise returns the same shaped result dict execute_plan()
+        normally returns, plus `requires_confirmation` / `browser_site` so
+        the caller (TaskAgent.grounded_desktop_action) can gate the actual
+        Send behind a voice confirmation instead of sending immediately.
+        """
+        if not browser_controller.is_enabled():
+            return None
+        site = _detect_browser_target(plan.command)
+        if site is None:
+            return None
+
+        planner = DesktopActionPlanner()
+        text = plan.command
+
+        if site == "gmail":
+            recipient = planner._extract_gmail_recipient(text)
+            message = planner._extract_email_draft_text(text)
+            if not recipient or not message:
+                return None
+
+            page_result = browser_controller.controller.ensure_page()
+            if not page_result["success"]:
+                return None  # automation unavailable; fall back to the vision path
+
+            page = page_result["page"]
+            site_gmail.open_inbox(page)
+            site_gmail.compose(page)
+            site_gmail.fill_recipient(page, recipient)
+            fill = site_gmail.fill_message(page, message)
+            ready = bool(fill["success"] and site_gmail.is_draft_ready(page))
+        else:
+            match = planner._parse_social_message(text)
+            if not match:
+                return None
+            _, person, message = match
+
+            page_result = browser_controller.controller.ensure_page()
+            if not page_result["success"]:
+                return None
+
+            page = page_result["page"]
+            module = BROWSER_SITE_MODULES[site]
+            open_fn = getattr(module, "open_inbox", None) or getattr(module, "open_messenger", None)
+            if open_fn:
+                open_fn(page)
+            found = module.find_contact(page, person)
+            fill = module.fill_message(page, message) if found["success"] else found
+            ready = bool(found["success"] and fill["success"] and module.is_draft_ready(page))
+
+        shot_path = str(Path(screenshot_dir) / f"browser_draft_{int(time.time())}.png")
+        browser_controller.screenshot(page, shot_path)
+
+        if not ready:
+            return {
+                "success": False,
+                "stopped_reason": f"Couldn't prepare the {site} draft — the page structure may have changed.",
+                "dry_run": False,
+                "parser": "browser",
+                "logs": [],
+            }
+
+        return {
+            "success": True,
+            "stopped_reason": f"{site.capitalize()} draft ready. Say 'yes' to send it, or 'cancel' to leave it as a draft.",
+            "dry_run": False,
+            "parser": "browser",
+            "logs": [],
+            "requires_confirmation": True,
+            "browser_site": site,
+            "screenshot": shot_path,
         }
 
     def _run_step(self, step: PlanStep, elements: list[UIElement], *, dry_run: bool) -> dict[str, Any]:
@@ -697,6 +800,12 @@ class DesktopGroundingAgent:
             dry_run=dry_run,
             screenshot_dir=self.screenshot_dir,
         )
+        if result.get("requires_confirmation"):
+            return {
+                "success": True,
+                "response": result.get("stopped_reason") or "Draft ready. Want me to send it?",
+                "data": result,
+            }
         if result.get("success"):
             return {
                 "success": True,

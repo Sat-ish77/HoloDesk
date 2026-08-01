@@ -10,6 +10,11 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
+from browser import playwright_controller as browser_controller
+from browser.sites import facebook as site_facebook, gmail as site_gmail, instagram as site_instagram
+
+BROWSER_SITE_MODULES = {"gmail": site_gmail, "facebook": site_facebook, "instagram": site_instagram}
+
 class _LazyPyAutoGUI:
     def __init__(self):
         self._module = None
@@ -289,16 +294,42 @@ class TaskAgent:
         if preview.get("requires_confirmation"):
             return self._set_pending_confirm(
                 "That desktop action needs confirmation. Say 'yes' to continue, or 'cancel' to stop.",
-                lambda: self.desktop_grounding_agent.execute(
-                    action="execute_command",
-                    context={"raw": raw, "dry_run": False},
-                ),
+                lambda: self._run_grounded_desktop(raw),
             )
 
-        return self.desktop_grounding_agent.execute(
+        return self._run_grounded_desktop(raw)
+
+    def _run_grounded_desktop(self, raw: str) -> dict:
+        result = self.desktop_grounding_agent.execute(
             action="execute_command",
             context={"raw": raw, "dry_run": False},
         )
+        data = result.get("data") or {}
+        site = data.get("browser_site")
+        if data.get("requires_confirmation") and site:
+            # A real browser draft (Gmail/Facebook/Instagram) is filled in and
+            # waiting — only clicking Send is gated behind this confirmation,
+            # never skipped even if the original command said "send" outright.
+            return self._set_pending_confirm(
+                result.get("response") or "Draft ready. Send it?",
+                lambda: self._send_via_browser(site),
+                kind="send",
+            )
+        return result
+
+    def _send_via_browser(self, site: str) -> dict:
+        site_module = BROWSER_SITE_MODULES.get(site)
+        if site_module is None:
+            return {"success": False, "response": f"I don't know how to send on {site}."}
+
+        page_result = browser_controller.controller.ensure_page()
+        if not page_result["success"]:
+            return {"success": False, "response": f"I couldn't reconnect to the browser to send: {page_result['error']}"}
+
+        result = site_module.click_send(page_result["page"])
+        if result["success"]:
+            return {"success": True, "response": "Sent."}
+        return {"success": False, "response": f"I couldn't send it: {result['error']}"}
 
     # ---------------------------
     # Safety helpers
