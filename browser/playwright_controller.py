@@ -61,7 +61,7 @@ def _find_chrome_executable() -> str | None:
 
 
 def _profile_dir() -> str:
-    return os.getenv("HOLODESK_BROWSER_PROFILE_DIR", "HoloDesk Automation")
+    return os.path.expandvars(os.getenv("HOLODESK_BROWSER_PROFILE_DIR", r"%LOCALAPPDATA%\HoloDesk\chrome-profile"))
 
 
 def _debug_port() -> int:
@@ -92,7 +92,9 @@ def _launch_automation_chrome(port: int) -> dict[str, Any]:
             [
                 exe,
                 f"--remote-debugging-port={port}",
-                f"--profile-directory={_profile_dir()}",
+                # Chrome 136+ ignores --remote-debugging-port on the default data dir,
+                # and a launch into a running default Chrome just opens a window there.
+                f"--user-data-dir={_profile_dir()}",
                 "--no-first-run",
                 "--no-default-browser-check",
             ]

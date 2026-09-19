@@ -28,42 +28,42 @@ Hard requirement: it must not hallucinate actions. It only claims what a tool ac
 - Passwords: HoloDesk never stores, logs, speaks, or sends passwords to any LLM. Login is done by Chrome's own password manager inside the "HoloDesk Automation" profile: agent focuses the username field, Chrome shows its saved-credential suggestion, agent selects it (ArrowDown + Enter). The user saves each login once in that profile manually. `GroundingSafetyPolicy.BLOCKED_KEYWORDS` in `agents/desktop_grounding_agent.py` currently blocks "login"/"sign in"/"password"; relax only for the autofill tool described in Phase 3, nowhere else.
 - Every action tool returns an observation (new window title, page URL, field value, visible text). The brain's reply must be built from observations only.
 
-## 3. Current state (honest, as of 2026-09-18)
+## 3. Current state (after Phase 0, 2026-09-18)
 
-The full app (`app/main.py`) was NOT run in the session that wrote this file. Voice, gestures, overlay and routing were never exercised live. Treat them as "code exists" until Phase 0 proves them.
+Design and full analysis: `DESIGN.md` (every claim tagged VERIFIED or ASSUMED). Phase 0 evidence is in section 9.
 
 VERIFIED (actually run):
-- `pytest -q`: 54 passed. These are unit tests with fakes; they prove logic, not the live app.
-- All modules import cleanly (`agents.orchestrator`, `agents.task_agent`, `agents.desktop_grounding_agent`, `browser.*`).
-- OmniParser HTTP fix: a live request reached the OmniParser server and it detected icons. OmniParser then crashed with out-of-memory on a full 1920x1080 screenshot (Florence-2 captioning tried to allocate 5.4 GB).
-- Installed: `playwright` 1.62 + Chromium, GitHub CLI (authenticated as Sat-ish77).
+- `pytest -q`: 54 passed (unit tests with fakes).
+- App startup with the full Python path: overlay window appears (transparent, topmost, orb visible, ~29 FPS), camera and vision threads start, Whisper "small" loads, voice thread starts, no tracebacks. The overlay takes foreground focus at launch.
+- Orchestrator routing and actions, driven by a script with the same agents as `app/main.py` (not via mic or the pygame chat box): `open notepad`, `minimize`, `open youtube in chrome` (opens in the default browser; "in chrome" is dropped by the production router), `what's on my screen` (GPT-4o answered in ~20 s), `game menu khola` (routes to overlay `open_game_menu`), `shutdown` then `cancel` (arms, then cancels; no OS shutdown pending afterwards).
+- Chrome attach: with `--user-data-dir=%LOCALAPPDATA%\HoloDesk\chrome-profile`, a separate automation Chrome launches while normal Chrome is open and Playwright reads `Example Domain` over CDP.
+- Commands run sequentially on the `OrchestratorAgent` thread (code read). The `threading.Thread(target=_run)` at `app/main.py:1046` is screen vision, not command dispatch.
+- Real Python is first on PATH in both PowerShell and Git Bash on this machine.
 
-CODE EXISTS, NOT VERIFIED LIVE (claims come from `PROJECT_STATE.md` and code reading):
-- Overlay/orb/chat/games: `app/holo_overlay.py`, started by `app/main.py`.
-- Voice: local `faster_whisper` "small" on CPU in `app/main.py` (~line 297). `PROJECT_STATE.md` says recognition is noisy ("close facebook" heard as "close facebooking").
-- Gestures: `core/vision_thread.py` (MediaPipe, `model_complexity=0`) emits only `"V_GESTURE"` and `"OPEN_PALM"` on `gesture_queue`. `PROJECT_STATE.md` says gestures are sensitive to light/angle and pinch is unreliable.
-- Routing: `agents/orchestrator.py` `OrchestratorAgent`; calls `ProductionControlAgent.route()` (`agents/production_control.py`) then a long keyword/regex block (~lines 270-450) building `(agent, action, context)` intents.
-- Actions: `agents/task_agent.py` `TaskAgent.execute(action, context)`: open_app (`APP_MAP`), open_web, open_web_in_browser (`BROWSER_PATH_CANDIDATES`, `_find_browser_executable`), close/minimize/maximize, scroll, type_text, media_control, lock_screen, shutdown/restart with confirm.
-- Browser automation: `browser/playwright_controller.py` (`controller.ensure_page()`, `open_url`, `click`, `type_into`, `press_key`, `read_text`, `is_visible`, `screenshot`; accept `role/name/label/placeholder/text`; return dicts, never raise). Site adapters `browser/sites/{gmail,facebook,instagram}.py`. Wired via `DesktopActionExecutor._try_browser_send_flow` and `TaskAgent._run_grounded_desktop` / `_send_via_browser`. Never run against a real browser. See known issues 1-4: as written it almost certainly does not work live.
-- Memory: `agents/memory_agent.py` `MemoryAgent` (SQLite, schema `storage/schema.sql`): app usage logging, `detect_habits`, `log_voice_command`, `get_recent_voice_commands`, `format_habits_for_prompt`.
-- LLMs: `connectors/openai_client.py` (primary), `connectors/groq_client.py` (fallback). `app/main.py` also has a separate legacy `ask_ai()` using Groq `llama-3.1-8b-instant` (duplicate chat path). User has Anthropic and Gemini keys, not yet in `.env`.
+BROKEN (found in Phase 0):
+- `scroll down` scrolls but replies "That didn't work." `TaskAgent.scroll` returns success with an empty response and `_merge_results` turns an all-empty result into the failure text. False failure report. Fix in Phase 1.
+- The app exited on its own after ~2 minutes with exit code 0 and no log line. The main loop only exits on `pygame.QUIT` or Esc; the overlay had keyboard focus, so a stray key press is the likely cause. Not proven.
+- One smoke run hung for over 7 minutes with no output and was killed; the identical rerun finished in ~30 s. Cause unknown; OpenAI calls have no short timeout, which is the prime suspect.
 
-KNOWN ISSUES (found by reading code/config; each must be fixed or disproven in Phase 0):
-1. Chrome remote debugging is blocked on the default profile. Since Chrome 136, `--remote-debugging-port` is ignored when using the default user data directory. `_launch_automation_chrome` in `browser/playwright_controller.py` passes only `--profile-directory`, so it stays inside the default data dir. Also, if normal Chrome is already open, the launch just opens a window in the existing process and ignores the flags. Fix: add `--user-data-dir=%LOCALAPPDATA%\HoloDesk\chrome-profile` (a separate folder); drop `--profile-directory`.
-2. Playwright's sync API is bound to the thread that started it. `app/main.py` appears to run each command in a new `threading.Thread(target=_run, daemon=True)` (~line 1046; not read in full). The module-level `controller` in `browser/playwright_controller.py` would then be reused from a different thread on the next command and fail. Fix: run all Playwright calls on one dedicated worker thread (a `queue.Queue` of callables), or create/close Playwright per call. Verify the threading first.
-3. Gmail recipient is a name, not an address. `_extract_gmail_recipient` returns "Satish Wagle"; `browser/sites/gmail.py` `fill_recipient` types that into To without selecting Gmail's autocomplete suggestion, so the chip may not form. Fix: after typing, wait for the suggestion and press Enter, then read back the To field.
-4. Site selectors in `browser/sites/*` were written without seeing the live pages. Expect some to be wrong. Verify each one against the real logged-in page with `snapshot_text` (Phase 3) and record the working selectors here.
-5. `.env` has `OMNIPARSER_SERVER_URL=http://127.0.0.1:8000`, which is the ElevateU backend, not OmniParser. `build_default_parser()` in `vision/ui_parser.py` picks the OmniParser adapter whenever that variable is set and never falls back at runtime, so vision grounding currently hits the wrong server and fails. Fix: comment it out (OpenAI vision becomes the parser) or point it at 8001 with OmniParser running.
-6. `.env` has `HOLODESK_BROWSER_AUTOMATION_ENABLED=1` already, so the unverified browser path is live. Set it to 0 until issues 1-4 are fixed.
-7. `python app/main.py` fails on this machine because `python` is the Store stub. Use the full interpreter path from rule 5. Earlier run instructions given to the user were wrong on this point.
-8. Two copies of the ElevateU backend were seen running on port 8000 (one from `backend\.venv`, one from a codex runtime python). Harmless to HoloDesk but confusing; note which one is real in Phase 4.
-9. pip warns about broken package folders `~penai`, `~treamlit`, `~yspark` in site-packages (leftovers from an interrupted uninstall). If `openai` imports fail, reinstall `openai`.
-10. `agents/production_control.py` `_workflow_for()` and `ProductionRoute.workflow` are never executed (only tests read them). `TaskAgent.draft_email` / `draft_message` only fire when grounding keywords don't match. Leave them; don't build on them.
-11. `DesktopActionExecutor._run_step` opens apps by typing into Win+R. Replaced in Phase 2.
-12. `pywinauto` and `uiautomation` are installed but used nowhere.
-13. `tests/test_browser_automation.py` `test_browser_send_flow_returns_none_when_disabled` has a pointless `... if False else ...` expression. Simplify to `DesktopActionExecutor.__new__(DesktopActionExecutor)`.
+NOT YET TESTED (needs the user at the laptop): real voice input and Whisper accuracy/latency, gestures and their delay, the pygame chat box, overlay focus behavior during use, second monitor.
 
-UNKNOWN (nobody has checked): gesture latency numbers, Whisper latency, whether the overlay steals focus from other windows, how the app behaves on a second monitor, how `ChatAgent` and legacy `ask_ai()` split traffic.
+CODE EXISTS, NOT VERIFIED LIVE: site adapters `browser/sites/*` and their selectors, Gmail draft flow, OmniParser, `MemoryAgent` habit output.
+
+KNOWN ISSUES status (numbers match the original list):
+1. Chrome debugging on default profile: FIXED in Phase 0 (`_launch_automation_chrome` uses `--user-data-dir`), verified live.
+2. Playwright thread-binding: real but narrower than described. Only the orchestrator's parallel thread pool can cross threads today. Browser worker thread is Phase 3.
+3. Gmail recipient autocomplete: real, Phase 3.
+4. Site selectors unverified: still unverified, Phase 3.
+5. `OMNIPARSER_SERVER_URL` pointed at ElevateU: FIXED in `.env` (commented out).
+6. Browser automation enabled: FIXED in `.env` (set to 0). `HOLODESK_OPENAI_PLANNER_ENABLED=0` also added.
+7. `python` is the Store stub: NOT REPRODUCED here; the full path still works and is safest.
+8. Two ElevateU backends: not checked, Phase 4.
+9. Broken `~penai` folders: warnings only; `openai` imports and works.
+10. `_workflow_for` dead: confirmed, leave.
+11. Win+R app launch: confirmed, Phase 2.
+12. `pywinauto`/`uiautomation` unused: confirmed, Phase 2.
+13. `if False` in a test: confirmed, cosmetic.
+Additional issues 14-20 are listed in `DESIGN.md` section 2.2 (planner LLM hop, 60 s voice wait and stale reply, Brain insertion point, forced-English Whisper, dead `ask_ai`, Next.js API env name, pinch gesture conflict).
 
 ElevateU (separate repo `C:\Users\Dipendra\Desktop\study-helper`, FastAPI backend in `backend/`, live site https://www.elevateuapp.org):
 - Local backend: `uvicorn main:app --port 8000`. Routes (prefix `/api/v1`): `/assignments`, `/canvas`, `/dashboard`, and job routes under `/api/v1/job`: `GET /jobs/feed`, `GET /jobs/search`, `GET /jobs/{job_id}/workspace`, `POST /jobs/score/{job_id}`, `GET|POST /applications`, `PUT /applications/{id}`, `GET /profile`, `GET /profile/setup-status`, `GET /autopilot/status`, `POST /autopilot/run-now`.
@@ -224,3 +224,13 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
 ## 9. Progress log (update after every phase)
 
 - 2026-09-18: Handoff written. Baseline 54 tests passing (unit tests only; app never run live this session). PR #4 open. Known issues 1-13 listed in section 3. Next: Phase 0.
+- 2026-09-18 Phase 0 (DESIGN.md written and approved first). Results:
+  - PASS `.env`: OMNIPARSER_SERVER_URL commented out, HOLODESK_BROWSER_AUTOMATION_ENABLED=0, HOLODESK_OPENAI_PLANNER_ENABLED=0.
+  - PASS startup: overlay, camera, vision, Whisper, voice thread up, no tracebacks. Log in artifacts/phase0_startup.log (gitignored). App later exited with code 0, cause unproven (likely Esc on the focused overlay).
+  - Smoke via orchestrator script (not mic): PASS open notepad; FAIL scroll down (scrolls, but replies "That didn't work."); PASS minimize; PASS open youtube in chrome (default browser, "in chrome" dropped); PASS what's on my screen (~20 s); PASS game menu khola (overlay action, stubbed); PASS shutdown then cancel.
+  - NOT RUN real voice and gestures: need the user present. Owner: user, before or during Phase 1 manual test.
+  - PASS threading read: commands run on the OrchestratorAgent thread.
+  - PASS Chrome attach: `Example Domain` via CDP with separate --user-data-dir, while normal Chrome was open.
+  - Moved to Phase 3 per DESIGN.md: Playwright worker thread, Gmail draft flow.
+  - pytest: 54 passed.
+  - Next: Phase 1 (BrainAgent), including the scroll false-failure fix.
