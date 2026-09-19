@@ -15,8 +15,9 @@ import time
 from typing import Any, Callable
 
 from agents.memory_agent import _get_active_window
-from agents.task_agent import pyautogui
+from agents.task_agent import WEBSITE_MAP, pyautogui
 from automation import win_ui
+from browser import playwright_controller as pw
 
 SYSTEM_PROMPT = """You are HoloDesk, a voice assistant that operates this Windows laptop for a user who cannot comfortably use a mouse or keyboard. Your replies are spoken aloud: one or two short sentences, no markdown, no lists.
 
@@ -251,6 +252,30 @@ class BrainAgent:
         add("set_field", "Replace the text in a named edit field of the front native app window and read it back.",
             lambda name, text: win_ui.set_text(name, text),
             {"name": {"type": "string"}, "text": {"type": "string"}}, ["name", "text"])
+        if pw.is_enabled():
+            # HoloDesk's own Chrome window (separate profile, sites logged in once by the user).
+            add("browser_open", "Open a site in HoloDesk's Chrome tab: a URL or a known name (canvas, claude, elevateu, gmail, youtube...).",
+                lambda target: pw.with_page(lambda page: self._browser_goto(page, target)),
+                {"target": {"type": "string"}}, ["target"])
+            add("browser_read", "List the headings, links, buttons, and fields visible in the browser tab.",
+                lambda: pw.with_page(pw.snapshot))
+            add("browser_page_text", "Read the visible text of the browser tab (first 3000 characters).",
+                lambda: pw.with_page(pw.page_text))
+            add("browser_click", "Click a link, button, or tab by its visible name. Risky buttons (send, submit, delete, buy...) ask the user first.",
+                self._browser_click, {"target": {"type": "string"}}, ["target"])
+            add("browser_fill", "Type a value into a field by its label or placeholder, then read it back. Refuses password fields.",
+                lambda label, value: pw.with_page(pw.fill_field, label, value),
+                {"label": {"type": "string"}, "value": {"type": "string"}}, ["label", "value"])
+            add("browser_press", "Press a key in the browser tab, e.g. Enter, Tab, PageDown, Escape.",
+                lambda key: pw.with_page(pw.press, key), {"key": {"type": "string"}}, ["key"])
+            add("browser_tabs", "List the open tabs in HoloDesk's Chrome.", lambda: pw.with_page(pw.list_tabs))
+            add("browser_switch_tab", "Switch to a tab by its number from browser_tabs.",
+                lambda index: pw.with_page(pw.switch_tab, int(index)), {"index": {"type": "integer"}}, ["index"])
+            add("browser_new_tab", "Open a URL in a new tab.",
+                lambda url: pw.with_page(pw.new_tab, self._site_url(url)), {"url": {"type": "string"}}, ["url"])
+            add("browser_close_tab", "Close the current tab.", lambda: pw.with_page(pw.close_tab))
+            add("browser_login", "Log in on the current page with the password Chrome saved for this site. HoloDesk never sees the password.",
+                lambda: pw.with_page(pw.login_autofill))
         if self.memory is not None:
             add("remember", "Save a fact the user wants remembered, e.g. 'my advisor is Dr. Lee'. Never passwords or keys.",
                 lambda fact: self.memory.remember(fact), {"fact": {"type": "string"}}, ["fact"])
@@ -261,6 +286,30 @@ class BrainAgent:
                 lambda question: self.screen.execute(question=question),
                 {"question": {"type": "string"}}, ["question"])
         return tools
+
+    @staticmethod
+    def _site_url(target: str) -> str:
+        target = (target or "").strip()
+        known = WEBSITE_MAP.get(target.lower())
+        if known:
+            return known
+        return target if target.startswith(("http://", "https://", "file:")) else f"https://{target}"
+
+    def _browser_goto(self, page, target: str) -> dict:
+        url = self._site_url(target)
+        opened = pw.open_url(page, url)
+        if not opened["success"]:
+            return {"success": False, "response": f"Couldn't open {url}: {opened['error']}"}
+        return {"success": True, "response": f"Opened {url}."}
+
+    def _browser_click(self, target: str) -> dict:
+        if _RISKY_CLICK_RE.search(target or ""):
+            return self.task._set_pending_confirm(
+                f"Clicking '{target}' can't be undone easily. Say 'yes' to click it, or 'cancel'.",
+                lambda: pw.with_page(pw.click_best, target),
+                kind="click",
+            )
+        return pw.with_page(pw.click_best, target)
 
     def _click(self, name: str, control_type: str | None = None) -> dict:
         if _RISKY_CLICK_RE.search(name or ""):

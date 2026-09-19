@@ -435,6 +435,10 @@ class DesktopActionExecutor:
         }
 
     def _try_browser_send_flow(self, plan: ActionPlan, screenshot_dir: str) -> dict[str, Any] | None:
+        # Playwright is bound to one thread; run the whole draft flow there.
+        return browser_controller.browser_call(self._browser_send_flow, plan, screenshot_dir)
+
+    def _browser_send_flow(self, plan: ActionPlan, screenshot_dir: str) -> dict[str, Any] | None:
         """Real browser automation for Gmail/Facebook/Instagram drafts.
 
         Returns None (meaning "fall through to the pixel/vision path below")

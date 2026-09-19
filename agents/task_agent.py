@@ -155,6 +155,7 @@ WEBSITE_MAP = {
     "spotify web": "https://open.spotify.com",
     "chatgpt": "https://chatgpt.com",
     "claude": "https://claude.ai",
+    "elevateu": "https://www.elevateuapp.org",
     "outlook": "https://outlook.live.com",
     "calendar": "https://calendar.google.com",
     "maps": "https://maps.google.com",
@@ -322,14 +323,17 @@ class TaskAgent:
         if site_module is None:
             return {"success": False, "response": f"I don't know how to send on {site}."}
 
-        page_result = browser_controller.controller.ensure_page()
-        if not page_result["success"]:
-            return {"success": False, "response": f"I couldn't reconnect to the browser to send: {page_result['error']}"}
+        def send() -> dict:
+            page_result = browser_controller.controller.ensure_page()
+            if not page_result["success"]:
+                return {"success": False, "response": f"I couldn't reconnect to the browser to send: {page_result['error']}"}
+            result = site_module.click_send(page_result["page"])
+            if result["success"]:
+                return {"success": True, "response": "Sent."}
+            return {"success": False, "response": f"I couldn't send it: {result['error']}"}
 
-        result = site_module.click_send(page_result["page"])
-        if result["success"]:
-            return {"success": True, "response": "Sent."}
-        return {"success": False, "response": f"I couldn't send it: {result['error']}"}
+        # Runs on the browser thread: the "yes" that triggers this arrives on another thread.
+        return browser_controller.browser_call(send)
 
     # ---------------------------
     # Safety helpers

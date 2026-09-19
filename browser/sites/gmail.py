@@ -36,7 +36,19 @@ def fill_recipient(page, recipient: str) -> dict[str, Any]:
     result = pw.type_into(page, recipient, label="To")
     if not result["success"]:
         result = pw.type_into(page, recipient, role="combobox", name="To")
-    return result
+    if not result["success"]:
+        return result
+    # A typed name is not an address: pick Gmail's contact suggestion so a chip forms.
+    try:
+        page.get_by_role("option").first.wait_for(state="visible", timeout=5000)
+    except Exception:
+        return {"success": False, "error": f"Gmail suggested no contact for '{recipient}'."}
+    page.keyboard.press("Enter")
+    page.wait_for_timeout(500)
+    # UNVERIFIED selector: recipient chips carry an email attribute in current Gmail.
+    if not page.locator("[email]").count():
+        return {"success": False, "error": f"No recipient chip formed for '{recipient}'."}
+    return {"success": True, "error": None}
 
 
 def fill_subject(page, subject: str) -> dict[str, Any]:

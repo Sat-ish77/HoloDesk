@@ -266,3 +266,13 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - BLOCKED "open calculator, click seven" by voice through the Brain: needs ANTHROPIC_API_KEY. The same actions pass when called directly.
   - Left open: Calculator, Settings windows from the tests.
   - Next: Phase 3 (browser worker thread, generic browser tools, password autofill). Needs the user to log in to sites once in the automation Chrome profile.
+- 2026-09-18 Phase 3 (browser worker, generic browser tools, password autofill). Results:
+  - `browser/playwright_controller.py`: single BrowserWorker thread (`browser_call`), `with_page` returns url/title with every result, current-tab tracking, and page tools: snapshot, page_text, click_best, fill_field (refuses password fields), press, list/switch/new/close tab, login_autofill (Chrome saved password; checks only whether the password field is non-empty, never its value).
+  - Existing Gmail/Facebook/Instagram draft flow and the confirmed Send now run on the worker thread.
+  - Brain tools: browser_open (knows canvas, claude, elevateu, ...), browser_read, browser_page_text, browser_click (send/submit/delete/buy... gated), browser_fill, browser_press, browser_tabs, browser_switch_tab, browser_new_tab, browser_close_tab, browser_login. Registered only when HOLODESK_BROWSER_AUTOMATION_ENABLED=1.
+  - Gmail `fill_recipient` now waits for Gmail's contact suggestion, presses Enter, and checks a chip formed. The chip selector `[email]` is UNVERIFIED.
+  - PASS live (artifacts/phase3_live.log), via the Brain's tool wiring against the automation Chrome: open a local test page, read headings/links/buttons/fields, fill "Full name" and read it back, password fill refused, click "Say hi" and page text shows the change, "Submit application" click gated, login autofill honestly reports no saved password, new tab from a second thread, list/switch/close tabs.
+  - PASS pytest: 75 passed (4 new in tests/test_browser_tools.py).
+  - `.env`: HOLODESK_BROWSER_AUTOMATION_ENABLED=1 again.
+  - NOT DONE (needs the user): log in once to Canvas, Gmail, ElevateU, Claude in the HoloDesk Chrome window (profile folder %LOCALAPPDATA%\HoloDesk\chrome-profile) and let Chrome save each password; then verify Gmail/Facebook/Instagram selectors on the real logged-in pages and "open canvas and read my dashboard" by voice.
+  - Next: Phase 4 (ElevateU connector).
