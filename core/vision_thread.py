@@ -13,6 +13,7 @@ still accurate for the gestures we need.
 import threading
 import queue
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -25,15 +26,19 @@ except ImportError:
     logger.warning("mediapipe or opencv not installed — VisionThread disabled")
 
 from core.queues import frame_queue, landmark_queue, gesture_queue
-from vision.gesture_detector import GestureDetector
+from vision.gesture_detector import GestureDetector, SwipeDetector
 
 
 class VisionThread(threading.Thread):
+
+    TIMING_LOG_EVERY = 300  # frames (~20 s at the measured ~15 fps)
 
     def __init__(self):
         super().__init__(name="VisionThread", daemon=True)
         self._running = False
         self._detector = GestureDetector()
+        self._swipe = SwipeDetector()
+        self._timings: list[float] = []
 
     def run(self):
         if not MEDIAPIPE_AVAILABLE:
@@ -68,15 +73,20 @@ class VisionThread(threading.Thread):
                 self._put_landmarks([])
                 continue
 
+            started = time.perf_counter()
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb)
+            self._log_timing(time.perf_counter() - started)
 
             if results.multi_hand_landmarks:
                 hands_payload = self._build_hands_payload(results)
                 self._put_landmarks(hands_payload)
 
-                # Run debounced gesture detector (intent zone + 8-frame buffer)
-                gesture = self._detector.detect(hands_payload[0]["landmarks"])
+                landmarks = hands_payload[0]["landmarks"]
+                gesture = self._swipe.update(landmarks.landmark[0].x)
+                if gesture is None and not self._swipe.is_moving():
+                    # Debounced V / open palm only while the hand is still.
+                    gesture = self._detector.detect(landmarks)
                 if gesture is not None:
                     try:
                         gesture_queue.put_nowait(gesture)
@@ -84,9 +94,17 @@ class VisionThread(threading.Thread):
                     except queue.Full:
                         pass  # Drop if queue full — no backlog
             else:
+                self._swipe.reset()
                 self._put_landmarks([])
 
         hands.close()
+
+    def _log_timing(self, seconds: float) -> None:
+        self._timings.append(seconds * 1000)
+        if len(self._timings) >= self.TIMING_LOG_EVERY:
+            ms = sorted(self._timings)
+            print(f"[VISION] hand tracking {ms[len(ms) // 2]:.1f} ms median, {ms[int(len(ms) * 0.9)]:.1f} ms p90 over {len(ms)} frames", flush=True)
+            self._timings.clear()
 
     def _put_landmarks(self, landmarks):
         """Replace stale landmark data with fresh (maxsize=1 queue)."""

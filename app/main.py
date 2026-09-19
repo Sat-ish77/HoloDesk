@@ -1129,6 +1129,12 @@ while running :
                 print("[GESTURE] OPEN_PALM — speech stopped")
             open_palm_cooldown = 15   # 0.5s at 30fps
 
+        elif gesture in ("SWIPE_RIGHT", "SWIPE_LEFT"):
+            # Tab switch in whatever window is in front (browser, editor, terminal).
+            keys = ("ctrl", "tab") if gesture == "SWIPE_RIGHT" else ("ctrl", "shift", "tab")
+            get_pyautogui().hotkey(*keys)
+            print(f"[GESTURE] {gesture} - {'+'.join(keys)}")
+
     except queue.Empty:
         pass
 

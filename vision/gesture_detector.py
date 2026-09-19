@@ -22,6 +22,9 @@ Two mechanisms that eliminate false positives:
    repeated triggers are prevented.
 """
 
+import os
+from collections import deque
+
 
 class GestureDetector:
 
@@ -127,3 +130,41 @@ class GestureDetector:
         so 'above' means tip.y < base.y.
         """
         return lm[tip_idx].y < lm[base_idx].y
+
+
+class SwipeDetector:
+    """Fast sideways hand sweep -> "SWIPE_LEFT" / "SWIPE_RIGHT" (tab switching).
+
+    Fed the wrist x (0..1, camera frame is mirrored so right is the user's right).
+    While the hand is moving, VisionThread skips GestureDetector so a sweeping
+    V or palm doesn't also fire V_GESTURE/OPEN_PALM.
+    """
+
+    WINDOW = 8          # frames the sweep must fit in (~0.5 s at the measured ~15 fps)
+    # Calibration knob: fraction of frame width a sweep must cover.
+    DISTANCE = float(os.getenv("HOLODESK_SWIPE_DISTANCE", "0.30"))
+    MOVING = 0.04       # wrist travel over 3 frames that counts as "moving"
+    COOLDOWN_FRAMES = 10
+
+    def __init__(self):
+        self._xs: deque[float] = deque(maxlen=self.WINDOW)
+        self._cooldown = 0
+
+    def update(self, wrist_x: float) -> str | None:
+        if self._cooldown > 0:
+            self._cooldown -= 1
+            self._xs.clear()
+            return None
+        self._xs.append(wrist_x)
+        dx = self._xs[-1] - self._xs[0]
+        if abs(dx) < self.DISTANCE:
+            return None
+        self._xs.clear()
+        self._cooldown = self.COOLDOWN_FRAMES
+        return "SWIPE_RIGHT" if dx > 0 else "SWIPE_LEFT"
+
+    def is_moving(self) -> bool:
+        return self._cooldown > 0 or (len(self._xs) >= 3 and abs(self._xs[-1] - self._xs[-3]) > self.MOVING)
+
+    def reset(self) -> None:
+        self._xs.clear()

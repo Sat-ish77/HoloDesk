@@ -293,3 +293,11 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - PASS pytest: 92 passed (13 new in tests/test_form_filler.py).
   - NOT DONE (needs the user): one real posting, stopping before submit. Radio-button questions (common on ATS forms) are reported as empty for the Brain to ask about; there is no radio tool yet beyond browser_click.
   - Next: Phase 7 (gestures). Phases 8 and 9 were folded into Phase 1; Phase 8's Canvas part is covered by browser_open canvas + browser_page_text and elevateu_assignments.
+- 2026-09-18 Phase 7 (low-lag gestures). Results:
+  - MEASURED on this laptop's camera (no hand in view): MediaPipe 23.1 ms median at 640x480, 19.0 ms at 320x240; the camera delivers only ~15 fps. Downscaling was NOT applied: it saves ~4 ms, the camera is the bottleneck, and smaller frames can miss distant hands. Note the debounce constants assume 30 fps, so V/palm take ~0.4 s and cooldowns ~1 s at 15 fps.
+  - Added `SwipeDetector` (vision/gesture_detector.py): fast sideways sweep of >= 30% of the frame within 8 frames -> SWIPE_RIGHT (ctrl+tab) / SWIPE_LEFT (ctrl+shift+tab), handled in app/main.py. V/open palm detection is skipped while the hand is moving so a sweep doesn't also fire them. Calibration knob: HOLODESK_SWIPE_DISTANCE.
+  - Not added (per DESIGN.md): pinch-scroll (pinch already drags the card; thumbs up/down already scroll) and fist alt+tab (overlaps the thumbs-down pose).
+  - VisionThread logs hand-tracking time every 300 frames. PASS in the running app: "21.7 ms median, 39.3 ms p90 over 300 frames" (artifacts/phase7_startup.log).
+  - PASS pytest: 95 passed (3 new in tests/test_swipe.py).
+  - NOT VERIFIED (needs the user's hand): swipe distance feel, that V/palm still fire reliably, and gesture delays.
+  - Phases 8 and 9: folded into Phase 1 (look_at_screen, lock, sleep, shutdown/restart gated, volume) and Phase 3/4 (Canvas via browser_open + browser_page_text, elevateu_assignments). No separate work left.
