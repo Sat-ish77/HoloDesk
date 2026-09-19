@@ -285,3 +285,11 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - PASS live failure path: backend not running on 8000 -> "The ElevateU backend isn't running at http://127.0.0.1:8000." Issue 8 (two backends on 8000) could not be checked: nothing was listening.
   - NOT DONE (user decision): start the backend and set DEV_USER_ID in study-helper/backend/.env to your real Supabase user id (DESIGN.md open question 3). I did not edit the other repo or start its server. Then "what jobs did ElevateU find today" by voice.
   - Next: Phase 5 (job application form filling).
+- 2026-09-18 Phase 5 (job application form filling). Results:
+  - VERIFIED from source: ElevateU's autofill answers come from GET /api/v1/job/ats/profile ({profile, suggested, missing, ready}); fields include legal_first_name, legal_last_name, email, phone, address, linkedin/github/portfolio urls, school, degree, authorized_to_work_us, requires_sponsorship_now/future, visa_status, salary_expectation, EEO answers.
+  - Added `browser/form_filler.py`: scans visible fields, matches the whole label against an alias table (rapidfuzz ratio >= 88, so "Company name" never matches "name"), fills text and selects, uploads HOLODESK_RESUME_PATH to resume/CV file inputs, skips password/checkbox/radio fields, never overwrites filled fields, never submits.
+  - Brain tools: browser_fill_application (profile from ElevateU) and browser_submit_application (always confirm-gated; on "yes" clicks submit, then PUT application status "applied").
+  - PASS live (artifacts/phase5_live.log) on a local application form with a synthetic profile and fake ElevateU: filled First/Last Name, Email, Phone, LinkedIn, Work authorization (select "Yes"), Resume/CV upload; left "Company name" and the free-text question empty and reported them; submit only happened after "yes"; page showed "Application submitted"; application marked applied.
+  - PASS pytest: 92 passed (13 new in tests/test_form_filler.py).
+  - NOT DONE (needs the user): one real posting, stopping before submit. Radio-button questions (common on ATS forms) are reported as empty for the Brain to ask about; there is no radio tool yet beyond browser_click.
+  - Next: Phase 7 (gestures). Phases 8 and 9 were folded into Phase 1; Phase 8's Canvas part is covered by browser_open canvas + browser_page_text and elevateu_assignments.

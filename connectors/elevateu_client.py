@@ -61,6 +61,10 @@ class ElevateUClient:
     def profile(self) -> dict:
         return self._request("GET", "/api/v1/job/profile")
 
+    def ats_profile(self) -> dict:
+        """Application autofill answers: {profile, suggested, missing, ready}."""
+        return self._request("GET", "/api/v1/job/ats/profile")
+
     def assignments(self) -> dict:
         return self._request("GET", "/api/v1/assignments")
 

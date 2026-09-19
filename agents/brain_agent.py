@@ -18,6 +18,7 @@ from agents.memory_agent import _get_active_window
 from agents.task_agent import WEBSITE_MAP, pyautogui
 from automation import win_ui
 from browser import playwright_controller as pw
+from browser.form_filler import fill_application
 from connectors.elevateu_client import ElevateUClient, summarize_applications, summarize_assignments, summarize_jobs
 
 SYSTEM_PROMPT = """You are HoloDesk, a voice assistant that operates this Windows laptop for a user who cannot comfortably use a mouse or keyboard. Your replies are spoken aloud: one or two short sentences, no markdown, no lists.
@@ -278,6 +279,10 @@ class BrainAgent:
             add("browser_close_tab", "Close the current tab.", lambda: pw.with_page(pw.close_tab))
             add("browser_login", "Log in on the current page with the password Chrome saved for this site. HoloDesk never sees the password.",
                 lambda: pw.with_page(pw.login_autofill))
+            add("browser_fill_application", "Fill the job application form in the browser tab from the user's ElevateU application profile. Reports filled and still-empty fields; never submits.",
+                self._fill_application)
+            add("browser_submit_application", "Submit the application form. Always asks the user first. Pass the ElevateU application_id to mark it applied.",
+                self._submit_application, {"button": {"type": "string"}, "application_id": {"type": "string"}}, [])
         add("elevateu_jobs", "Jobs from the user's ElevateU account: the Job Scout feed, or a search when role is given. Returns the top 5 with ids.",
             self._elevateu_jobs, {"role": {"type": "string"}, "location": {"type": "string"}}, [])
         add("elevateu_job_details", "Full details for one ElevateU job by id (from elevateu_jobs).",
@@ -308,6 +313,30 @@ class BrainAgent:
             return result
         # ponytail: raw JSON clipped to 3000 chars; shape it per field if the model misreads it.
         return {"success": True, "response": json.dumps(result["data"], default=str)[:3000]}
+
+    def _fill_application(self) -> dict:
+        got = self.elevateu.ats_profile()
+        if not got.get("success"):
+            return got
+        profile = got["data"].get("profile") or got["data"].get("suggested") or {}
+        if not profile:
+            return {"success": False, "response": "Your ElevateU application profile is empty. Fill it in on ElevateU first."}
+        return pw.with_page(fill_application, profile)
+
+    def _submit_application(self, button: str = "Submit application", application_id: str = "") -> dict:
+        def submit() -> dict:
+            clicked = pw.with_page(pw.click_best, button)
+            if not clicked.get("success") or not application_id:
+                return clicked
+            marked = self.elevateu.update_application(application_id, "applied")
+            note = " Marked applied in ElevateU." if marked.get("success") else f" ElevateU wasn't updated: {marked.get('response')}"
+            return {**clicked, "response": clicked["response"] + note}
+
+        return self.task._set_pending_confirm(
+            f"Ready to click '{button}' and submit this application. Say 'yes' to submit, or 'cancel'.",
+            submit,
+            kind="submit",
+        )
 
     @staticmethod
     def _site_url(target: str) -> str:
