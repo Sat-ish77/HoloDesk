@@ -276,3 +276,12 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - `.env`: HOLODESK_BROWSER_AUTOMATION_ENABLED=1 again.
   - NOT DONE (needs the user): log in once to Canvas, Gmail, ElevateU, Claude in the HoloDesk Chrome window (profile folder %LOCALAPPDATA%\HoloDesk\chrome-profile) and let Chrome save each password; then verify Gmail/Facebook/Instagram selectors on the real logged-in pages and "open canvas and read my dashboard" by voice.
   - Next: Phase 4 (ElevateU connector).
+- 2026-09-18 Phase 4 (ElevateU connector). Results:
+  - VERIFIED from source (study-helper/backend): auth is `Authorization: Bearer <token>`, Supabase `auth.get_user(token)`; `Bearer dev-token` works only when ALLOW_DEV_AUTH=true, which backend/.env sets, and maps to DEV_USER_ID (currently `local-dev-user`, not your real account). The job app (`jobhunt/core/auth.py`) uses the same rule.
+  - VERIFIED routes: GET /api/v1/job/jobs/feed (returns {jobs, total}), GET /api/v1/job/jobs/search?role=, GET /api/v1/job/jobs/{id}/workspace, GET|PUT /api/v1/job/applications[/{id}], GET /api/v1/job/profile, GET /api/v1/job/autopilot/status, GET /api/v1/assignments (returns {assignments, count}, ordered by due_at).
+  - Handoff correction: the frontend is Next.js; its API base is NEXT_PUBLIC_API_URL (study-helper-frontend/lib/api.ts), not VITE_API. The production API host is not in the repo.
+  - Added `connectors/elevateu_client.py` (requests, 20 s timeout, dict results, plain messages for backend down / 401 / HTTP errors) and Brain tools elevateu_jobs, elevateu_job_details, elevateu_applications, elevateu_assignments (top 5 spoken, ids kept).
+  - PASS pytest: 79 passed (4 new, requests mocked).
+  - PASS live failure path: backend not running on 8000 -> "The ElevateU backend isn't running at http://127.0.0.1:8000." Issue 8 (two backends on 8000) could not be checked: nothing was listening.
+  - NOT DONE (user decision): start the backend and set DEV_USER_ID in study-helper/backend/.env to your real Supabase user id (DESIGN.md open question 3). I did not edit the other repo or start its server. Then "what jobs did ElevateU find today" by voice.
+  - Next: Phase 5 (job application form filling).

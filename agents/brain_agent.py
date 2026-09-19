@@ -18,6 +18,7 @@ from agents.memory_agent import _get_active_window
 from agents.task_agent import WEBSITE_MAP, pyautogui
 from automation import win_ui
 from browser import playwright_controller as pw
+from connectors.elevateu_client import ElevateUClient, summarize_applications, summarize_assignments, summarize_jobs
 
 SYSTEM_PROMPT = """You are HoloDesk, a voice assistant that operates this Windows laptop for a user who cannot comfortably use a mouse or keyboard. Your replies are spoken aloud: one or two short sentences, no markdown, no lists.
 
@@ -56,10 +57,11 @@ class BrainAgent:
     MAX_SECONDS = 45  # voice thread waits 120 s, so a reply always lands first
     HISTORY_TURNS = 6
 
-    def __init__(self, task_agent, memory_agent=None, screen_agent=None, client=None, model: str | None = None):
+    def __init__(self, task_agent, memory_agent=None, screen_agent=None, client=None, model: str | None = None, elevateu=None):
         self.task = task_agent
         self.memory = memory_agent
         self.screen = screen_agent
+        self.elevateu = elevateu or ElevateUClient()
         self._client = client
         self.model = model or os.getenv("HOLODESK_BRAIN_MODEL", "claude-sonnet-5")
         self.history: list[dict] = []
@@ -276,6 +278,14 @@ class BrainAgent:
             add("browser_close_tab", "Close the current tab.", lambda: pw.with_page(pw.close_tab))
             add("browser_login", "Log in on the current page with the password Chrome saved for this site. HoloDesk never sees the password.",
                 lambda: pw.with_page(pw.login_autofill))
+        add("elevateu_jobs", "Jobs from the user's ElevateU account: the Job Scout feed, or a search when role is given. Returns the top 5 with ids.",
+            self._elevateu_jobs, {"role": {"type": "string"}, "location": {"type": "string"}}, [])
+        add("elevateu_job_details", "Full details for one ElevateU job by id (from elevateu_jobs).",
+            self._elevateu_job_details, {"job_id": {"type": "string"}}, ["job_id"])
+        add("elevateu_applications", "The user's tracked job applications in ElevateU and their status.",
+            lambda: summarize_applications(self.elevateu.list_applications()))
+        add("elevateu_assignments", "The user's upcoming course assignments synced into ElevateU from Canvas.",
+            lambda: summarize_assignments(self.elevateu.assignments()))
         if self.memory is not None:
             add("remember", "Save a fact the user wants remembered, e.g. 'my advisor is Dr. Lee'. Never passwords or keys.",
                 lambda fact: self.memory.remember(fact), {"fact": {"type": "string"}}, ["fact"])
@@ -286,6 +296,18 @@ class BrainAgent:
                 lambda question: self.screen.execute(question=question),
                 {"question": {"type": "string"}}, ["question"])
         return tools
+
+    def _elevateu_jobs(self, role: str = "", location: str = "") -> dict:
+        if role.strip():
+            return summarize_jobs(self.elevateu.search_jobs(role, location))
+        return summarize_jobs(self.elevateu.job_feed())
+
+    def _elevateu_job_details(self, job_id: str) -> dict:
+        result = self.elevateu.job_workspace(job_id)
+        if not result.get("success"):
+            return result
+        # ponytail: raw JSON clipped to 3000 chars; shape it per field if the model misreads it.
+        return {"success": True, "response": json.dumps(result["data"], default=str)[:3000]}
 
     @staticmethod
     def _site_url(target: str) -> str:
