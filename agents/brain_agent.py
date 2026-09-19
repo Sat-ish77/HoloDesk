@@ -93,7 +93,7 @@ class BrainAgent:
                 response = client.messages.create(
                     model=self.model,
                     max_tokens=2048,
-                    system=[{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}],
+                    system=self._system(text),
                     tools=self._tool_defs(),
                     messages=messages,
                     output_config={"effort": "low"},
@@ -174,6 +174,21 @@ class BrainAgent:
         self.history += [{"role": "user", "content": user}, {"role": "assistant", "content": reply}]
         self.history = self.history[-self.HISTORY_TURNS * 2:]
 
+    def _system(self, text: str) -> list[dict]:
+        # The cache breakpoint covers tools + the fixed prompt; per-request memory goes after it.
+        blocks = [{"type": "text", "text": SYSTEM_PROMPT, "cache_control": {"type": "ephemeral"}}]
+        if self.memory is not None:
+            try:
+                facts = self.memory.recall(text)
+                habits = self.memory.format_habits_for_prompt()
+            except Exception:
+                facts, habits = [], ""
+            context = "Usage habits: " + (habits or "none yet.")
+            if facts:
+                context += "\nThings the user asked you to remember: " + "; ".join(facts)
+            blocks.append({"type": "text", "text": context})
+        return blocks
+
     def _tool_defs(self) -> list[dict]:
         return [{"name": n, "description": s["description"], "input_schema": s["input_schema"]} for n, (s, _) in self.tools.items()]
 
@@ -221,11 +236,22 @@ class BrainAgent:
         add("restart", "Restart the PC. Asks the user to confirm first.", t.restart_with_confirm)
         add("volume", "Change system volume.", self._volume,
             {"action": {"type": "string", "enum": ["up", "down", "mute"]}, "steps": {"type": "integer"}}, ["action"])
+        if self.memory is not None:
+            add("remember", "Save a fact the user wants remembered, e.g. 'my advisor is Dr. Lee'. Never passwords or keys.",
+                lambda fact: self.memory.remember(fact), {"fact": {"type": "string"}}, ["fact"])
+            add("recall", "Search facts the user asked you to remember.", self._recall,
+                {"query": {"type": "string"}}, ["query"])
         if self.screen is not None:
             add("look_at_screen", "Look at the screen and answer a question about what is visible. Slow (10-20 s); use only when the user asks about the screen.",
                 lambda question: self.screen.execute(question=question),
                 {"question": {"type": "string"}}, ["question"])
         return tools
+
+    def _recall(self, query: str) -> dict:
+        facts = self.memory.recall(query)
+        if not facts:
+            return {"success": True, "response": "Nothing remembered about that.", "facts": []}
+        return {"success": True, "response": "; ".join(facts), "facts": facts}
 
     def _scroll(self, direction: str, amount: int = 5) -> dict:
         amount = max(1, min(int(amount or 5), 20))

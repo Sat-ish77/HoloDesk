@@ -136,3 +136,35 @@ def test_orchestrator_routes_unmatched_command_to_brain(monkeypatch):
 def test_silent_success_is_not_reported_as_failure():
     assert OrchestratorAgent._merge_results([{"success": True, "response": ""}]) == "Done."
     assert OrchestratorAgent._merge_results([{"success": False, "response": ""}]) == "That didn't work."
+
+
+@pytest.fixture
+def memory(tmp_path, monkeypatch):
+    import agents.memory_agent as mem_mod
+    from storage.db import Database
+
+    monkeypatch.setattr(mem_mod, "db", Database(tmp_path / "facts.db"))
+    return mem_mod.MemoryAgent()
+
+
+def test_remember_then_recall(memory):
+    assert memory.remember("My advisor is Dr. Lee")["success"] is True
+    memory.remember("I went shopping on Friday")  # "pin" inside a word must not trip the secret filter
+    assert memory.recall("who is my advisor") == ["My advisor is Dr. Lee"]
+    assert "I went shopping on Friday" in memory.recall("shopping")
+
+
+def test_secrets_are_never_stored(memory):
+    for secret in ("my gmail password is hunter2", "card 4111 1111 1111 1111", "api key sk-abc123", "my pin is 4821"):
+        assert memory.remember(secret)["success"] is False, secret
+    assert memory.recall("password") == []
+
+
+def test_brain_puts_recalled_facts_after_the_cache_breakpoint(memory):
+    memory.remember("My advisor is Dr. Lee")
+    client = FakeClient([text("Your advisor is Dr. Lee.")])
+    BrainAgent(FakeTask(), memory_agent=memory, client=client).run("who is my advisor")
+
+    system = client.calls[0]["system"]
+    assert "cache_control" in system[0] and "Dr. Lee" not in system[0]["text"]
+    assert "Dr. Lee" in system[1]["text"] and "cache_control" not in system[1]

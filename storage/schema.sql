@@ -78,6 +78,14 @@ CREATE TABLE IF NOT EXISTS reminders (
     completed_at    TEXT
 );
 
+-- Facts the user asked HoloDesk to remember ("my advisor is Dr. X").
+-- Secrets are rejected in MemoryAgent.remember before they reach this table.
+CREATE TABLE IF NOT EXISTS facts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    text        TEXT NOT NULL,
+    created_at  TEXT DEFAULT (datetime('now'))
+);
+
 -- Fast lookups for habit queries (app + time slot combinations)
 CREATE INDEX IF NOT EXISTS idx_app_events_app_time
     ON app_events(app_name, hour_of_day, day_of_week);

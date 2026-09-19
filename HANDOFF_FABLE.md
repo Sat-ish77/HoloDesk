@@ -245,3 +245,11 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - PASS app startup with Phase 1 changes (artifacts/phase1_startup.log), closed via WM_CLOSE.
   - BLOCKED manual check "open notepad and type hello": no ANTHROPIC_API_KEY on this machine (.env, environment, CLI). Owner: user adds the key to .env, then rerun. Real API request shape is untested until then.
   - Next: Phase 6 (memory facts), then Phase 2.
+- 2026-09-18 Phase 6 (memory facts), done before Phase 2 per DESIGN.md. Results:
+  - `facts` table in storage/schema.sql; `MemoryAgent.remember(text)` rejects passwords, PINs, API keys, tokens, card numbers; `recall(query)` ranks the newest 500 facts with rapidfuzz token_set_ratio >= 50.
+  - Brain tools `remember` and `recall`; recalled facts and habits go in a second system block after the cached prefix.
+  - PASS pytest: 66 passed (3 new: remember/recall, secret rejection incl. "shopping" not tripping the PIN rule, facts placed after the cache breakpoint).
+  - PASS real DB: `facts` table created in data/holodesk.db on init.
+  - BLOCKED manual "remember my advisor is Dr. X" / "who is my advisor": needs ANTHROPIC_API_KEY.
+  - Note for future agents: the Bash tool here halves backslashes inside heredocs and python -c. Use the Edit/Write tools, or chr(92), for any text containing backslashes.
+  - Next: Phase 2 (native UI automation).

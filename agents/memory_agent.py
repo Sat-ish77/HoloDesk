@@ -15,6 +15,7 @@ Windows-only: uses win32gui + win32process to read the active window title.
 psutil reads the process name from the PID.
 """
 
+import re
 import threading
 import logging
 import json
@@ -398,6 +399,29 @@ class MemoryAgent:
         with open(out_path, "a", encoding="utf-8") as f:
             f.write("\n".join(lines) + "\n\n")
         return out_path
+
+    # Card numbers, API keys, and anything naming a credential are never stored.
+    _SECRET_RE = re.compile(
+        r"passw|passcode|\bpin\b|api[ _-]?key|token|secret|\bsk-[a-z0-9]|\b(?:\d[ -]?){13,19}\b",
+        re.IGNORECASE,
+    )
+
+    def remember(self, text: str) -> dict:
+        text = (text or "").strip()[:500]
+        if not text:
+            return {"success": False, "response": "What should I remember?"}
+        if self._SECRET_RE.search(text):
+            return {"success": False, "response": "I don't store passwords, keys, or card numbers."}
+        db.insert("facts", {"text": text})
+        return {"success": True, "response": f"Remembered: {text}"}
+
+    def recall(self, query: str, limit: int = 5) -> list[str]:
+        from rapidfuzz import fuzz, process
+
+        # ponytail: scores the newest 500 facts in Python; move to SQLite FTS5 if facts grow past that.
+        facts = [r["text"] for r in db.query("SELECT text FROM facts ORDER BY id DESC LIMIT 500")]
+        ranked = process.extract(query or "", facts, scorer=fuzz.token_set_ratio, limit=limit)
+        return [text for text, score, _ in ranked if score >= 50]
 
     def format_habits_for_prompt(self) -> str:
         """
