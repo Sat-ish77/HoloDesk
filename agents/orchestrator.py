@@ -100,6 +100,12 @@ class OrchestratorAgent(threading.Thread):
                 for agent, action, ctx in intents
             ]
 
+        brain = self.agents.get("brain_agent")
+        if not intents and brain is not None and getattr(brain, "available", False):
+            # The Brain acts only through tools and replies from their observations,
+            # so it goes before the declared-action refusal below.
+            intents = [("brain_agent", "run", {"raw": command})]
+
         if not intents:
             # Guard against the "roleplay" failure mode: if the user clearly
             # declared an ACTION verb but we don't have a handler, DO NOT fall
@@ -503,6 +509,8 @@ class OrchestratorAgent(threading.Thread):
             return " ".join(success_parts)
         if success_parts and fail_parts:
             return " ".join(success_parts) + " " + " ".join(fail_parts)
+        if not fail_parts and all(r.get("success", True) for r in results):
+            return "Done."  # silent actions (e.g. scroll) succeeded with no text
         return " ".join(fail_parts) or "That didn't work."
 
     @staticmethod

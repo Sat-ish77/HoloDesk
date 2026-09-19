@@ -16,6 +16,7 @@ pyttsx3                 # TTS fallback
 # pvporcupine           # optional wake-word engine; requires access key
 
 # --- AI & APIs ---
+anthropic               # BrainAgent: Claude tool-calling loop (agents/brain_agent.py)
 groq                    # Groq API client (Llama 3 - fast, cheap)
 openai                  # GPT-4o Vision for screen analysis (Step 7)
 moonshine-voice         # optional on-device STT fallback (requires model download)

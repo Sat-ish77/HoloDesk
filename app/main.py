@@ -63,9 +63,11 @@ from core.vision_thread import VisionThread
 print("[STARTUP] Camera/vision modules ready", flush=True)
 
 # ===== SCREEN VISION (Step 7) =====
-screen_agent = None
+# Loaded eagerly: the orchestrator and BrainAgent receive this object at startup,
+# and a None here made "what's on my screen" fail. The OpenAI client inside stays lazy.
+from agents.screen_agent import screen_agent
 SCREEN_VISION_AVAILABLE = True
-print("[OK] Screen vision lazy-loaded - say 'what's on my screen' to use it!")
+print("[OK] Screen vision ready - say 'what's on my screen' to use it!")
 # ===== STEP 6: WINDOW TRANSPARENCY IMPORTS =====
 try: 
     import win32gui      # Access Windows window management
@@ -96,15 +98,6 @@ def scroll_desktop(delta: int) -> None:
 
 
 
-#====AI SETUP====
-print("[STARTUP] Loading Groq client...", flush=True)
-try:
-    from groq import Groq
-    grok_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-    print("[STARTUP] Groq client ready", flush=True)
-except Exception as exc:
-    grok_client = None
-    print(f"[WARNING] Groq client unavailable at startup: {exc}", flush=True)
 
 # ===== STEP 6: TRANSPARENCY SETUP FUNCTION =====
 def setup_transparent_window(hwnd):
@@ -147,27 +140,6 @@ def setup_transparent_window(hwnd):
     except Exception as e:
         print(f"[WARNING] Transparency setup failed: {e}")
 
-last_ai_response_cache = "I'm having trouble answering that right now."
-
-def ask_ai(question):
-    '''Ask the AI a question and get a response'''
-    global last_ai_response_cache
-    if grok_client is None:
-        return f"{last_ai_response_cache} I'm having connection issues."
-    try: 
-        response = grok_client.chat.completions.create(
-            model = "llama-3.1-8b-instant",
-            messages= [
-            { "role": "system", "content": "You are HoloDesk, a helpful AI assistant on the user's Windows desktop. Keep responses short and conversational (2-3 sentences max). Always end with a brief, natural follow-up like 'Want to know more?' or 'Need help with anything else?' — vary it each time."},
-            {"role": "user", "content": question}
-            ],
-            max_tokens = 100,
-        )
-        last_ai_response_cache = response.choices[0].message.content
-        return last_ai_response_cache
-    except Exception as e:
-        print(f"AI ERROR: {e}")
-        return f"{last_ai_response_cache} I'm having connection issues."
 
 
 
@@ -327,6 +299,7 @@ from agents.chat_agent import ChatAgent
 from agents.memory_agent import MemoryAgent
 from agents.desktop_grounding_agent import DesktopGroundingAgent
 from agents.reminder_agent import ReminderAgent
+from agents.brain_agent import BrainAgent
 
 # Instantiate agents (singletons for the app lifetime)
 memory_agent = MemoryAgent()
@@ -353,6 +326,9 @@ orchestrator = OrchestratorAgent(agents={
     "chat_agent": chat_agent,
     "desktop_grounding_agent": desktop_grounding_agent,
     "overlay_agent": overlay_control_agent,
+    "brain_agent": BrainAgent(
+        task_agent, memory_agent, screen_agent if SCREEN_VISION_AVAILABLE else None
+    ),
 })
 orchestrator.start()
 
@@ -853,7 +829,7 @@ class VoiceAssistantThread(threading.Thread):
 
         print(f"[VOICE] Dispatched: '{text}' — waiting for response...")
         try:
-            reply = voice_reply_queue.get(timeout=60)
+            reply = voice_reply_queue.get(timeout=120)  # BrainAgent caps itself at 45 s
         except queue.Empty:
             print("[VOICE] Timeout waiting for reply")
             return None

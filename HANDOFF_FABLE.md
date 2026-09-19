@@ -234,3 +234,14 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - Moved to Phase 3 per DESIGN.md: Playwright worker thread, Gmail draft flow.
   - pytest: 54 passed.
   - Next: Phase 1 (BrainAgent), including the scroll false-failure fix.
+- 2026-09-18 Phase 1 (BrainAgent). Results:
+  - Added `agents/brain_agent.py`: Claude tool loop (model from HOLODESK_BRAIN_MODEL, default claude-sonnet-5, effort low), cap 8 tool calls / 45 s, stops on a pending TaskAgent confirmation. Tools: open_app, open_website, scroll, type_text, press_keys (delete and alt+f4 confirm-gated), minimize, maximize, close_app (gated), get_active_window, lock_screen, sleep_pc, shutdown/restart (gated), volume, look_at_screen. Phases 8 and 9 folded in here per DESIGN.md.
+  - Honesty backstops in code: an action claim with zero tool calls is replaced; a failed tool the reply omits is appended.
+  - Orchestrator sends unmatched commands to the Brain when ANTHROPIC_API_KEY is set, before the declared-action refusal. Without the key, behavior is unchanged.
+  - FIXED scroll false failure: `_merge_results` returns "Done." for silent successes. PASS: `scroll down` now replies "Done." (smoke script).
+  - FIXED (found this phase) "what's on my screen" in the real app: `app/main.py` passed `screen_agent=None` to the orchestrator (lazy-load never ran; `analyze_screen()` has no callers). Now imported at startup. Phase 0's PASS for that step came from the smoke script, which built the real ScreenAgent.
+  - Removed dead `ask_ai()` and its Groq client from `app/main.py`. Voice reply wait raised 60 -> 120 s.
+  - PASS pytest: 63 passed (54 + 9 new in tests/test_brain_agent.py, fake client, no network).
+  - PASS app startup with Phase 1 changes (artifacts/phase1_startup.log), closed via WM_CLOSE.
+  - BLOCKED manual check "open notepad and type hello": no ANTHROPIC_API_KEY on this machine (.env, environment, CLI). Owner: user adds the key to .env, then rerun. Real API request shape is untested until then.
+  - Next: Phase 6 (memory facts), then Phase 2.
