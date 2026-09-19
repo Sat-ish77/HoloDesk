@@ -387,6 +387,15 @@ class TaskAgent:
         if not app:
             return {"success": False, "response": "Which app should I open?"}
 
+        if app not in APP_MAP:
+            # Any installed app (desktop or Store) by its Start menu name, before the
+            # fuzzy APP_MAP/running-process guess that can pick the wrong app.
+            from automation import win_ui
+
+            launched = win_ui.launch_app(app_raw)
+            if launched["success"]:
+                return launched
+
         resolved = self._resolve_app_name(app_raw)
         if not resolved["success"]:
             return resolved

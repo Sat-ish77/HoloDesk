@@ -16,6 +16,7 @@ from typing import Any, Callable
 
 from agents.memory_agent import _get_active_window
 from agents.task_agent import pyautogui
+from automation import win_ui
 
 SYSTEM_PROMPT = """You are HoloDesk, a voice assistant that operates this Windows laptop for a user who cannot comfortably use a mouse or keyboard. Your replies are spoken aloud: one or two short sentences, no markdown, no lists.
 
@@ -31,6 +32,10 @@ For plain conversation or questions you can answer from knowledge, answer direct
 # ponytail: regex heuristic; a model that phrases a false claim differently slips through.
 _CLAIM_RE = re.compile(
     r"\b(i(?:'ve| have)?\s+(?:opened|closed|clicked|sent|typed|scrolled|minimi[sz]ed|maximi[sz]ed|submitted|launched|pressed)|all done|done!)",
+    re.IGNORECASE,
+)
+_RISKY_CLICK_RE = re.compile(
+    r"\b(send|submit|delete|remove|erase|buy|pay|purchase|order|checkout|uninstall|sign out|log out|format|discard|empty)\b",
     re.IGNORECASE,
 )
 _FAILURE_WORDS = ("couldn't", "could not", "can't", "cannot", "failed", "didn't", "unable", "not able", "error")
@@ -236,6 +241,16 @@ class BrainAgent:
         add("restart", "Restart the PC. Asks the user to confirm first.", t.restart_with_confirm)
         add("volume", "Change system volume.", self._volume,
             {"action": {"type": "string", "enum": ["up", "down", "mute"]}, "steps": {"type": "integer"}}, ["action"])
+        add("list_windows", "List the open app windows, front first.", lambda: win_ui.list_windows())
+        add("switch_to", "Bring an open window to the front by (part of) its title.",
+            lambda window: win_ui.focus_window(window), {"window": {"type": "string"}}, ["window"])
+        add("read_screen_controls", "Read the buttons, fields, and text of the front app window as text. Fast; use before clicking in a native app.",
+            lambda: win_ui.read_controls())
+        add("click", "Click a named control in the front native app window, e.g. 'Seven', 'Save', 'File'. Risky buttons (send, delete, buy...) ask the user first.",
+            self._click, {"name": {"type": "string"}, "control_type": {"type": "string"}}, ["name"])
+        add("set_field", "Replace the text in a named edit field of the front native app window and read it back.",
+            lambda name, text: win_ui.set_text(name, text),
+            {"name": {"type": "string"}, "text": {"type": "string"}}, ["name", "text"])
         if self.memory is not None:
             add("remember", "Save a fact the user wants remembered, e.g. 'my advisor is Dr. Lee'. Never passwords or keys.",
                 lambda fact: self.memory.remember(fact), {"fact": {"type": "string"}}, ["fact"])
@@ -246,6 +261,15 @@ class BrainAgent:
                 lambda question: self.screen.execute(question=question),
                 {"question": {"type": "string"}}, ["question"])
         return tools
+
+    def _click(self, name: str, control_type: str | None = None) -> dict:
+        if _RISKY_CLICK_RE.search(name or ""):
+            return self.task._set_pending_confirm(
+                f"Clicking '{name}' can't be undone easily. Say 'yes' to click it, or 'cancel'.",
+                lambda: win_ui.click_control(name, control_type),
+                kind="click",
+            )
+        return win_ui.click_control(name, control_type)
 
     def _recall(self, query: str) -> dict:
         facts = self.memory.recall(query)

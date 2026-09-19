@@ -522,6 +522,12 @@ class DesktopActionExecutor:
         if step.action == "open_application":
             if dry_run:
                 return {"success": True, "response": f"Dry-run: would open {step.args.get('app_name', '')}."}
+            from automation import win_ui
+
+            launched = win_ui.launch_app(step.args.get("app_name", ""))
+            if launched["success"]:
+                return launched
+            # Fallback for names only the Run box knows (executables on PATH).
             if not PYAUTOGUI_AVAILABLE:
                 return {"success": False, "response": "Desktop control requires pyautogui."}
             pyautogui.hotkey("win", "r")

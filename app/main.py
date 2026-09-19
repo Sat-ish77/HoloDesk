@@ -332,6 +332,10 @@ orchestrator = OrchestratorAgent(agents={
 })
 orchestrator.start()
 
+# The installed-app list takes 3-10 s to build; build it now so the first "open X" is fast.
+from automation import win_ui
+threading.Thread(target=win_ui.find_installed_app, args=("notepad",), name="AppListWarmup", daemon=True).start()
+
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling
 scroll_direction = 0        # 1 = up, -1 = down, 0 = stopped

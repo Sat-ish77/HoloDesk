@@ -253,3 +253,16 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - BLOCKED manual "remember my advisor is Dr. X" / "who is my advisor": needs ANTHROPIC_API_KEY.
   - Note for future agents: the Bash tool here halves backslashes inside heredocs and python -c. Use the Edit/Write tools, or chr(92), for any text containing backslashes.
   - Next: Phase 2 (native UI automation).
+- 2026-09-18 Phase 2 (native app control). Results:
+  - Added `automation/win_ui.py`: launch_app (Windows' own installed-app list via shell:AppsFolder, covers Store apps like Calculator/Notepad that have no .lnk), list_windows, focus_window, read_controls, click_control (UIA invoke, then click_input), set_text (reads back the value). All return dicts, never raise; COM initialized per thread.
+  - `TaskAgent.open_app` tries the installed-app list for names not in APP_MAP before the old fuzzy guess. Grounding `_run_step` open_application tries it before Win+R (kept as fallback).
+  - Brain tools: list_windows, switch_to, read_screen_controls, click (send/submit/delete/buy/... names are confirm-gated), set_field.
+  - PASS live, worker thread, no Brain: launch Calculator, focus it, read controls in 0.42 s, click Clear/Seven/Plus/Two/Equals, display read back "Display is 9".
+  - PASS live set_text on the Run dialog: value read back exactly, including + ( ) { } characters.
+  - PASS live "open settings" through the orchestrator (not in APP_MAP): Settings opened, reply "Opening Settings." Took 5.5 s cold; the window opened behind Chrome (Windows focus rules), so the Brain may need switch_to after launching.
+  - Found and fixed while testing: pywinauto 0.6.9 descendants(depth=) raises AttributeError (no depth limit now); rapidfuzz 3 matching is case-sensitive by default (now default_process everywhere); WRatio sent "vs code" to "Developer PowerShell for VS 2022" (now exact-ignoring-spaces, shortest first, then token_set_ratio >= 85). Checked names: chrome, calculator, word, note pad, notepad, notepad plus plus, edge, file explorer, settings all correct; vs code, teams, spotify give no match (not installed or ambiguous) and fall back to the old path.
+  - Installed-app list takes 3-10 s to build; cached for the process, rebuilt at most once a minute on a miss, warmed in a background thread at app startup.
+  - PASS pytest: 71 passed (5 new in tests/test_win_ui.py).
+  - BLOCKED "open calculator, click seven" by voice through the Brain: needs ANTHROPIC_API_KEY. The same actions pass when called directly.
+  - Left open: Calculator, Settings windows from the tests.
+  - Next: Phase 3 (browser worker thread, generic browser tools, password autofill). Needs the user to log in to sites once in the automation Chrome profile.
