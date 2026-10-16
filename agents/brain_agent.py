@@ -106,7 +106,7 @@ class BrainAgent:
                     system=self._system(text),
                     tools=self._tool_defs(),
                     messages=messages,
-                    output_config={"effort": "low"},
+                    **self._effort(),
                 )
                 if response.stop_reason == "refusal":
                     reply = "I can't help with that one."
@@ -188,6 +188,13 @@ class BrainAgent:
     def _remember_turn(self, user: str, reply: str) -> None:
         self.history += [{"role": "user", "content": user}, {"role": "assistant", "content": reply}]
         self.history = self.history[-self.HISTORY_TURNS * 2:]
+
+    def _effort(self) -> dict:
+        """Low effort keeps voice replies quick. Haiku 4.5 rejects the parameter
+        outright ("This model does not support the effort parameter"), so omit it."""
+        if "haiku" in self.model:
+            return {}
+        return {"output_config": {"effort": "low"}}
 
     def _system(self, text: str) -> list[dict]:
         # The cache breakpoint covers tools + the fixed prompt; per-request memory goes after it.

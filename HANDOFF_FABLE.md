@@ -308,3 +308,9 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - ADDED timing/diagnostics, since latency was unmeasurable: "[VOICE] transcribed in Xs", "[ROUTE] <agents> handled <cmd> in Xs", "[BRAIN] tool(args) -> ok/FAILED in Xs". Also silenced the per-frame protobuf UserWarning that buried every real line.
   - PASS pytest: 108 passed (13 new in tests/test_confirmation.py, using the exact phrases from the failed session).
   - STILL OPEN: speech recognition accuracy (Whisper small, forced English); end-to-end latency (now instrumented, not yet tuned); ANTHROPIC_API_KEY still absent so the Brain never ran; site logins not saved in the automation profile yet.
+- 2026-10-16 First real Claude API calls (key now in .env). Results:
+  - PASS end to end: "which window is in front right now?" -> get_active_window -> correct spoken answer. The request shape (tools, cached system prompt, tool_result round trip) works against the live API.
+  - FIXED: `output_config={"effort": "low"}` is rejected by claude-haiku-4-5 ("This model does not support the effort parameter"), so every Haiku command failed with BadRequestError. The Brain now sends effort only to models that accept it.
+  - MEASURED Brain latency (one-tool command, excludes speech): claude-sonnet-5 about 3 s cold and 1.8-2.3 s warm; claude-haiku-4-5 1.4 s warm. Prompt caching is working (warm calls are much faster). Network variance is large, one Haiku cold call took 20 s.
+  - Default stays claude-sonnet-5; set HOLODESK_BRAIN_MODEL=claude-haiku-4-5 for speed.
+  - Remaining latency is in the voice pipeline (Whisper + VAD + TTS), not the Brain; the new [VOICE] transcribed timing line will show it.
