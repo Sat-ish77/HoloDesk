@@ -155,6 +155,19 @@ class PlaywrightController:
         except Exception as exc:
             return {"success": False, "page": None, "error": f"Couldn't connect to the automation browser: {exc}"}
 
+    def reset(self) -> None:
+        """Drop the connection so the next call rebuilds it.
+
+        The Playwright node driver can die mid-session (seen live: "EPIPE broken
+        pipe"), after which every browser command failed until HoloDesk restarted.
+        """
+        for closer in (getattr(self._browser, "close", None), getattr(self._playwright, "stop", None)):
+            try:
+                closer and closer()
+            except Exception:
+                pass
+        self._playwright = self._browser = self._page = None
+
     def tabs(self) -> list:
         got = self.ensure_page()
         return got["page"].context.pages if got["success"] else []
@@ -177,12 +190,26 @@ _worker: threading.Thread | None = None
 _worker_lock = threading.Lock()
 
 
+_DEAD_DRIVER_SIGNS = ("epipe", "broken pipe", "target page, context or browser has been closed",
+                      "connection closed", "browser has been closed", "has been closed")
+
+
 def _worker_loop() -> None:
     while True:
         fn, args, kwargs, box = _calls.get()
         try:
             box["result"] = fn(*args, **kwargs)
         except Exception as exc:
+            message = str(exc).lower()
+            if any(sign in message for sign in _DEAD_DRIVER_SIGNS):
+                # Driver or browser died; rebuild and try once more before giving up.
+                controller.reset()
+                try:
+                    box["result"] = fn(*args, **kwargs)
+                    box["done"].set()
+                    continue
+                except Exception as retry_exc:
+                    exc = retry_exc
             box["result"] = {"success": False, "error": f"{type(exc).__name__}: {exc}", "response": f"Browser error: {exc}"}
         box["done"].set()
 

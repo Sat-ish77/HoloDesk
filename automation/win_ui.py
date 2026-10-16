@@ -32,6 +32,34 @@ def _fail(message: str) -> dict:
     return {"success": False, "response": message}
 
 
+def ensure_dpi_aware() -> None:
+    """Make this process see true pixels.
+
+    Without it, Windows display scaling (125% here) gives three different
+    coordinate systems: UI Automation reports physical pixels, GetWindowRect and
+    pyautogui report scaled ones. Clicking what a screenshot showed then missed.
+    Must run before any window is created or captured.
+    """
+    try:
+        # Pointer-width handle: a plain -4 silently fails and leaves the process unaware.
+        set_dpi = ctypes.windll.user32.SetProcessDpiAwarenessContext
+        set_dpi.argtypes, set_dpi.restype = [ctypes.c_void_p], ctypes.c_bool
+        if set_dpi(ctypes.c_void_p(-4)):  # per-monitor aware v2
+            return
+    except Exception:
+        pass
+    for fallback in (lambda: ctypes.windll.shcore.SetProcessDpiAwareness(2),
+                     lambda: ctypes.windll.user32.SetProcessDPIAware()):
+        try:
+            fallback()
+            return
+        except Exception:
+            continue
+
+
+ensure_dpi_aware()
+
+
 def _com() -> None:
     # Orchestrator and Brain run on worker threads; COM must be initialized per thread.
     import pythoncom

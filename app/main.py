@@ -1,3 +1,22 @@
+# FIRST: display-scaling awareness can only be set once per process, and importing
+# pygame claims it. Without this the process sees 1536x864 on a 1920x1080 screen, so
+# screenshots, window rects and clicks disagree and clicks miss their target.
+import ctypes
+import os as _os
+_os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+try:
+    # The handle must be pointer-width: passing a plain -4 silently returns 0 and
+    # leaves the process scaling-unaware (verified: metrics stayed 1536x864).
+    _set_dpi = ctypes.windll.user32.SetProcessDpiAwarenessContext
+    _set_dpi.argtypes, _set_dpi.restype = [ctypes.c_void_p], ctypes.c_bool
+    if not _set_dpi(ctypes.c_void_p(-4)):  # per-monitor aware v2
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        pass
+
 import pygame
 import os
 import sys
@@ -13,6 +32,7 @@ import wave
 import audioop
 import re
 from holo_overlay import HoloOverlayRenderer, HoloOverlayState, MODE_NORMAL, MODE_TICTACTOE
+
 # MediaPipe/protobuf print a UserWarning per frame, which buried every real log line.
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf.*")
@@ -151,8 +171,11 @@ def setup_transparent_window(hwnd):
 
 
 #settings 
-WINDOW_WIDTH = 1280 # width of window 
-WINDOW_HEIGHT = 720 # height of window 
+# Match the real screen. These were fixed at 1280x720, which covered most of the screen
+# only because the process was scaling-unaware; now that it sees true pixels, a fixed
+# size would leave the overlay (and the gesture cursor area) covering two thirds of it.
+WINDOW_WIDTH = ctypes.windll.user32.GetSystemMetrics(0)
+WINDOW_HEIGHT = ctypes.windll.user32.GetSystemMetrics(1)
 FPS_CAP = 30  # 30fps — matches camera thread rate, UI has no reason to run faster
 
 
@@ -273,8 +296,13 @@ tts_engine.setProperty('rate', 150) #speed of speech( words per minute)
 
 #whisper model for speech-to-text ( steup - loads once at startup) 
 print("Loading Whisper model....please wait...")
-whisper_model = WhisperModel("small", device = "cpu", compute_type = "int8")  # "small" is more accurate than "base" 
-print("Whisper model loaded successfully!")
+# Measured on this laptop with a 13.5 s utterance: small 6.0 s, base 2.0 s, tiny 1.3 s,
+# all three transcribing it correctly. "small" made every command feel slow (11.6 s on a
+# long sentence in the live test). Raise it back with HOLODESK_WHISPER_MODEL=small if
+# accented speech is misheard.
+_WHISPER_SIZE = os.getenv("HOLODESK_WHISPER_MODEL", "base").strip()
+whisper_model = WhisperModel(_WHISPER_SIZE, device="cpu", compute_type="int8") 
+print(f"Whisper model '{_WHISPER_SIZE}' loaded successfully!")
 
 # Optional Moonshine STT fallback (requires model download/config)
 ENABLE_MOONSHINE_FALLBACK = os.getenv("ENABLE_MOONSHINE_FALLBACK", "0").strip() == "1"
@@ -282,6 +310,10 @@ MOONSHINE_MODEL_PATH = os.getenv("MOONSHINE_MODEL_PATH", "").strip()
 MOONSHINE_MODEL_ARCH = os.getenv("MOONSHINE_MODEL_ARCH", "").strip()
 _moonshine_transcriber = None
 HOLODESK_VOICE_DEBUG = os.getenv("HOLODESK_VOICE_DEBUG", "0").strip() == "1"
+# None lets Whisper detect the language, so Nepali is transcribed as Nepali instead of
+# being forced into English-sounding words. Set HOLODESK_STT_LANGUAGE=en to pin English.
+HOLODESK_STT_LANGUAGE = os.getenv("HOLODESK_STT_LANGUAGE", "auto").strip().lower()
+HOLODESK_STT_LANGUAGE = None if HOLODESK_STT_LANGUAGE in ("", "auto") else HOLODESK_STT_LANGUAGE
 
 # Voice tuning knobs (per-mic). Defaults are chosen for typical laptop mics.
 HOLODESK_VAD_START_THRESHOLD = int(os.getenv("HOLODESK_VAD_START_THRESHOLD", "240"))
@@ -481,7 +513,7 @@ class VoiceAssistantThread(threading.Thread):
             segments, info = whisper_model.transcribe(
                 wav_path,
                 beam_size=5,
-                language="en",
+                language=HOLODESK_STT_LANGUAGE,
                 temperature=0.0,
                 # Tunable via env vars for different mics / noise floors.
                 no_speech_threshold=HOLODESK_WHISPER_NO_SPEECH_THRESHOLD,

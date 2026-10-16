@@ -49,6 +49,10 @@ class OrchestratorAgent(threading.Thread):
 
     # Short yes/cancel words that should only be recognized as confirmation
     # when a TaskAgent confirmation is actually pending.
+    # Commands at or above this many words go straight to the Brain. Short ones
+    # ("open notepad", "scroll down") stay on the instant deterministic path.
+    BRAIN_WORD_THRESHOLD = 12
+
     _CONFIRM_WORDS = {
         "yes", "yep", "yeah", "do it", "confirm", "okay", "ok",
         "cancel", "stop", "no", "nope", "don't", "dont",
@@ -73,6 +77,17 @@ class OrchestratorAgent(threading.Thread):
         task_agent = self.agents.get("task_agent")
         if task_agent is not None and callable(getattr(task_agent, "pending_confirmation", None)) and task_agent.pending_confirmation():
             result = task_agent.execute(action="__confirm_reply__", context={"raw": command_for_intent, "original_raw": command})
+            self._reply({"text": result.get("response", "Okay."), "prompt": True}, source=source)
+            return
+
+        # A long sentence is a request, not a command. Keyword matching used to grab
+        # these: "...why do you open so many chrome tabs, I just want one tab with
+        # facebook gmail and instagram" matched "facebook" and replied "Opening
+        # facebook." Anything this long goes to the Brain, which reads all of it.
+        brain = self.agents.get("brain_agent")
+        if brain is not None and getattr(brain, "available", False) and len(command_for_intent.split()) >= self.BRAIN_WORD_THRESHOLD:
+            result = brain.execute(action="run", context={"raw": command})
+            print(f"[ROUTE] brain_agent handled a {len(command_for_intent.split())}-word request in {time.time() - started:.1f}s", flush=True)
             self._reply({"text": result.get("response", "Okay."), "prompt": True}, source=source)
             return
 

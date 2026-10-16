@@ -30,7 +30,9 @@ If the request is ambiguous (which app, which window, which text), ask one short
 
 Sending, submitting, deleting, closing apps, and powering off need the user's confirmation. When a tool says confirmation is pending, stop and repeat its question.
 
-For plain conversation or questions you can answer from knowledge, answer directly without tools."""
+For plain conversation or questions you can answer from knowledge, answer directly without tools.
+
+Reply in the language the user spoke. If they speak Nepali, answer in Nepali written in the Latin alphabet (for example "Notepad kholeko chu"), because the computer's voice can only pronounce Latin letters."""
 
 # Past-tense action claims that must be backed by at least one tool call.
 # ponytail: regex heuristic; a model that phrases a false claim differently slips through.

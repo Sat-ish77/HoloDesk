@@ -72,3 +72,32 @@ def test_fill_field_refuses_password_fields():
 def test_fill_field_reads_value_back():
     result = pw.fill_field(FakePage(FakeField()), "Full name", "Satish")
     assert result["success"] and result["value"] == "Satish"
+
+
+def test_worker_rebuilds_the_driver_after_a_broken_pipe(monkeypatch):
+    """Seen live: the Playwright node driver died with EPIPE and every later
+    browser command failed until HoloDesk was restarted."""
+    resets = []
+    monkeypatch.setattr(pw.controller, "reset", lambda: resets.append(True))
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("Error: EPIPE: broken pipe, write")
+        return {"success": True, "response": "recovered"}
+
+    assert pw.browser_call(flaky) == {"success": True, "response": "recovered"}
+    assert resets == [True] and len(calls) == 2
+
+
+def test_other_errors_are_not_retried(monkeypatch):
+    monkeypatch.setattr(pw.controller, "reset", lambda: None)
+    calls = []
+
+    def boom():
+        calls.append(1)
+        raise ValueError("no such element")
+
+    assert pw.browser_call(boom)["success"] is False
+    assert len(calls) == 1
