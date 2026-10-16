@@ -13,6 +13,12 @@ import wave
 import audioop
 import re
 from holo_overlay import HoloOverlayRenderer, HoloOverlayState, MODE_NORMAL, MODE_TICTACTOE
+# MediaPipe/protobuf print a UserWarning per frame, which buried every real log line.
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf.*")
+os.environ.setdefault("GLOG_minloglevel", "2")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+
 print("[STARTUP] Base imports loaded", flush=True)
 
 warnings.filterwarnings(
@@ -48,6 +54,7 @@ from core.queues import (
     voice_reply_queue,
     record_tts_finished,
     read_tts_state,
+    abort_event,
 )
 print("[STARTUP] Shared queues ready", flush=True)
 
@@ -465,6 +472,7 @@ class VoiceAssistantThread(threading.Thread):
             pass
 
     def transcribe_audio(self, wav_path):
+        _stt_started = time.time()
         try:
             # Stricter no_speech_threshold + stricter log_prob gate. Whisper's
             # 'small' will happily hallucinate fluent English out of room noise
@@ -529,6 +537,7 @@ class VoiceAssistantThread(threading.Thread):
             if text.strip(" .!?") in _HALLUCINATION_BLOCKLIST:
                 return ""
 
+            print(f"[VOICE] transcribed in {time.time() - _stt_started:.1f}s: {text!r}", flush=True)
             return text
         except Exception as e:
             print(f"[WARNING] Whisper failed, fallback STT: {e}")
@@ -832,10 +841,21 @@ class VoiceAssistantThread(threading.Thread):
             return None
 
         print(f"[VOICE] Dispatched: '{text}' — waiting for response...")
-        try:
-            reply = voice_reply_queue.get(timeout=120)  # BrainAgent caps itself at 45 s
-        except queue.Empty:
-            print("[VOICE] Timeout waiting for reply")
+        abort_event.clear()
+        reply, waited = None, 0.0
+        while waited < 120:  # BrainAgent caps itself at 45 s
+            try:
+                reply = voice_reply_queue.get(timeout=0.5)
+                break
+            except queue.Empty:
+                waited += 0.5
+                if abort_event.is_set():
+                    # Open palm during a long command: stop waiting, listen again.
+                    print("[VOICE] Aborted by open palm")
+                    speak("Okay, I stopped.")
+                    return None
+        if reply is None:
+            print(f"[VOICE] Timeout waiting for reply after {waited:.0f}s")
             return None
 
         if reply is None or (isinstance(reply, dict) and reply.get("text") is None):
@@ -1124,6 +1144,11 @@ while running :
                 is_scrolling = False
                 scroll_direction = 0
                 print("[GESTURE] OPEN_PALM — scrolling stopped")
+            # Abandon any command still running, so a wrong one can be stopped.
+            abort_event.set()
+            if task_agent.pending_confirmation():
+                task_agent.execute(action="__confirm_reply__", context={"raw": "cancel"})
+                print("[GESTURE] OPEN_PALM — pending confirmation cancelled")
             if is_ai_speaking:
                 stop_ai_speech()
                 print("[GESTURE] OPEN_PALM — speech stopped")

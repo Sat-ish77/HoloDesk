@@ -341,6 +341,27 @@ _SNAPSHOT_JS = r"""
 """
 
 
+def open_in_automation_browser(url: str) -> dict[str, Any]:
+    """Open a URL in HoloDesk's existing Chrome tab and raise that window.
+
+    Used by spoken "open <site>" so every later step (read, click, draft) acts on
+    the same page. webbrowser.open() would start a separate window HoloDesk
+    cannot touch.
+    """
+
+    def job(page):
+        result = open_url(page, url)
+        if not result["success"]:
+            return {"success": False, "response": f"Couldn't open {url}: {result['error']}"}
+        try:
+            page.bring_to_front()
+        except Exception:
+            pass
+        return {"success": True, "response": f"Opened {url}."}
+
+    return with_page(job)
+
+
 def snapshot(page, limit: int = 60) -> dict[str, Any]:
     try:
         items = page.evaluate(_SNAPSHOT_JS, limit)

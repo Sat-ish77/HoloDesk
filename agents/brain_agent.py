@@ -20,6 +20,7 @@ from automation import win_ui
 from browser import playwright_controller as pw
 from browser.form_filler import fill_application
 from connectors.elevateu_client import ElevateUClient, summarize_applications, summarize_assignments, summarize_jobs
+from core.queues import abort_event
 
 SYSTEM_PROMPT = """You are HoloDesk, a voice assistant that operates this Windows laptop for a user who cannot comfortably use a mouse or keyboard. Your replies are spoken aloud: one or two short sentences, no markdown, no lists.
 
@@ -137,6 +138,9 @@ class BrainAgent:
                     # The gate owns the next turn: "yes"/"cancel" is caught by the orchestrator.
                     reply = pending["response"]
                     break
+                if abort_event.is_set():
+                    reply = "Stopped. " + self._summarize(tool_log)
+                    break
                 if len(tool_log) >= self.MAX_TOOL_CALLS or time.time() - started > self.MAX_SECONDS:
                     reply = "I stopped after " + self._summarize(tool_log)
                     break
@@ -154,10 +158,12 @@ class BrainAgent:
         if entry is None:
             return {"success": False, "response": f"Unknown tool {name}."}
         before = getattr(self.task, "_pending_confirm", None)
+        started = time.time()
         try:
             obs = entry[1](**(args or {}))
         except Exception as exc:
             obs = {"success": False, "response": f"{name} failed: {exc}"}
+        print(f"[BRAIN] {name}({args or {}}) -> {'ok' if obs.get('success') else 'FAILED'} in {time.time() - started:.1f}s: {str(obs.get('response'))[:120]}", flush=True)
         after = getattr(self.task, "_pending_confirm", None)
         if after is not None and after is not before:
             obs = {**obs, "pending_confirmation": True}

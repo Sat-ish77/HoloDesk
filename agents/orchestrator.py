@@ -1,6 +1,7 @@
 import queue
 import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from agents.command_normalizer import CommandNormalizer
@@ -54,6 +55,7 @@ class OrchestratorAgent(threading.Thread):
     }
 
     def _process(self, command: str, source: str = "voice"):
+        started = time.time()
         normalized = self.normalizer.normalize(command)
         command_for_intent = normalized.text
         if normalized.changed:
@@ -65,16 +67,11 @@ class OrchestratorAgent(threading.Thread):
             except queue.Full:
                 pass
 
-        # If a TaskAgent confirmation is pending (e.g. an armed shutdown),
-        # short yes/cancel utterances MUST be delivered to TaskAgent so the
-        # scheduled action actually fires or aborts. Otherwise "cancel"
-        # would be classified as an EXIT phrase or fall through to chat.
+        # While a confirmation is pending, EVERY utterance goes to TaskAgent to
+        # answer it. Matching the command again here re-armed the same question
+        # forever ("yes, close the chrome" -> "Close chrome? Say yes to confirm").
         task_agent = self.agents.get("task_agent")
-        if (
-            task_agent is not None
-            and getattr(task_agent, "_pending_confirm", None)
-            and command_for_intent.lower().strip().rstrip(".!?,") in self._CONFIRM_WORDS
-        ):
+        if task_agent is not None and callable(getattr(task_agent, "pending_confirmation", None)) and task_agent.pending_confirmation():
             result = task_agent.execute(action="__confirm_reply__", context={"raw": command_for_intent, "original_raw": command})
             self._reply({"text": result.get("response", "Okay."), "prompt": True}, source=source)
             return
@@ -138,6 +135,7 @@ class OrchestratorAgent(threading.Thread):
             results = [self._execute_one(*intents[0])]
 
         merged = self._merge_results(results)
+        print(f"[ROUTE] {'+'.join(i[0] for i in intents)} handled {command!r} in {time.time() - started:.1f}s", flush=True)
         self._reply({"text": merged, "prompt": True}, source=source)
 
     def _reply(self, payload: dict, source: str = "voice"):

@@ -197,13 +197,18 @@ class TaskAgent:
             if self._contains_blocked(raw):
                 return {"success": False, "response": "I can’t help with that command."}
 
-            # Global confirmation resolution (user says "yes"/"cancel")
-            if self._pending_confirm:
-                # If user is responding to a confirmation prompt, consume it first.
-                if self._looks_like_yes(raw):
+            # Global confirmation resolution. While one is pending, the utterance
+            # answers it or it does not; it must never arm a second confirmation
+            # for the same thing (that was the "say yes to confirm" loop).
+            pending = self.pending_confirmation()
+            if pending:
+                signal = self.confirm_signal(raw)
+                if signal == "yes":
                     return self._confirm_yes()
-                if self._looks_like_cancel(raw):
+                if signal == "cancel":
                     return self._confirm_cancel()
+                if action == "__confirm_reply__":
+                    return {"success": True, "response": f"I still need a yes or a cancel. {pending['message']}"}
 
             # Dispatch actions
             if action == "open_app":
@@ -347,15 +352,42 @@ class TaskAgent:
         t = (text or "").lower()
         return any(x in t for x in CONFIRM_BEFORE)
 
+    # People answer a confirmation in sentences ("yes please close it"), not single
+    # words. Whichever signal comes FIRST wins, so "yes, cancel the chrome" is a yes
+    # about chrome rather than a cancellation.
+    _YES_RE = re.compile(r"\b(yes|yeah|yep|yup|sure|confirm(?:ed)?|go ahead|do it|please do|affirmative)\b")
+    _CANCEL_RE = re.compile(r"\b(cancel|no|nope|stop|don'?t|never ?mind|forget it|abort|leave it)\b")
+    PENDING_TTL_SECONDS = 120
+
+    @classmethod
+    def confirm_signal(cls, text: str) -> str | None:
+        """Return "yes", "cancel", or None when the sentence answers neither."""
+        t = (text or "").strip().lower()
+        yes, cancel = cls._YES_RE.search(t), cls._CANCEL_RE.search(t)
+        if yes and cancel:
+            return "yes" if yes.start() < cancel.start() else "cancel"
+        if yes:
+            return "yes"
+        if cancel:
+            return "cancel"
+        return None
+
+    def pending_confirmation(self) -> dict | None:
+        """The live pending confirmation, or None once it has gone stale."""
+        pending = self._pending_confirm
+        if pending and time.time() - pending.get("ts", 0) > self.PENDING_TTL_SECONDS:
+            with self._confirm_lock:
+                self._pending_confirm = None
+            return None
+        return pending
+
     @staticmethod
     def _looks_like_yes(text: str) -> bool:
-        t = (text or "").strip().lower()
-        return t in {"yes", "yep", "yeah", "do it", "confirm", "okay", "ok"}
+        return TaskAgent.confirm_signal(text) == "yes"
 
     @staticmethod
     def _looks_like_cancel(text: str) -> bool:
-        t = (text or "").strip().lower()
-        return t in {"cancel", "stop", "no", "nope", "don't", "dont"}
+        return TaskAgent.confirm_signal(text) == "cancel"
 
     def _confirm_yes(self) -> dict:
         with self._confirm_lock:
@@ -511,6 +543,14 @@ class TaskAgent:
                 url = "https://" + target
             else:
                 url = "https://" + target + ".com"
+
+        # Prefer HoloDesk's own Chrome tab so follow-up commands ("read it",
+        # "draft a reply") act on this page. webbrowser.open() starts a separate
+        # window that HoloDesk has no handle on.
+        if browser_controller.is_enabled():
+            opened = browser_controller.open_in_automation_browser(url)
+            if opened.get("success"):
+                return {"success": True, "response": f"Opening {target}.", "url": url}
 
         try:
             webbrowser.open(url)

@@ -43,6 +43,9 @@ class FakeTask:
         self.scrolls += 1
         return {"success": True, "response": ""}
 
+    def pending_confirmation(self):
+        return self._pending_confirm
+
     def _set_pending_confirm(self, message, fn, kind="generic"):
         self._pending_confirm = {"message": message, "fn": fn, "kind": kind}
         return {"success": True, "response": message}

@@ -44,6 +44,11 @@ response_queue = queue.Queue(maxsize=50)
 # end_ts:     monotonic-ish wall clock when speech finished (0.0 if never spoken).
 # The lock is held only for the brief assignment; reads can be dirty — that's
 # fine because a stale read just makes the echo guard slightly more lenient.
+# Set by the open-palm gesture to abandon whatever is running: the voice thread
+# stops waiting for a reply, and the Brain stops between tool calls. Cleared when
+# the next command is dispatched.
+abort_event = threading.Event()
+
 tts_state = {
     "text": "",
     "end_ts": 0.0,
