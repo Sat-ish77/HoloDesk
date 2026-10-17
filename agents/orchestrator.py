@@ -149,6 +149,15 @@ class OrchestratorAgent(threading.Thread):
         else:
             results = [self._execute_one(*intents[0])]
 
+        # A deterministic dead end ("I heard 'not bad', but I'm not confident which app
+        # that is") used to end the conversation. Let the Brain try before giving up.
+        if brain is not None and getattr(brain, "available", False) and results and not any(r.get("success") for r in results):
+            retried = brain.execute(action="run", context={"raw": command})
+            if retried.get("success"):
+                print(f"[ROUTE] brain_agent rescued a failed command in {time.time() - started:.1f}s", flush=True)
+                self._reply({"text": retried.get("response", "Okay."), "prompt": True}, source=source)
+                return
+
         merged = self._merge_results(results)
         print(f"[ROUTE] {'+'.join(i[0] for i in intents)} handled {command!r} in {time.time() - started:.1f}s", flush=True)
         self._reply({"text": merged, "prompt": True}, source=source)

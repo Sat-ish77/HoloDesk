@@ -295,14 +295,23 @@ tts_engine = pyttsx3.init()
 tts_engine.setProperty('rate', 150) #speed of speech( words per minute)
 
 #whisper model for speech-to-text ( steup - loads once at startup) 
-print("Loading Whisper model....please wait...")
-# Measured on this laptop with a 13.5 s utterance: small 6.0 s, base 2.0 s, tiny 1.3 s,
-# all three transcribing it correctly. "small" made every command feel slow (11.6 s on a
-# long sentence in the live test). Raise it back with HOLODESK_WHISPER_MODEL=small if
-# accented speech is misheard.
-_WHISPER_SIZE = os.getenv("HOLODESK_WHISPER_MODEL", "base").strip()
-whisper_model = WhisperModel(_WHISPER_SIZE, device="cpu", compute_type="int8") 
-print(f"Whisper model '{_WHISPER_SIZE}' loaded successfully!")
+# Speed scales with how long you speak, not with the model alone: on a 13.5 s sample
+# small took 6.0 s and base 2.0 s, but short commands cost a fraction of that. base
+# misheard "notepad" as "north pad" and "not bad" in live use, so accuracy wins here.
+# HOLODESK_WHISPER_MODEL=base trades it back for speed.
+_WHISPER_SIZE = os.getenv("HOLODESK_WHISPER_MODEL", "small").strip()
+_whisper_model = None
+
+
+def whisper_local():
+    """Load the local model on first use: with Groq handling speech it may never run."""
+    global _whisper_model
+    if _whisper_model is None:
+        print(f"Loading local Whisper '{_WHISPER_SIZE}'...", flush=True)
+        _whisper_model = WhisperModel(_WHISPER_SIZE, device="cpu", compute_type="int8")
+    return _whisper_model
+print(f"[STARTUP] Speech: {HOLODESK_STT_ENGINE if _groq_stt else 'local'} "
+      f"(fallback local '{_WHISPER_SIZE}', loaded on demand)", flush=True)
 
 # Optional Moonshine STT fallback (requires model download/config)
 ENABLE_MOONSHINE_FALLBACK = os.getenv("ENABLE_MOONSHINE_FALLBACK", "0").strip() == "1"
@@ -314,6 +323,21 @@ HOLODESK_VOICE_DEBUG = os.getenv("HOLODESK_VOICE_DEBUG", "0").strip() == "1"
 # being forced into English-sounding words. Set HOLODESK_STT_LANGUAGE=en to pin English.
 HOLODESK_STT_LANGUAGE = os.getenv("HOLODESK_STT_LANGUAGE", "auto").strip().lower()
 HOLODESK_STT_LANGUAGE = None if HOLODESK_STT_LANGUAGE in ("", "auto") else HOLODESK_STT_LANGUAGE
+HOLODESK_STT_ENGINE = os.getenv("HOLODESK_STT_ENGINE", "groq").strip().lower()
+_groq_stt = None
+if HOLODESK_STT_ENGINE == "groq" and os.getenv("GROQ_API_KEY", "").strip():
+    try:
+        from groq import Groq as _GroqSTT
+
+        _groq_stt = _GroqSTT(api_key=os.getenv("GROQ_API_KEY"))
+    except Exception as _exc:
+        print(f"[WARNING] Groq speech unavailable ({_exc}); using local Whisper", flush=True)
+STT_VOCABULARY = (
+    "Commands for HoloDesk: open Notepad, Chrome, Calculator, Spotify, Word, Excel, "
+    "VS Code, File Explorer, Settings. Open Gmail, YouTube, Facebook, Instagram, "
+    "Canvas, ElevateU, Claude. Scroll down, minimize, maximize, close, shut down, "
+    "restart, lock, volume up, draft an email, send it, yes, cancel."
+)
 
 # Voice tuning knobs (per-mic). Defaults are chosen for typical laptop mics.
 HOLODESK_VAD_START_THRESHOLD = int(os.getenv("HOLODESK_VAD_START_THRESHOLD", "240"))
@@ -505,15 +529,38 @@ class VoiceAssistantThread(threading.Thread):
 
     def transcribe_audio(self, wav_path):
         _stt_started = time.time()
+
+        # Groq hosts Whisper large v3: measured 0.3 s on a clip that took the local
+        # "small" model 8.0 s, and it is the most accurate model of the three, which
+        # matters for accented speech and Nepali. Audio leaves the machine for this;
+        # set HOLODESK_STT_ENGINE=local to keep everything offline.
+        if HOLODESK_STT_ENGINE == "groq" and _groq_stt is not None:
+            try:
+                with open(wav_path, "rb") as audio:
+                    result = _groq_stt.audio.transcriptions.create(
+                        file=(os.path.basename(wav_path), audio.read()),
+                        model=os.getenv("HOLODESK_GROQ_STT_MODEL", "whisper-large-v3"),
+                        prompt=STT_VOCABULARY,
+                        **({"language": HOLODESK_STT_LANGUAGE} if HOLODESK_STT_LANGUAGE else {}),
+                    )
+                text = self._normalize_transcript((result.text or "").strip().lower())
+                print(f"[VOICE] transcribed in {time.time() - _stt_started:.1f}s (groq): {text!r}", flush=True)
+                return text
+            except Exception as exc:
+                print(f"[VOICE] Groq transcription failed ({type(exc).__name__}), using local Whisper", flush=True)
+
         try:
             # Stricter no_speech_threshold + stricter log_prob gate. Whisper's
             # 'small' will happily hallucinate fluent English out of room noise
             # unless we raise the bar. These numbers were picked empirically to
             # drop near-silence hallucinations without killing real speech.
-            segments, info = whisper_model.transcribe(
+            segments, info = whisper_local().transcribe(
                 wav_path,
                 beam_size=5,
                 language=HOLODESK_STT_LANGUAGE,
+                # Bias decoding towards the words this app actually hears. Without it
+                # "notepad" came back as "north pad" and "not bad".
+                initial_prompt=STT_VOCABULARY,
                 temperature=0.0,
                 # Tunable via env vars for different mics / noise floors.
                 no_speech_threshold=HOLODESK_WHISPER_NO_SPEECH_THRESHOLD,
@@ -569,7 +616,7 @@ class VoiceAssistantThread(threading.Thread):
             if text.strip(" .!?") in _HALLUCINATION_BLOCKLIST:
                 return ""
 
-            print(f"[VOICE] transcribed in {time.time() - _stt_started:.1f}s: {text!r}", flush=True)
+            print(f"[VOICE] transcribed in {time.time() - _stt_started:.1f}s (local {_WHISPER_SIZE}): {text!r}", flush=True)
             return text
         except Exception as e:
             print(f"[WARNING] Whisper failed, fallback STT: {e}")
@@ -795,6 +842,36 @@ class VoiceAssistantThread(threading.Thread):
     ECHO_PARTIAL_CUTOFF = 92         # partial_ratio for short echoes
     ECHO_MAX_WORDS_FOR_PARTIAL = 12  # long transcripts are almost never echoes
 
+    def strip_echo(self, text):
+        """Remove sentences that are HoloDesk's own speech bleeding into the mic.
+
+        A whole-transcript check isn't enough: live, the mic picked up
+        "i'm not confident which app that is. please repeat. can you please open
+        the north ad" - its own reply plus a real command - and the mixed text
+        scored too low to be rejected, so the assistant answered itself.
+        """
+        t = (text or "").strip()
+        if not t or not _RAPIDFUZZ_AVAILABLE:
+            return t
+        tts_text, tts_end_ts = read_tts_state()
+        if not tts_text or tts_end_ts <= 0.0 or time.time() - tts_end_ts > self.ECHO_LATENCY_WINDOW_SEC:
+            return t
+
+        kept = []
+        for sentence in re.split(r"(?<=[.!?])\s+", t):
+            piece = sentence.strip()
+            if not piece:
+                continue
+            try:
+                echoed = _rf_fuzz.partial_ratio(piece.lower(), tts_text) >= self.ECHO_PARTIAL_CUTOFF
+            except Exception:
+                echoed = False
+            if echoed and len(piece.split()) >= 3:
+                print(f"[VOICE] Dropped my own words from the transcript: {piece[:60]!r}", flush=True)
+            else:
+                kept.append(piece)
+        return " ".join(kept).strip()
+
     def _is_echo_of_ai(self, text):
         """
         Detect if transcribed text is our own TTS bleeding back into the mic.
@@ -930,7 +1007,7 @@ class VoiceAssistantThread(threading.Thread):
                     self.push_state("IDLE")
                     continue
                 try:
-                    text = self.strip_fillers(self.transcribe_audio(wav_path))
+                    text = self.strip_fillers(self.strip_echo(self.transcribe_audio(wav_path)))
                 finally:
                     if os.path.exists(wav_path):
                         os.unlink(wav_path)
@@ -963,7 +1040,7 @@ class VoiceAssistantThread(threading.Thread):
                     self.push_state("PROCESSING")
                     try:
                         followup_text = self.strip_fillers(
-                            self.transcribe_audio(followup_wav)
+                            self.strip_echo(self.transcribe_audio(followup_wav))
                         )
                     finally:
                         if os.path.exists(followup_wav):
