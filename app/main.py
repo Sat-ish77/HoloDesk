@@ -32,6 +32,7 @@ import wave
 import audioop
 import re
 from holo_overlay import HoloOverlayRenderer, HoloOverlayState, MODE_NORMAL, MODE_TICTACTOE
+from holo_overlay import ui_font
 
 # MediaPipe/protobuf print a UserWarning per frame, which buried every real log line.
 import warnings
@@ -1463,7 +1464,7 @@ while running :
         pygame.draw.circle(screen, (255, 255, 255), (cursor_x, cursor_y), 8)       # Center dot (white)
     
     # ===== 2. GESTURE INDICATORS (top-right corner) =====
-    status_font = pygame.font.Font(None, 32)
+    status_font = ui_font(pygame, 32)
     status_y = 10
     
     if is_scrolling:
@@ -1480,8 +1481,8 @@ while running :
         status_y += 30
     
     # ===== 3. VOICE OVERLAY STATE =====
-    overlay_font = pygame.font.Font(None, 48)
-    small_overlay_font = pygame.font.Font(None, 30)
+    overlay_font = ui_font(pygame, 48)
+    small_overlay_font = ui_font(pygame, 30)
     pulse = abs((frame_count % 40) - 20) / 20
     mic_color = (120, 120, 120) if voice_ui_state == "IDLE" else (0, 200 + int(55 * pulse), 0)
     pygame.draw.circle(screen, mic_color, (80, WINDOW_HEIGHT - 80), 22, 3)
@@ -1505,7 +1506,7 @@ while running :
     # ===== 4. SCREEN VISION STATUS (Step 7) =====
     if screen_status_timer > 0:
         screen_status_timer -= 1
-        sv_font = pygame.font.Font(None, 30)
+        sv_font = ui_font(pygame, 30)
         if is_analyzing_screen:
             # Pulsing cyan while GPT-4o is thinking
             pulse = abs((frame_count % 60) - 30) / 30  # 0.0 to 1.0
@@ -1524,12 +1525,12 @@ while running :
     
     # ===== 6. FPS COUNTER (optional, top-left, small) =====
     fps = clock.get_fps()
-    small_font = pygame.font.Font(None, 24)
+    small_font = ui_font(pygame, 24)
     fps_text = small_font.render(f"FPS: {int(fps)}", True, (150, 150, 150))  # Gray
     screen.blit(fps_text, (10, 10))
     
     # ===== 7. ESC KEY HINT (bottom-right) =====
-    hint_font = pygame.font.Font(None, 20)
+    hint_font = ui_font(pygame, 20)
     esc_hint = hint_font.render("Press ESC to exit", True, (100, 100, 100))  # Dark gray
     screen.blit(esc_hint, (WINDOW_WIDTH - 150, WINDOW_HEIGHT - 25)) 
 

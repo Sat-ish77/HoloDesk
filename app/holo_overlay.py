@@ -7,8 +7,30 @@ are intentionally lightweight so the transparent Pygame overlay stays fast.
 from __future__ import annotations
 
 import math
+import os
 import random
 import time
+from functools import lru_cache
+
+# pygame's built-in font has no Devanagari: Nepali replies drew as empty boxes.
+# Nirmala ships with Windows and covers Devanagari plus Latin.
+_FONT_CANDIDATES = (
+    os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "Nirmala.ttc"),
+    os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "mangal.ttf"),
+)
+
+
+@lru_cache(maxsize=32)
+def _font_path() -> str | None:
+    return next((p for p in _FONT_CANDIDATES if os.path.isfile(p)), None)
+
+
+def ui_font(pygame_module, size: int):
+    """A font that can draw both English and Nepali, falling back to the default."""
+    try:
+        return pygame_module.font.Font(_font_path(), size)
+    except Exception:
+        return pygame_module.font.Font(None, size)
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
@@ -543,10 +565,10 @@ class HoloOverlayState:
 class HoloOverlayRenderer:
     def __init__(self, pygame_module):
         self.pg = pygame_module
-        self.font = pygame_module.font.Font(None, 25)
-        self.small = pygame_module.font.Font(None, 20)
-        self.medium = pygame_module.font.Font(None, 32)
-        self.large = pygame_module.font.Font(None, 46)
+        self.font = ui_font(pygame_module, 25)
+        self.small = ui_font(pygame_module, 20)
+        self.medium = ui_font(pygame_module, 32)
+        self.large = ui_font(pygame_module, 46)
 
     def draw(self, surface, state: HoloOverlayState, voice_state: str, audio_level: float, frame_count: int):
         self._draw_orb(surface, state, voice_state, audio_level, frame_count)
