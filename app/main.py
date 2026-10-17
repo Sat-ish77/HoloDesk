@@ -45,6 +45,14 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
 print("[STARTUP] Base imports loaded", flush=True)
 
+# One instance only. Two copies fight over the microphone (so the wake listener
+# never hears you) and over the automation Chrome profile, which is what made a
+# browser command hang until "the browser didn't respond in time".
+_instance_lock = ctypes.windll.kernel32.CreateMutexW(None, False, "HoloDesk.SingleInstance")
+if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    print("[STARTUP] HoloDesk is already running. Close that window first.", flush=True)
+    raise SystemExit(1)
+
 warnings.filterwarnings(
     "ignore",
     message=r"SymbolDatabase\.GetPrototype\(\) is deprecated.*",
@@ -337,16 +345,13 @@ if HOLODESK_STT_ENGINE == "groq" and os.getenv("GROQ_API_KEY", "").strip():
         print(f"[WARNING] Groq speech unavailable ({_exc}); using local Whisper", flush=True)
 print(f"[STARTUP] Speech: {'groq ' + os.getenv('HOLODESK_GROQ_STT_MODEL', 'whisper-large-v3') if _groq_stt else 'local only'}"
       f" (fallback local '{_WHISPER_SIZE}', loaded on demand)", flush=True)
+# A transcription prompt also steers the OUTPUT language: the earlier English-only
+# version made Nepali speech come back translated into English. Nepali leads here and
+# both languages appear, so each is transcribed in its own script.
 STT_VOCABULARY = (
-    "Commands for HoloDesk: open Notepad, Chrome, Calculator, Spotify, Word, Excel, "
-    "VS Code, File Explorer, Settings. Open Gmail, YouTube, Facebook, Instagram, "
-    "Canvas, ElevateU, Claude. Scroll down, minimize, maximize, close, shut down, "
-    "restart, lock, volume up, draft an email, send it, yes, cancel. "
-    # The user speaks Nepali and English, often mixed. Naming both scripts helps the
-    # model commit to Nepali instead of forcing it into English-sounding words.
-    "नेपाली आदेश: नोटप्याड खोल, क्रोम खोल, बन्द गर, सुन, सुत, मेल पठाऊ, हुन्छ, पर्दैन। "
-    "Nepali in Latin letters: notepad kholnus, chrome kholnus, banda garnus, "
-    "mail patthaunus, hunchha, pardaina, suta, chup laag."
+    "क्रोममा फेसबुक खोल। नोटप्याड खोल। जिमेल हेर। बन्द गर। सुत। मेल पठाऊ। हुन्छ। पर्दैन। "
+    "Open Notepad, Chrome, Calculator, Gmail, YouTube, Facebook, Canvas, ElevateU. "
+    "Scroll down, minimize, close, shut down, yes, cancel."
 )
 
 # Voice tuning knobs (per-mic). Defaults are chosen for typical laptop mics.
@@ -408,6 +413,19 @@ orchestrator.start()
 # The installed-app list takes 3-10 s to build; build it now so the first "open X" is fast.
 from automation import win_ui
 threading.Thread(target=win_ui.find_installed_app, args=("notepad",), name="AppListWarmup", daemon=True).start()
+
+# Start the automation Chrome now, in the background: otherwise the first spoken
+# "open gmail" pays for launching Chrome and attaching to it, which is most of the
+# wait the user feels.
+def _warm_browser():
+    from browser import playwright_controller as _pw
+
+    if _pw.is_enabled():
+        result = _pw.browser_call(lambda: _pw.controller.ensure_page())
+        print(f"[STARTUP] Automation browser {'ready' if result.get('success') else 'not ready: ' + str(result.get('error'))}", flush=True)
+
+
+threading.Thread(target=_warm_browser, name="BrowserWarmup", daemon=True).start()
 
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling

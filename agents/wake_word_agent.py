@@ -154,7 +154,20 @@ class WakeWordAdapter:
         if not t:
             return False
         phrase = self.config.phrase
-        return t == phrase or phrase in t
+        if t == phrase or phrase in t:
+            return True
+        # The tiny model hears "hey hollow", "a halo", "hey hollo". Accept near
+        # misses, and log every attempt so a miss can be diagnosed.
+        try:
+            from rapidfuzz import fuzz
+
+            score = max(fuzz.partial_ratio(phrase, t), fuzz.ratio(phrase, t))
+        except Exception:
+            score = 0
+        if score >= 80:
+            return True
+        print(f"[WAKE] heard {t!r} (match {score}% of {phrase!r}) - not waking", flush=True)
+        return False
 
     def _run_simple(self) -> None:
         """

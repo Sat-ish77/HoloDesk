@@ -214,7 +214,7 @@ def _worker_loop() -> None:
         box["done"].set()
 
 
-def browser_call(fn, *args, timeout: float = 90, **kwargs):
+def browser_call(fn, *args, timeout: float = 45, **kwargs):
     """Run fn(*args, **kwargs) on the single browser thread and return its result."""
     global _worker
     if threading.current_thread() is _worker:
@@ -226,7 +226,12 @@ def browser_call(fn, *args, timeout: float = 90, **kwargs):
     box = {"done": threading.Event()}
     _calls.put((fn, args, kwargs, box))
     if not box["done"].wait(timeout):
-        return {"success": False, "error": "Browser call timed out.", "response": "The browser didn't respond in time."}
+        return {
+            "success": False,
+            "error": "Browser call timed out.",
+            "response": (f"The browser didn't respond within {timeout:.0f}s. "
+                         "If another copy of HoloDesk is running, close it: they share one Chrome profile."),
+        }
     return box["result"]
 
 
