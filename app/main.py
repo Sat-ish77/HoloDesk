@@ -453,6 +453,18 @@ def speak(text):
         pass
     print(f"SPEAKING: {text}")  # Debug
     try:
+        # Devanagari goes to a real Nepali voice; Windows only has English ones.
+        # Inside this try so the finally below always clears mic_busy and the
+        # speaking state - returning early from here would strand both.
+        try:
+            from core.speech import speak_nepali
+
+            if speak_nepali(text):
+                print("SPEECH DONE (nepali)")
+                return
+        except Exception as exc:
+            print(f"[VOICE] Nepali speech failed ({type(exc).__name__}); using the English voice", flush=True)
+
         import comtypes.client  # Windows COM interface
         sapi_speaker = comtypes.client.CreateObject("SAPI.SpVoice")
         sapi_speaker.Rate = 1  # Speed: -10 (slow) to 10 (fast)
@@ -502,6 +514,9 @@ def stop_ai_speech():
     """Stop the AI from speaking immediately"""
     global stop_speaking_flag
     stop_speaking_flag = True
+    from core.speech import stop_nepali
+
+    stop_nepali()  # the Nepali voice plays through the mixer, not SAPI
     print(">>> STOP SPEECH SIGNAL SENT <<<")
 
 class VoiceAssistantThread(threading.Thread):

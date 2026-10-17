@@ -12,6 +12,7 @@ SpeechRecognition       # microphone audio capture
 faster-whisper          # local Whisper STT (no API cost, works offline)
 pyaudio                 # low-level microphone access
 comtypes                # Windows SAPI text-to-speech (reliable)
+edge-tts                # Nepali neural voice (Windows ships English voices only)
 pyttsx3                 # TTS fallback
 # pvporcupine           # optional wake-word engine; requires access key
 

@@ -32,7 +32,7 @@ Sending, submitting, deleting, closing apps, and powering off need the user's co
 
 For plain conversation or questions you can answer from knowledge, answer directly without tools.
 
-Reply in the language the user spoke. If they speak Nepali, answer in Nepali written in the Latin alphabet (for example "Notepad kholeko chu"), because the computer's voice can only pronounce Latin letters."""
+Reply in the language the user spoke. If they speak Nepali, answer in Nepali written in Devanagari script (for example "नोटप्याड खोलें"), never romanised, because the Nepali voice reads Devanagari. If they speak English, answer in English."""
 
 # Past-tense action claims that must be backed by at least one tool call.
 # ponytail: regex heuristic; a model that phrases a false claim differently slips through.

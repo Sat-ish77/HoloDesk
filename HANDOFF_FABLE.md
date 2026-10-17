@@ -338,3 +338,10 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - Nepali: the speech vocabulary hint now names Nepali commands in both Devanagari and Latin script so the model commits to Nepali instead of forcing English words. The Brain already replies in the language it was addressed in.
   - KNOWN LIMIT, told to the user: Windows has only English voices installed (David, Zira), so Nepali replies are pronounced with an English voice. A Nepali voice needs a cloud TTS, which is not wired up.
   - PASS pytest: 112 passed. Startup verified live, including the wake listener.
+- 2026-10-16 Nepali voice added. Windows here has only English voices (David, Zira), so Nepali replies were spoken with an English accent.
+  - Added `core/speech.py` using Microsoft's edge-tts endpoint: real Nepali neural voices (ne-NP-SagarNeural, ne-NP-HemkalaNeural), free, no API key, about 0.6 s to synthesise. Playback goes through pygame's mixer; open palm stops it via `stop_nepali()`.
+  - Routing is by script: Devanagari -> Nepali voice, anything else -> the Windows voice. Romanised Nepali is indistinguishable from English to a script check, so the Brain is now told to answer Nepali in Devanagari.
+  - Falls back to the Windows voice when there is no network, no audio device, or edge-tts fails, and says so in the log.
+  - CAUGHT WHILE WRITING IT: the first version returned early from `speak()` on the Nepali path, which skipped the finally block that clears `mic_busy` and the speaking state. That would have left the wake listener paused forever after the first Nepali reply. The Nepali attempt now sits inside the same try.
+  - VERIFIED live: a Nepali question returned Devanagari ("अहिले तपाईंको कम्प्युटरमा Claude एप्लिकेसन अगाडि छ।") and was spoken by the Nepali voice; the same question in English stayed English. App startup re-checked.
+  - PASS pytest: 114 passed (2 new in tests/test_speech.py).
