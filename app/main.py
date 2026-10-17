@@ -310,8 +310,6 @@ def whisper_local():
         print(f"Loading local Whisper '{_WHISPER_SIZE}'...", flush=True)
         _whisper_model = WhisperModel(_WHISPER_SIZE, device="cpu", compute_type="int8")
     return _whisper_model
-print(f"[STARTUP] Speech: {HOLODESK_STT_ENGINE if _groq_stt else 'local'} "
-      f"(fallback local '{_WHISPER_SIZE}', loaded on demand)", flush=True)
 
 # Optional Moonshine STT fallback (requires model download/config)
 ENABLE_MOONSHINE_FALLBACK = os.getenv("ENABLE_MOONSHINE_FALLBACK", "0").strip() == "1"
@@ -332,6 +330,8 @@ if HOLODESK_STT_ENGINE == "groq" and os.getenv("GROQ_API_KEY", "").strip():
         _groq_stt = _GroqSTT(api_key=os.getenv("GROQ_API_KEY"))
     except Exception as _exc:
         print(f"[WARNING] Groq speech unavailable ({_exc}); using local Whisper", flush=True)
+print(f"[STARTUP] Speech: {'groq ' + os.getenv('HOLODESK_GROQ_STT_MODEL', 'whisper-large-v3') if _groq_stt else 'local only'}"
+      f" (fallback local '{_WHISPER_SIZE}', loaded on demand)", flush=True)
 STT_VOCABULARY = (
     "Commands for HoloDesk: open Notepad, Chrome, Calculator, Spotify, Word, Excel, "
     "VS Code, File Explorer, Settings. Open Gmail, YouTube, Facebook, Instagram, "
