@@ -402,7 +402,7 @@ def snapshot(page, limit: int = 60) -> dict[str, Any]:
         return {"success": False, "response": f"Couldn't read the page: {exc}"}
 
 
-def page_text(page, limit: int = 3000) -> dict[str, Any]:
+def page_text(page, limit: int = 1500) -> dict[str, Any]:
     try:
         text = page.evaluate("() => (document.querySelector('main') || document.body).innerText") or ""
         text = "\n".join(line.strip() for line in text.splitlines() if line.strip())[:limit]

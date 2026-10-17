@@ -30,6 +30,8 @@ If the request is ambiguous (which app, which window, which text), ask one short
 
 Sending, submitting, deleting, closing apps, and powering off need the user's confirmation. When a tool says confirmation is pending, stop and repeat its question.
 
+Never read a web page or a list of controls out loud. Reading a page returns it to you so YOU can read it; answer with one or two sentences of your own words, naming at most three items.
+
 For plain conversation or questions you can answer from knowledge, answer directly without tools.
 
 Reply in the language the user spoke. If they speak Nepali, answer in Nepali written in Devanagari script (for example "नोटप्याड खोलें"), never romanised, because the Nepali voice reads Devanagari. If they speak English, answer in English."""
@@ -175,7 +177,15 @@ class BrainAgent:
     def _summarize(tool_log: list[dict]) -> str:
         if not tool_log:
             return "doing nothing."
-        return "; ".join(f"{t['tool']}: {t.get('response') or ('ok' if t.get('success') else 'failed')}" for t in tool_log) + "."
+        # Each response is clipped: browser_page_text returns a page's worth of text,
+        # and speaking all of it is what made HoloDesk read Gmail aloud endlessly.
+        parts = []
+        for t in tool_log:
+            said = (t.get("response") or ("ok" if t.get("success") else "failed")).strip()
+            if len(said) > 90:
+                said = said[:90].rstrip() + "..."
+            parts.append(f"{t['tool']}: {said}")
+        return "; ".join(parts) + "."
 
     def _enforce_honesty(self, reply: str, tool_log: list[dict]) -> str:
         if not reply:

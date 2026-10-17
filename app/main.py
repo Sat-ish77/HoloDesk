@@ -456,13 +456,23 @@ THUMBS_REQUIRED_FRAMES = 5
 sapi_speaker = None
 
 #Function to speak using Windows SAPI directly (more reliable than pyttsx3)
-def speak(text): 
+SPOKEN_LIMIT = int(os.getenv("HOLODESK_SPOKEN_LIMIT", "600"))
+
+
+def speak(text):
     global is_ai_speaking, stop_speaking_flag, sapi_speaker
-    
+
     if stop_speaking_flag:
         stop_speaking_flag = False
         return
-        
+
+    # Nothing useful is ever this long out loud, and a runaway reply (a whole web
+    # page) used to take minutes with no way to sit through it.
+    if text and len(text) > SPOKEN_LIMIT:
+        print(f"[VOICE] Reply was {len(text)} characters; speaking the first {SPOKEN_LIMIT}.", flush=True)
+        text = text[:SPOKEN_LIMIT].rsplit(" ", 1)[0] + "... I'll stop there."
+
+
     is_ai_speaking = True
     tts_active.set()
     mic_busy.set()  # the wake listener must not hear HoloDesk's own voice
@@ -532,10 +542,15 @@ def speak(text):
 def stop_ai_speech():
     """Stop the AI from speaking immediately"""
     global stop_speaking_flag
-    stop_speaking_flag = True
     from core.speech import stop_nepali
 
     stop_nepali()  # the Nepali voice plays through the mixer, not SAPI
+    if not is_ai_speaking:
+        # Setting the flag with nothing to stop made speak() swallow the NEXT reply
+        # instead, which looked like HoloDesk going silent for no reason.
+        print(">>> STOP SPEECH: nothing was speaking <<<")
+        return
+    stop_speaking_flag = True
     print(">>> STOP SPEECH SIGNAL SENT <<<")
 
 class VoiceAssistantThread(threading.Thread):
@@ -1003,6 +1018,7 @@ class VoiceAssistantThread(threading.Thread):
 
         print(f"[VOICE] Dispatched: '{text}' — waiting for response...")
         abort_event.clear()
+        globals()["stop_speaking_flag"] = False  # a new command always gets its answer
         reply, waited = None, 0.0
         while waited < 120:  # BrainAgent caps itself at 45 s
             try:
@@ -1080,6 +1096,10 @@ class VoiceAssistantThread(threading.Thread):
                 # full 15s window, conversation ends naturally.
                 conversation_end = time.time() + self.CONVERSATION_WINDOW_SEC
                 while time.time() < conversation_end and self.running:
+                    if abort_event.is_set():
+                        # Open palm means stop everything, not just this sentence.
+                        print("[VOICE] Conversation ended by open palm", flush=True)
+                        break
                     self.push_state("IDLE")
                     followup_wav = self._record_from_mic(
                         max_seconds=self.FOLLOWUP_LISTEN_SEC,

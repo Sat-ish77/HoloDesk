@@ -54,6 +54,13 @@ class VisionThread(threading.Thread):
                 logger.warning("mediapipe/opencv unavailable - VisionThread disabled: %s", exc)
                 return
 
+        # Re-apply here: importing mediapipe/absl resets the warning filters set in
+        # main.py, and protobuf then warns once per frame, burying every real log line.
+        import warnings
+
+        warnings.filterwarnings("ignore", message=r".*SymbolDatabase\.GetPrototype\(\) is deprecated.*")
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+
         # Initialize MediaPipe on THIS thread (not the main thread)
         hands = mp.solutions.hands.Hands(
             static_image_mode=False,
