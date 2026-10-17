@@ -330,3 +330,11 @@ Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay v
   - DEAD END FIXED: "I heard 'not bad', but I'm not confident which app that is" ended the conversation. When every deterministic result fails, the Brain now gets a chance before giving up.
   - PASS pytest: 112 passed.
   - STILL UNVERIFIED: Nepali speech (needs the user's voice; synthetic Nepali spoken by an English TTS voice is not a valid test), and everything that needs the Gmail login.
+- 2026-10-16 Fourth round, from live use. Fixes:
+  - FIXED the open palm not stopping speech. My Phase 7 swipe work suppressed GestureDetector whenever the hand was moving, and raising a palm is movement, so OPEN_PALM rarely fired. Open palm is now exempt; only the V still waits for the hand to settle.
+  - FIXED the protobuf warning flood for real. The module filter never matched (mediapipe re-triggers it from its own module); matching the message text does. Verified: 0 warning lines in a fresh run.
+  - ADDED always-on wake word: HOLODESK_WAKE_WORD_ENABLED=1 with the local tiny Whisper engine ("hey holo"), so HoloDesk can be woken without the V gesture. New `core.queues.mic_busy` pauses the wake listener while the main voice thread records or HoloDesk speaks, so the two never fight for the microphone and it cannot wake itself on its own voice. Verified live: "[WAKE] Listener started. engine=whisper phrase='hey holo'" and stable afterwards.
+  - ADDED sleep phrases, English and Nepali, spoken or written: stop listening, go to sleep, be quiet, stop talking, suta, chup laag, band gara, nasun, plus Devanagari forms. They end the conversation window and return to idle.
+  - Nepali: the speech vocabulary hint now names Nepali commands in both Devanagari and Latin script so the model commits to Nepali instead of forcing English words. The Brain already replies in the language it was addressed in.
+  - KNOWN LIMIT, told to the user: Windows has only English voices installed (David, Zira), so Nepali replies are pronounced with an English voice. A Nepali voice needs a cloud TTS, which is not wired up.
+  - PASS pytest: 112 passed. Startup verified live, including the wake listener.

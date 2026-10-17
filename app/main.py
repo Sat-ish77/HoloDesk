@@ -36,6 +36,9 @@ from holo_overlay import HoloOverlayRenderer, HoloOverlayState, MODE_NORMAL, MOD
 # MediaPipe/protobuf print a UserWarning per frame, which buried every real log line.
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf.*")
+# The module filter above does not catch it (mediapipe re-triggers it per frame from
+# its own module), so match the message itself.
+warnings.filterwarnings("ignore", message=r".*SymbolDatabase\.GetPrototype\(\) is deprecated.*")
 os.environ.setdefault("GLOG_minloglevel", "2")
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
@@ -75,6 +78,7 @@ from core.queues import (
     record_tts_finished,
     read_tts_state,
     abort_event,
+    mic_busy,
 )
 print("[STARTUP] Shared queues ready", flush=True)
 
@@ -336,7 +340,12 @@ STT_VOCABULARY = (
     "Commands for HoloDesk: open Notepad, Chrome, Calculator, Spotify, Word, Excel, "
     "VS Code, File Explorer, Settings. Open Gmail, YouTube, Facebook, Instagram, "
     "Canvas, ElevateU, Claude. Scroll down, minimize, maximize, close, shut down, "
-    "restart, lock, volume up, draft an email, send it, yes, cancel."
+    "restart, lock, volume up, draft an email, send it, yes, cancel. "
+    # The user speaks Nepali and English, often mixed. Naming both scripts helps the
+    # model commit to Nepali instead of forcing it into English-sounding words.
+    "नेपाली आदेश: नोटप्याड खोल, क्रोम खोल, बन्द गर, सुन, सुत, मेल पठाऊ, हुन्छ, पर्दैन। "
+    "Nepali in Latin letters: notepad kholnus, chrome kholnus, banda garnus, "
+    "mail patthaunus, hunchha, pardaina, suta, chup laag."
 )
 
 # Voice tuning knobs (per-mic). Defaults are chosen for typical laptop mics.
@@ -437,6 +446,7 @@ def speak(text):
         
     is_ai_speaking = True
     tts_active.set()
+    mic_busy.set()  # the wake listener must not hear HoloDesk's own voice
     try:
         response_queue.put_nowait({"type": "VOICE_STATE", "state": "SPEAKING"})
     except queue.Full:
@@ -478,6 +488,7 @@ def speak(text):
         is_ai_speaking = False
         time.sleep(0.8)
         tts_active.clear()
+        mic_busy.clear()
         stop_speaking_flag = False
         # Record exact end time so the echo guard can correlate TTS->mic
         # by latency, not by fuzzy word-matching alone.
@@ -812,6 +823,7 @@ class VoiceAssistantThread(threading.Thread):
 
     def _record_from_mic(self, *, max_seconds: float, silence_ms: int):
         try:
+            mic_busy.set()  # pause the always-on wake listener while we own the mic
             with mic as source:
                 return self.record_with_vad(source, max_seconds=max_seconds, silence_ms=silence_ms)
         except AttributeError as exc:
@@ -819,6 +831,8 @@ class VoiceAssistantThread(threading.Thread):
                 print("[VOICE] Mic stream closed during cleanup; retrying next wake.")
                 return None
             raise
+        finally:
+            mic_busy.clear()
 
     EXIT_PHRASES_EXACT = {
         "no", "nah", "nope", "nothing", "bye", "goodbye", "bye bye",
@@ -830,6 +844,10 @@ class VoiceAssistantThread(threading.Thread):
         "have a good day", "have a nice day", "good night",
         "thank you", "thanks", "see you later", "see you",
         "talk to you later", "take care",
+        # Explicit "go idle" phrases, English and Nepali (spoken and written).
+        "stop listening", "go to sleep", "go idle", "sleep now", "be quiet",
+        "stop talking", "sutna jau", "suta", "chup laag", "band gara", "nasun",
+        "सुत", "चुप", "बन्द गर",
     ]
 
     CONVERSATION_WINDOW_SEC = 30

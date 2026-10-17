@@ -49,6 +49,11 @@ response_queue = queue.Queue(maxsize=50)
 # the next command is dispatched.
 abort_event = threading.Event()
 
+# Set while the main voice thread owns the microphone or HoloDesk is speaking. The
+# always-on wake listener pauses then, so it neither fights for the mic nor wakes
+# itself on HoloDesk's own voice.
+mic_busy = threading.Event()
+
 tts_state = {
     "text": "",
     "end_ts": 0.0,

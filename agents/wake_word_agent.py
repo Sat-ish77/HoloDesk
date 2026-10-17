@@ -113,6 +113,20 @@ class WakeWordAdapter:
         except Exception as exc:
             logger.warning("[WAKE] Wake-word listener stopped after error: %s", exc)
 
+    @staticmethod
+    def _mic_in_use() -> bool:
+        """True while the main voice thread records or HoloDesk speaks.
+
+        Without this the always-on listener fights for the microphone and wakes
+        itself on HoloDesk's own voice.
+        """
+        try:
+            from core.queues import mic_busy
+
+            return mic_busy.is_set()
+        except Exception:
+            return False
+
     def _should_trigger(self) -> bool:
         now = time.time()
         if now - self._last_trigger_ts < self.config.cooldown_s:
@@ -177,6 +191,9 @@ class WakeWordAdapter:
 
         failures = 0
         while not self._stop.is_set():
+            if self._mic_in_use():
+                time.sleep(0.3)
+                continue
             try:
                 with mic as source:
                     audio = recognizer.listen(
@@ -212,6 +229,9 @@ class WakeWordAdapter:
         model = WhisperModel(self.config.whisper_model, device="cpu", compute_type="int8")
 
         while not self._stop.is_set():
+            if self._mic_in_use():
+                time.sleep(0.3)
+                continue
             try:
                 with mic as source:
                     audio = recognizer.listen(

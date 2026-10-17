@@ -84,9 +84,13 @@ class VisionThread(threading.Thread):
 
                 landmarks = hands_payload[0]["landmarks"]
                 gesture = self._swipe.update(landmarks.landmark[0].x)
-                if gesture is None and not self._swipe.is_moving():
-                    # Debounced V / open palm only while the hand is still.
-                    gesture = self._detector.detect(landmarks)
+                if gesture is None:
+                    detected = self._detector.detect(landmarks)
+                    # Open palm is the emergency stop: raising a hand always involves
+                    # movement, so suppressing it while moving meant it never fired.
+                    # Only the V (start listening) waits for the hand to settle.
+                    if detected == "OPEN_PALM" or (detected and not self._swipe.is_moving()):
+                        gesture = detected
                 if gesture is not None:
                     try:
                         gesture_queue.put_nowait(gesture)
