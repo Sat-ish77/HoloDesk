@@ -34,3 +34,11 @@ pywin32                 # win32gui/win32api — transparency, always-on-top, win
 
 # --- Utilities ---
 python-dotenv           # loads API keys from .env file
+
+# --- Brain v3 (tool calling, phone bridge, Nepali) ---
+# No GPU needed: the LLM and Whisper large-v3 run on Groq's free tier.
+edge-tts                # neural Nepali voice (Windows SAPI has none); needs internet
+pywinauto               # click buttons by name through Windows UI Automation
+send2trash              # delete_path sends files to the Recycle Bin instead of erasing them
+nepali-datetime         # Bikram Sambat <-> AD date conversion
+pytest                  # run the test suite: python -m pytest

@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 
 class GroqClient:
 
-    MODEL = "llama-3.3-70b-versatile"
+    # Override with HOLODESK_LEGACY_MODEL if Groq retires this model.
+    MODEL = os.getenv("HOLODESK_LEGACY_MODEL", "llama-3.3-70b-versatile")
 
     def __init__(self):
         self._client = None  # Lazy-loaded on first call

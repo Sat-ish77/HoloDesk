@@ -6,3 +6,5 @@ __pycache__/
 *.pyc
 *.db
 holodesk.log
+.pytest_cache/
+evals/RESULTS.md

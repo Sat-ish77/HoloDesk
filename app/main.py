@@ -17,6 +17,15 @@ import pyautogui
 import audioop
 import re
 
+# Nepali text gets printed in debug lines. The default Windows console
+# encoding (cp1252) cannot encode Devanagari and would raise inside the voice
+# loop, so make printing lossy instead of fatal.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Add project root to path so agents/, connectors/, core/, vision/ are importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
 # app/ itself must also be on sys.path so startup.py can be imported as 'startup'
@@ -300,6 +309,17 @@ def speak(text):
         pass
     print(f"SPEAKING: {text}")  # Debug
     try:
+        # Nepali (Devanagari) text: Windows SAPI has no Nepali voice, so use
+        # the neural voice in speech/tts.py. Returns False on any failure and
+        # we fall through to SAPI. Open palm still interrupts it.
+        try:
+            from speech import tts as _neural_tts
+            if _neural_tts.wants_neural(text) and _neural_tts.speak_neural(
+                    text, should_stop=lambda: stop_speaking_flag):
+                print("SPEECH DONE (neural)")
+                return
+        except Exception as _e:
+            print(f"NEURAL TTS ERROR: {_e}")
         import comtypes.client  # Windows COM interface
         sapi_speaker = comtypes.client.CreateObject("SAPI.SpVoice")
         sapi_speaker.Rate = 1  # Speed: -10 (slow) to 10 (fast)
@@ -350,6 +370,18 @@ def stop_ai_speech():
     stop_speaking_flag = True
     print(">>> STOP SPEECH SIGNAL SENT <<<")
 
+def _answers_pending_confirmation(text):
+    """True when the brain is waiting for a yes/no and this utterance is one."""
+    try:
+        from brain.policy import is_yes, is_no
+        brain = getattr(orchestrator, "brain", None)
+        if brain is not None and brain.policy.get_pending("voice") is not None:
+            return is_yes(text) or is_no(text)
+    except Exception:
+        pass
+    return False
+
+
 class VoiceAssistantThread(threading.Thread):
     """
     Sequential state machine — the production pattern used by every working
@@ -383,6 +415,24 @@ class VoiceAssistantThread(threading.Thread):
             response_queue.put_nowait(payload)
         except queue.Full:
             pass
+
+    def transcribe_command(self, wav_path):
+        """Transcribe a full command. Tries hosted Whisper large-v3 first
+        (speech/stt.py: much better at Nepali, no GPU needed), then falls back
+        to the local model, which also keeps HoloDesk working offline.
+        The wake word never leaves the machine: it always uses the local model."""
+        try:
+            from speech.stt import transcribe_command as _cloud_transcribe
+            text = _cloud_transcribe(wav_path)
+            if text:
+                if HOLODESK_VOICE_DEBUG:
+                    print(f"[VOICE][debug] cloud stt: {text!r}")
+                # NOT _normalize_transcript: it keeps only a-z0-9 and would
+                # erase every Devanagari character.
+                return " ".join(text.split())
+        except Exception as e:
+            print(f"[VOICE] Cloud STT unavailable, using local Whisper: {e}")
+        return self.strip_fillers(self.transcribe_audio(wav_path))
 
     def transcribe_audio(self, wav_path):
         try:
@@ -656,6 +706,9 @@ class VoiceAssistantThread(threading.Thread):
         "no", "nah", "nope", "nothing", "bye", "goodbye", "bye bye",
         "no thanks", "no thank you", "that's all", "that's it",
         "nevermind", "never mind", "i'm good", "all good", "i'm done",
+        # Nepali
+        "धन्यवाद", "पुग्यो", "भयो", "बाई", "पर्दैन", "केही छैन",
+        "dhanyabad", "pugyo", "bhayo", "pardaina",
     }
     EXIT_KEYWORDS = [
         "that's all", "that's it", "bye", "goodbye", "i'm done",
@@ -780,12 +833,13 @@ class VoiceAssistantThread(threading.Thread):
                     self.push_state("IDLE")
                     continue
                 try:
-                    text = self.strip_fillers(self.transcribe_audio(wav_path))
+                    text = self.transcribe_command(wav_path)
                 finally:
                     if os.path.exists(wav_path):
                         os.unlink(wav_path)
 
-                if not text or len(text.split()) < 2:
+                if not text or (len(text.split()) < 2
+                                and not _answers_pending_confirmation(text)):
                     self.push_state("IDLE")
                     continue
 
@@ -814,9 +868,7 @@ class VoiceAssistantThread(threading.Thread):
 
                     self.push_state("PROCESSING")
                     try:
-                        followup_text = self.strip_fillers(
-                            self.transcribe_audio(followup_wav)
-                        )
+                        followup_text = self.transcribe_command(followup_wav)
                     finally:
                         if os.path.exists(followup_wav):
                             os.unlink(followup_wav)
@@ -825,6 +877,17 @@ class VoiceAssistantThread(threading.Thread):
                         continue
 
                     print(f"[VOICE] Follow-up heard: '{followup_text}'")
+
+                    # A one-word "yes" / "cancel" / "हुन्छ" answering a pending
+                    # confirmation must reach the brain. Without this it would
+                    # be dropped by the two-word minimum below, or "no" would
+                    # be read as "end the conversation".
+                    if _answers_pending_confirmation(followup_text):
+                        result = self._dispatch_and_speak(followup_text)
+                        if result is None:
+                            break
+                        conversation_end = time.time() + self.CONVERSATION_WINDOW_SEC
+                        continue
 
                     if self._is_exit_phrase(followup_text):
                         speak("Alright, I'm here if you need me.")

@@ -21,6 +21,38 @@ class OrchestratorAgent(threading.Thread):
         self.agents = agents
         self.thread_pool = ThreadPoolExecutor(max_workers=5)
         self.running = True
+        # Tool-calling brain (brain/). When it is available every command goes
+        # through it; the regex router below stays as the offline fallback.
+        self.brain = self._load_brain()
+
+    def _load_brain(self):
+        try:
+            from brain.bootstrap import build_engine
+            return build_engine(
+                task_agent=self.agents.get("task_agent"),
+                screen_agent=self.agents.get("screen_agent"),
+            )
+        except Exception as e:
+            print(f"[BRAIN] Not available, using the legacy router: {e}")
+            return None
+
+    def _try_brain(self, command: str) -> bool:
+        """Returns True when the brain produced the reply."""
+        if self.brain is None:
+            return False
+        try:
+            reply = self.brain.reply(command, source="voice")
+        except Exception as e:
+            print(f"[BRAIN] Error, falling back to the legacy router: {e}")
+            return False
+        # ok=False with nothing executed means the LLM was unreachable: let the
+        # legacy router try. If tools already ran, never re-run the command.
+        if not reply.ok and not reply.tool_calls:
+            return False
+        if reply.text:
+            self._reply({"text": reply.text, "prompt": True})
+            return True
+        return False
 
     def stop(self):
         self.running = False
@@ -61,6 +93,9 @@ class OrchestratorAgent(threading.Thread):
         ):
             result = task_agent.execute(action="__confirm_reply__", context={"raw": command})
             self._reply({"text": result.get("response", "Okay."), "prompt": True})
+            return
+
+        if self._try_brain(command):
             return
 
         intents = self._detect_intents(command)
