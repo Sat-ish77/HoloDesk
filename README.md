@@ -27,7 +27,7 @@ runs without a GPU. Setup, architecture and what is still untested:
 **[docs/BRAIN.md](docs/BRAIN.md)**.
 
 ```powershell
-python -m pytest            # 128 unit tests
+python -m pytest            # 129 unit tests
 python evals\run_evals.py   # live eval, 54 cases in 3 languages
 python run_daemon.py        # phone bridge + monitors
 ```

@@ -21,7 +21,7 @@ watch.
 | Only at the desk | Telegram bridge: text or voice notes from anywhere |
 | Runs while the overlay is open | Headless daemon, starts at login, restarts itself |
 | Confirm-before list checked by substring | Four risk tiers, a kill switch and an audit log |
-| No tests | 128 unit tests + a 54-case live eval in three languages |
+| No tests | 129 unit tests + a 54-case live eval in three languages |
 
 The old regex router is still there. If the model is unreachable, or you set
 `HOLODESK_BRAIN=0`, HoloDesk behaves exactly as before.
@@ -65,7 +65,7 @@ the model does the wording, and an eval suite that is part of the repo.
 
 ```powershell
 pip install -r requirement.txt
-python -m pytest                       # 128 tests, about a second
+python -m pytest                       # 129 tests, about a second
 python app\main.py                     # overlay, as before
 ```
 
