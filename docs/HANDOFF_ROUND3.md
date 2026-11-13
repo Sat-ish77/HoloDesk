@@ -60,6 +60,50 @@ close as possible to the north star. Cover at least:
 Then implement section 3 following that design. If the design shows a better
 path than section 3 says, take it and explain why in section 6.
 
+## 1b. Long-term architecture (design for it now, build it in later rounds)
+
+Example task the user wants to give from the phone, laptop out of reach:
+"Open Canvas, go to the dashboard, open the assignment instructions, open
+Claude in a new tab, paste the instructions and ask for help, save the file I
+prepared to the Desktop, go back to Canvas, open the submission page, upload
+the file." Many apps, many steps, no laptop in sight. (Submitting work the user
+did not write is off the table; the agent uploads files the user prepared.)
+
+1. **Cheap seeing, layered, cheapest first:**
+   (a) accessibility tree (browser ARIA snapshot, Windows UIA): free, fast,
+   exact. Default for every step.
+   (b) change detection: perceptual hash of the active-window screenshot; skip
+   re-analysis when nothing changed. (The user's earlier holodesk-lens project
+   used frame differencing to verify a fan slowing down; same idea.)
+   (c) screenshot + vision model only when (a) has nothing usable: downscale,
+   crop to the active window, optionally number detected boxes (Set-of-Mark /
+   OmniParser-style) so the model answers "click #7", not coordinates.
+2. **Task recipes (learned skills).** When a task succeeds, save its steps as a
+   recipe in SQLite memory: each step = action + element descriptor (role,
+   accessible name, nearby text/landmark; never raw coordinates) +
+   precondition + expected postcondition. Next time: replay without the LLM,
+   checking pre/postconditions per step. If a step's element is missing (UI
+   changed), only that step falls back to snapshot → LLM (→ vision), and the
+   repaired step is written back. Recipes are per task intent ("like the post on
+   screen", "submit file to Canvas assignment X") with parameters.
+3. **Verified completion, no hallucination.** Every step's success is a
+   code-checked fact (URL, element state like "Remove Like"/"Submitted", field
+   value, file exists). The final reply is built only from those facts; a failed
+   check reports the exact step it stopped at. Vision verifies only when no
+   fact check exists.
+4. **Remote control.** Telegram voice notes already reach the brain. Long
+   tasks run in the background with progress messages and a final screenshot;
+   DANGER confirmations go to the phone (Yes/No). Later: Twilio, both outbound
+   (it calls the user on important events) and inbound (the user calls, speech
+   goes through the same engine, the reply is spoken). The laptop must stay awake
+   and unlocked for UI actions, so the allowlist and phone confirmations are
+   mandatory.
+
+Build order: round 3 = page map + act-by-ref + verify (this round). Round 4 =
+recipes + change detection. Round 5 = Telegram background tasks + phone
+confirmations. Round 6 = Twilio + vision fallback. Round 3's design doc should
+show where recipes plug in, so round 4 doesn't need a rewrite.
+
 ## 2. Live voice test of round 2 (2026-11-13, Windows, real mic)
 
 Worked: Google search plus `browser_open_result` 1; `look_at_screen` summary;
