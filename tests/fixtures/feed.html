@@ -1,0 +1,39 @@
+<!doctype html><html><head><title>Feed</title><style>
+body{margin:0;font:14px sans-serif} article{height:420px;border:1px solid #ccc;margin:10px;padding:10px;box-sizing:border-box}
+nav{height:40px} .like{display:inline-block;min-width:40px;height:24px;background:#eee}</style></head><body>
+<nav aria-label="Main"><a href="#home">Home</a><input type="search" aria-label="Search the feed"></nav>
+<main>
+<article role="article" aria-label="Post by Asha Rai" id="p1"><p>Asha Rai: Graduation day at UNT!</p>
+  <div role="button" aria-label="Like" tabindex="0" class="like"></div>
+  <div role="button" tabindex="0" class="open-comment">Comment</div>
+  <div class="comments">
+    <div role="article" aria-label="Comment by Bikash"><span>Bikash: nice</span><div role="button" tabindex="0" class="clike">Like</div></div>
+  </div>
+  <div class="box" hidden><div contenteditable="true" role="textbox" aria-label="Write a comment…"></div></div>
+</article>
+<article id="p2"><p>Second post: Momo night</p>
+  <div role="button" class="like"><svg aria-label="Like" width="24" height="24"><rect width="24" height="24"/></svg></div>
+  <form><textarea aria-label="Add a comment…"></textarea><button type="button" class="post" disabled>Post</button></form>
+  <ul class="comments"></ul>
+</article>
+<article id="p3"><p>Third post: far below</p><div role="button" aria-label="Like" class="like"></div></article>
+</main>
+<script>
+document.querySelectorAll('.like').forEach(b => b.addEventListener('click', () => {
+  const svg = b.querySelector('svg');
+  if (b.dataset.broken) return;
+  if (svg) svg.setAttribute('aria-label', svg.getAttribute('aria-label') === 'Like' ? 'Unlike' : 'Like');
+  else b.setAttribute('aria-label', b.getAttribute('aria-label') === 'Like' ? 'Remove Like' : 'Like');
+}));
+// Post 1: Facebook style. "Comment" reveals the box, Enter posts.
+const p1 = document.getElementById('p1'), box1 = p1.querySelector('[contenteditable]');
+p1.querySelector('.open-comment').addEventListener('click', () => { p1.querySelector('.box').hidden = false; box1.focus(); });
+box1.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault();
+  const c = document.createElement('div'); c.setAttribute('role', 'article'); c.textContent = 'You: ' + box1.innerText.trim();
+  p1.querySelector('.comments').appendChild(c); box1.innerHTML = ''; } });
+// Post 2: Instagram style. A Post button that enables once there is text.
+const p2 = document.getElementById('p2'), ta = p2.querySelector('textarea'), post = p2.querySelector('.post');
+ta.addEventListener('input', () => { post.disabled = !ta.value.trim(); });
+post.addEventListener('click', () => { const li = document.createElement('li'); li.textContent = 'You: ' + ta.value;
+  p2.querySelector('.comments').appendChild(li); ta.value = ''; post.disabled = true; });
+</script></body></html>

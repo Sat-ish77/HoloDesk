@@ -483,7 +483,8 @@ def build(task_agent_provider=lambda: None, screen_agent_provider=lambda: None) 
                  "engine": {"type": "string", "enum": ["google", "youtube", "maps"]}}, "required": ["query"]},
              handler=search_in_browser, risk=Risk.ACT,
              keywords=("search", "google", "look up", "play", "song", "video", "खोज", "khoja", "bajau")),
-        Tool(name="list_windows", description="List the titles of all open windows and which one is active.",
+        Tool(name="list_windows", description=("List the titles of all open windows and which one is active. For which web "
+                                              "page or tab is showing, use browser_snapshot instead."),
              handler=list_windows, keywords=("windows", "open apps", "what's open", "which app")),
         Tool(name="focus_window", description="Bring a window to the front.",
              parameters={"type": "object", "properties": {"title": title_param}, "required": ["title"]},

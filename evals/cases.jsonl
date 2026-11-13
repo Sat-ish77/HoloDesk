@@ -90,3 +90,22 @@
 {"id": "ro-new-tab", "lang": "ne-roman", "text": "naya tab ma gmail khol", "expect": ["browser_new_tab"]}
 {"id": "ro-type-search", "lang": "ne-roman", "text": "gmail ko search box ma invoice khoja", "expect": ["browser_type"]}
 {"id": "ro-press-key", "lang": "ne-roman", "text": "yo page ma escape key thicha", "expect": ["browser_press_key"]}
+{"id": "en-what-page", "lang": "en", "text": "what page am I on right now, can you see it?", "expect": ["browser_snapshot", "browser_read_page"]}
+{"id": "en-snapshot-click", "lang": "en", "text": "on this web page, click the Settings tab", "expect": ["browser_snapshot", "browser_click_text"]}
+{"id": "en-dropdown", "lang": "en", "text": "on this web page pick United States in the country dropdown", "expect": ["browser_snapshot"]}
+{"id": "en-comment", "lang": "en", "text": "comment congrats on this post", "expect": ["social_comment"], "confirm": true}
+{"id": "en-like-picture", "lang": "en", "text": "I want to like this picture", "expect": ["social_react"], "confirm": true}
+{"id": "en-compose", "lang": "en", "text": "write an email to Asha Rai, subject Hello, saying good morning", "expect": ["gmail_compose"]}
+{"id": "en-ask-claude", "lang": "en", "text": "ask Claude what MCP is in one line", "expect": ["ask_chatbot"]}
+{"id": "en-find-move", "lang": "en", "text": "find my resume and move it to the Documents folder", "expect": ["find_files"]}
+{"id": "en-open-file", "lang": "en", "text": "open the file budget.xlsx from my Desktop", "expect": ["open_path", "find_files"]}
+{"id": "ne-what-page", "lang": "ne", "text": "अहिले कुन पेज खुलेको छ, देख्छौ?", "expect": ["browser_snapshot", "browser_read_page"]}
+{"id": "ne-comment", "lang": "ne", "text": "यो पोस्टमा बधाई छ भनेर कमेन्ट गर", "expect": ["social_comment"], "confirm": true}
+{"id": "ne-compose", "lang": "ne", "text": "आशा राईलाई इमेल लेख, विषय नमस्ते, शुभ प्रभात भनेर", "expect": ["gmail_compose"]}
+{"id": "ne-ask-claude", "lang": "ne", "text": "Claude लाई सोध, MCP भनेको के हो", "expect": ["ask_chatbot"]}
+{"id": "ne-find-file", "lang": "ne", "text": "मेरो resume फाइल कहाँ छ, खोज", "expect": ["find_files"]}
+{"id": "ro-what-page", "lang": "ne-roman", "text": "ahile kun page khuleko cha, dekhchau?", "expect": ["browser_snapshot", "browser_read_page"]}
+{"id": "ro-comment", "lang": "ne-roman", "text": "yo post ma badhai cha bhanera comment gara", "expect": ["social_comment"], "confirm": true}
+{"id": "ro-compose", "lang": "ne-roman", "text": "Asha Rai lai email lekha, subject Namaste, subha prabhat bhanera", "expect": ["gmail_compose"]}
+{"id": "ro-ask-claude", "lang": "ne-roman", "text": "Claude lai sodha MCP bhaneko ke ho", "expect": ["ask_chatbot"]}
+{"id": "ro-find-file", "lang": "ne-roman", "text": "mero resume file kaha cha, khoja", "expect": ["find_files"]}

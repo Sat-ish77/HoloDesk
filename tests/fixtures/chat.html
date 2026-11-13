@@ -1,0 +1,11 @@
+<!doctype html><html><head><title>Chat</title></head><body>
+<main id="thread"><p>How can I help you today?</p></main>
+<div contenteditable="true" role="textbox" aria-label="Write your prompt" style="min-height:40px;border:1px solid #ccc"></div>
+<script>
+const box = document.querySelector('[contenteditable]'), thread = document.getElementById('thread');
+const ANSWER = 'MCP is an open protocol that lets AI apps connect to tools and data.'.split(' ');
+box.addEventListener('keydown', e => { if (e.key !== 'Enter') return; e.preventDefault();
+  const q = document.createElement('p'); q.textContent = box.innerText.trim(); thread.appendChild(q); box.innerHTML = '';
+  const a = document.createElement('p'); thread.appendChild(a); let i = 0;
+  const t = setInterval(() => { a.textContent += (i ? ' ' : '') + ANSWER[i++]; if (i >= ANSWER.length) clearInterval(t); }, 120); });
+</script></body></html>

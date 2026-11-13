@@ -45,6 +45,7 @@ class Tool:
     # Human-readable one-liner for the confirmation question.
     summarize: Callable[[dict], str] | None = None
     always: bool = False             # always offered to the model
+    latest_only: bool = False        # only the newest result stays in the conversation (page maps)
 
     def risk_for(self, args: dict) -> Risk:
         if callable(self.risk):

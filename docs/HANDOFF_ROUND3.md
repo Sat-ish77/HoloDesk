@@ -224,4 +224,64 @@ All 171 tests pass. Commit after `f34b8bb`.
 
 ## 6. Your notes for the next round
 
-(Fill in.)
+Written by Fable in the cloud, 2026-11-13. Design and review of the earlier
+fixes: `docs/DESIGN_UI_CONTROL.md`.
+
+### What was verified, and how
+
+200 tests pass. New this round: 26 tests in `tests/test_page_map.py` run in a
+**real headless Chromium** against local fixture pages (`tests/fixtures/`: a
+feed, a mail client, a chatbot, a settings form). The real controller was also
+driven by hand over a live DevTools connection (open, snapshot, like, new tab,
+click that opens a tab, back, close tab, Chrome killed and restarted).
+The full suite now takes about 40 s; the browser tests skip themselves if
+Playwright finds no Chromium, Chrome or Edge.
+
+NOT run: Facebook, Instagram, Gmail, Claude.ai, ChatGPT, Windows, the overlay,
+a microphone, a live model, the live eval (19 new cases, 111 total). The
+fixtures prove the mechanism in a browser, not that those sites behave alike.
+
+### Where I left section 3
+
+- Page map by our own DOM walk (`brain/tools/pagemap.py`), not Playwright's
+  ARIA snapshot; reasons in the design doc. Open shadow roots are walked.
+  **Iframes are not.**
+- `browser_hover_ref` not built (no task needed it).
+- Intent tools added on top of the map, with no site selectors:
+  `social_comment`, `ask_chatbot`, `gmail_compose`. `social_react` now uses
+  the map too; `LIKE_SELECTORS` is gone. `gmail_compose` / `gmail_send` still
+  use the label names in `browser/sites/gmail.py` ("To", "Subject", "Message
+  Body", `[email]` chips), unverified on real Gmail. If they miss, compose
+  through `browser_snapshot` + `browser_type_ref` still works.
+- `browser_snapshot` is always offered when automation is on; it adds
+  `browser_click_ref` / `browser_type_ref` to the turn. Only the newest map
+  stays in the conversation. Step limit raised from 8 to 12.
+- One confirmation: the prompt tells the model the system asks; a confirmed
+  action that **failed** may be retried once within 2 minutes without asking
+  again (same tool, same arguments). A success is never a standing approval.
+- Tabs: HoloDesk follows tabs it opens (new tab, a click that opens one). It
+  switches to a tab the user chose by hand only when the current tab reports
+  hidden and exactly one other reports visible.
+- Found on a real Chrome and fixed: after Chrome was killed, the controller
+  still looked connected and the next open failed. It now asks the browser
+  for its version before each use and rebuilds the connection if that fails.
+- Files (1a item 4): no code change. `find_files`, `move_path`, `open_path`
+  are reachable (eval cases added). "Save this" from a page is not built.
+
+### Most likely to need a fix after the live test
+
+1. Facebook's comment box is a rich editor; `fill()` may not register. The tool
+   then reports the box value it read and posts nothing.
+2. Which element counts as the post: grouping uses the outermost
+   `article` / `[role=article]`. If Facebook nests the feed differently, the
+   `ON SCREEN` group is wrong. `browser_snapshot` output shows the grouping.
+3. Chat answers are read as "new lines on the page since the prompt"; site
+   chrome may leak into the answer.
+4. `elementFromPoint` hides elements under a transparent overlay inside the
+   page (some sites use one); they would be missing from the map.
+
+### Round 4 hooks
+
+Every act returns `element` (role, name, group), `before` and `after`. A recipe
+step is that record plus the tool name; replay finds the element by
+role + name + group in a fresh map and compares `after`.

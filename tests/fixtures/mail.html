@@ -1,0 +1,33 @@
+<!doctype html><html><head><title>Inbox - Mail</title><style>body{font:14px sans-serif}
+[role=dialog]{position:fixed;right:20px;bottom:20px;width:420px;border:1px solid #888;background:#fff;padding:8px}
+[contenteditable]{min-height:60px;border:1px solid #ccc}</style></head><body>
+<div role="button" tabindex="0" id="compose">Compose</div>
+<input aria-label="Search mail" type="text">
+<main><a href="#m1">Welcome to your inbox</a></main>
+<div id="toast"></div>
+<script>
+const CONTACTS = [['Smarika Koirala', 'smarika@example.com'], ['Asha Rai', 'asha@example.com']];
+document.getElementById('compose').addEventListener('click', () => {
+  if (document.querySelector('[role=dialog]')) return;
+  const d = document.createElement('div'); d.setAttribute('role', 'dialog'); d.setAttribute('aria-label', 'New Message');
+  d.innerHTML = '<div id="chips"></div><input role="combobox" aria-label="To recipients"><div id="options"></div>' +
+    '<input name="subjectbox" aria-label="Subject"><div contenteditable="true" role="textbox" aria-label="Message Body"></div>' +
+    '<div role="button" tabindex="0" id="send">Send</div>';
+  document.body.appendChild(d);
+  const to = d.querySelector('[role=combobox]'), options = d.querySelector('#options');
+  to.addEventListener('input', () => {
+    const q = to.value.trim().toLowerCase();
+    options.innerHTML = '';
+    if (q) CONTACTS.filter(c => c[0].toLowerCase().includes(q)).forEach(c => {
+      const o = document.createElement('div'); o.setAttribute('role', 'option'); o.textContent = c[0] + ' ' + c[1]; o.dataset.email = c[1]; o.dataset.name = c[0];
+      options.appendChild(o); });
+  });
+  to.addEventListener('keydown', e => { if (e.key !== 'Enter') return;
+    const pick = options.querySelector('[role=option]');
+    const email = pick ? pick.dataset.email : (to.value.includes('@') ? to.value.trim() : null);
+    if (!email) return;
+    const chip = document.createElement('span'); chip.setAttribute('email', email); chip.textContent = pick ? pick.dataset.name : email;
+    d.querySelector('#chips').appendChild(chip); to.value = ''; options.innerHTML = ''; });
+  d.querySelector('#send').addEventListener('click', () => { d.remove(); document.getElementById('toast').textContent = 'Message sent'; });
+});
+</script></body></html>

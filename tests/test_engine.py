@@ -226,3 +226,45 @@ def test_spelled_names_are_joined():
     from brain.engine import _join_spelled
     assert _join_spelled("search S-M-A-R-I-K-A K-O-I-R-A-L-A") == "search Smarika Koirala"
     assert _join_spelled("open a new tab") == "open a new tab"
+
+
+def test_a_promise_with_no_tool_call_is_challenged_even_after_other_tools():
+    # Voice test: "...I still need to find the Reply button. Let me check again." then silence.
+    engine, _, log = make_engine([call("system_status"), say("Let me check again."),
+                                  call("open_app", name="gmail"), say("Gmail is open.")])
+    reply = engine.reply("open my mail")
+    assert [name for name, _ in log] == ["system_status", "open_app"] and reply.text == "Gmail is open."
+    engine, _, _ = make_engine([say("Let me know which video you'd like to open.")])
+    assert engine.reply("play something").text.startswith("Let me know")        # a question back is fine
+
+
+def test_only_the_newest_result_of_a_latest_only_tool_stays_in_context():
+    from brain.tools.registry import Tool
+    maps = iter(["MAP-ONE", "MAP-TWO"])
+    page_map = Tool("page_map", "Map of the page.", lambda a, c: {"ok": True, "map": next(maps)}, latest_only=True)
+    engine, backend, _ = make_engine([call("page_map"), call("page_map", again=True), say("done")],
+                                     extra_tools=[page_map])
+    engine.reply("look at the page twice")
+    sent = " ".join(str(m.get("content")) for m in backend.calls[2]["messages"])
+    assert "MAP-TWO" in sent and "MAP-ONE" not in sent and "older result removed" in sent
+
+
+def test_a_confirmed_action_that_failed_can_be_retried_once_without_asking_again():
+    # Voice test: one Like needed three confirmations because each retry asked again.
+    from brain.policy import Risk
+    from brain.tools.registry import Tool
+    results = iter([{"ok": False, "error": "did not show as liked"}, {"ok": True}, {"ok": True}])
+    like = Tool("like_post", "Like the post.", lambda a, c: next(results), risk=Risk.DANGER,
+                summarize=lambda a: "like the post")
+    engine, _, _ = make_engine([call("like_post"), call("like_post"), say("Liked now."), call("like_post")],
+                               extra_tools=[like])
+    assert engine.reply("like this post").needs_confirmation
+    assert not engine.reply("yes").ok                                   # confirmed, ran, failed
+    retried = engine.reply("it didn't work, try again")
+    assert not retried.needs_confirmation and retried.text == "Liked now."
+    assert engine.reply("like it again").needs_confirmation             # a success is not a standing approval
+
+
+def test_short_spelled_runs_stay_upper_case():
+    from brain.engine import _join_spelled
+    assert _join_spelled("I study at U-N-T") == "I study at UNT"

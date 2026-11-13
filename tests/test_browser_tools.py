@@ -11,7 +11,6 @@ from browser import playwright_controller as pw
 from helpers import call, make_engine, say
 
 CTX = ToolContext()
-LIKE, LIKED = bt.LIKE_SELECTORS["facebook.com"]
 BODY = ("label", "Message Body")
 REPLY = ("role", "button", "Reply")
 SEND = ("role", "button", "Send")
@@ -285,51 +284,6 @@ def test_play_pause_falls_back_when_the_key_does_nothing_and_off_youtube(tab):
 
 
 # ---------------------------------------------------------------- like
-def facebook_page(elements):
-    page = FakePage("https://www.facebook.com/", elements)
-
-    def on_click(key, item):
-        if key == LIKE:
-            page.elements[LIKE].remove(item)
-            page.elements.setdefault(LIKED, []).append(item)
-    page.on_click = on_click
-    return page
-
-
-def test_like_clicks_the_post_on_screen_and_verifies(tab):
-    above, on_screen = {"y": -300, "text": "old"}, {"y": 400, "text": "this"}
-    tab["page"] = facebook_page({LIKE: [above, on_screen]})
-    out = bt.social_react({}, CTX)
-    assert out["ok"] and out["liked"] and tab["page"].clicks == ["this"]
-
-
-def test_like_never_unlikes_and_reports_failures(tab):
-    tab["page"] = facebook_page({LIKED: [{"y": 300}]})
-    out = bt.social_react({}, CTX)
-    assert out["ok"] and "already liked" in out["message"] and tab["page"].clicks == []
-
-    tab["page"] = facebook_page({LIKE: [{"y": 5000}]})                 # far below the screen
-    assert "Scroll" in bt.social_react({}, CTX)["error"]
-
-    page = FakePage("https://www.facebook.com/", {LIKE: [{"y": 300}]})  # click has no effect
-    tab["page"] = page
-    assert bt.social_react({}, CTX)["ok"] is False
-
-    tab["page"] = FakePage("https://www.youtube.com/watch?v=1", {LIKE: [{"y": 300}]})
-    out = bt.social_react({}, CTX)
-    assert out["ok"] is False and "Facebook and Instagram only" in out["error"]
-
-
-def test_like_waits_for_yes_through_the_existing_policy(tab):
-    tab["page"] = facebook_page({LIKE: [{"y": 300, "text": "post"}]})
-    engine, _, _ = make_engine([call("social_react")], extra_tools=bt.build())
-    asked = engine.reply("like this post")
-    assert asked.needs_confirmation and "like the post" in asked.text
-    assert tab["page"].clicks == []                                       # nothing happened yet
-    done = engine.reply("yes")
-    assert done.ok and tab["page"].clicks == ["post"]
-
-
 # ---------------------------------------------------------------- gmail
 def test_draft_reply_opens_reply_writes_and_does_not_send(tab):
     page = gmail_page({REPLY: [{"text": "Reply"}], SEND: [{"text": "Send"}]})
@@ -440,6 +394,11 @@ class FakeBrowser:
             raise RuntimeError("Target page, context or browser has been closed")
         return [self.page.context]
 
+    def new_browser_cdp_session(self):
+        if self.dead:
+            raise RuntimeError("Target page, context or browser has been closed")
+        return type("Session", (), {"send": lambda self, method: {}, "detach": lambda self: None})()
+
     def close(self):
         self.closed = True
 
@@ -479,19 +438,6 @@ def test_controller_reports_an_error_when_chrome_cannot_come_back(monkeypatch):
     controller, _ = connected_controller(monkeypatch, [FakeBrowser(dead=True), FakeBrowser(dead=True)])
     got = controller.ensure_page()
     assert got["success"] is False and "Couldn't connect" in got["error"]
-
-
-def test_controller_follows_the_tab_the_user_is_looking_at(monkeypatch):
-    first = FakePage("https://www.google.com/search?q=mcp")
-    controller, _ = connected_controller(monkeypatch, [FakeBrowser(first)])
-    assert controller.ensure_page()["page"] is first
-    second = first.context.new_page()            # a link opened a new tab, or the user switched
-    second.bring_to_front()
-    assert controller.ensure_page()["page"] is second
-    first.visible = second.visible = False       # window minimised: stay on the working tab
-    assert controller.ensure_page()["page"] is second
-    second.close()
-    assert controller.ensure_page()["page"] is first
 
 
 def test_chrome_is_launched_with_notification_prompts_off(monkeypatch):
@@ -566,17 +512,6 @@ def test_press_key_accepts_spoken_names_and_rejects_unknown_ones(tab):
         bt.browser_press_key({"key": "banana"}, CTX)
 
 
-def test_click_like_is_confirmed_and_uses_the_like_button_not_text(tab):
-    # Round-2 voice test: the model called browser_click_text 'Like', which found
-    # no text to click because Facebook's Like button is an aria-label.
-    assert bt._click_risk({"text": "Like"}) == Risk.DANGER
-    tab["page"] = facebook_page({LIKE: [{"y": 300, "text": "post"}]})
-    out = bt.browser_click_text({"text": "Like"}, CTX)
-    assert out["ok"] and out["liked"] and tab["page"].clicks == ["post"]
-    tab["page"] = FakePage({("role", "button", "Like"): [{"text": "Like"}]})     # not Facebook: plain click
-    assert bt.browser_click_text({"text": "Like"}, CTX)["ok"] and tab["page"].clicks == ["Like"]
-
-
 def test_skip_ad_is_a_plain_click(tab):
     assert bt._click_risk({"text": "Skip"}) == Risk.ACT
     tab["page"] = FakePage({("role", "button", "Skip"): [{"text": "Skip Ad"}]})
@@ -591,3 +526,58 @@ def test_router_finds_the_round_2_tools_in_three_languages():
     assert "browser_new_tab" in pick("open gmail in a new tab") and "browser_new_tab" in pick("नयाँ ट्याब खोल")
     assert "browser_type" in pick("search for invoices in gmail")
     assert "browser_press_key" in pick("press the escape key")
+
+
+def test_controller_keeps_its_tab_unless_chrome_is_sure_the_user_moved(monkeypatch):
+    # Round-3 voice test: a still-loading new tab looked "hidden" and the tools
+    # jumped back to the old one.
+    first = FakePage("https://www.google.com/search?q=mcp")
+    controller, _ = connected_controller(monkeypatch, [FakeBrowser(first)])
+    assert controller.ensure_page()["page"] is first
+    second = first.context.new_page()
+    controller.use_tab(second)                       # HoloDesk opened it: follow it
+    second.evaluate = lambda js, *a: (_ for _ in ()).throw(RuntimeError("navigating"))
+    assert controller.ensure_page()["page"] is second        # unknown is not hidden
+    del second.evaluate
+    first.visible = second.visible = False                   # covered by the overlay
+    assert controller.ensure_page()["page"] is second
+    first.visible = True                                     # the user clearly switched back
+    assert controller.ensure_page()["page"] is first
+    third = first.context.new_page()
+    first.visible, second.visible, third.visible = False, True, True      # two candidates: stay
+    assert controller.ensure_page()["page"] is first
+    first.close()
+    assert controller.ensure_page()["page"] in (second, third)
+
+
+def test_back_counts_as_done_when_the_page_changed_despite_a_timeout(tab):
+    page = tab["page"]
+    page.goto("https://www.youtube.com/watch?v=1")
+
+    def slow_back(**_):
+        page.url = page.history.pop()
+        raise TimeoutError("Timeout 15000ms exceeded")
+    page.go_back = slow_back
+    out = bt.browser_back({}, CTX)
+    assert out["ok"] and out["url"] == YOUTUBE
+
+
+def test_the_separate_chrome_profile_is_explained_once(monkeypatch, tmp_path):
+    monkeypatch.setenv("HOLODESK_BROWSER_AUTOMATION_ENABLED", "1")
+    monkeypatch.setenv("HOLODESK_BROWSER_PROFILE_DIR", str(tmp_path / "chrome-profile"))
+    (tmp_path / "chrome-profile").mkdir()
+    monkeypatch.setattr(pw, "open_in_automation_browser", lambda url: {"success": True, "url": url, "title": "T"})
+    assert "own Chrome profile" in bt.open_in_automation("https://x.test")["message"]
+    assert "own Chrome profile" not in bt.open_in_automation("https://x.test")["message"]
+
+
+def test_controller_notices_a_killed_chrome_that_still_looks_connected(monkeypatch):
+    # Found against a real Chrome: is_connected() stayed True after a kill and the
+    # next open failed with "Target page, context or browser has been closed".
+    old, new = FakePage(), FakePage("https://example.com/")
+    first = FakeBrowser(old)
+    controller, _ = connected_controller(monkeypatch, [first, FakeBrowser(new)])
+    assert controller.ensure_page()["page"] is old
+    first.dead = True
+    got = controller.ensure_page()
+    assert got["success"] and got["page"] is new

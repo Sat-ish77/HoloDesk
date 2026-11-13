@@ -76,7 +76,7 @@ class BrainConfig:
         "HOLODESK_FALLBACK_MODEL", "gpt-4o-mini"))
 
     # --- Agent loop ---
-    max_turns: int = field(default_factory=lambda: _env_int("HOLODESK_MAX_TURNS", 8))
+    max_turns: int = field(default_factory=lambda: _env_int("HOLODESK_MAX_TURNS", 12))
     max_tools_per_request: int = field(default_factory=lambda: _env_int(
         "HOLODESK_MAX_TOOLS", 10))
     llm_router: bool = field(default_factory=lambda: _env_bool("HOLODESK_LLM_ROUTER", True))

@@ -1,0 +1,22 @@
+<!doctype html><html><head><title>Settings</title><style>body{font:14px sans-serif;margin:0}
+#far{margin-top:2000px;display:block} #cover{position:fixed;left:0;top:300px;width:300px;height:60px;background:#fff}</style></head><body>
+<nav><a href="other.html" target="_blank">Open help in a new tab</a> <a href="#saved">Jump</a></nav>
+<form role="search"><input type="search" placeholder="Search settings"><div id="hits"></div></form>
+<main>
+  <label>Country <select id="country"><option>Nepal</option><option>United States</option></select></label>
+  <label><input type="checkbox" id="news"> Email me news</label>
+  <label>Password <input type="password" value="hunter2"></label>
+  <button id="save">Save changes</button> <button id="del">Delete account</button>
+  <button id="swap">Next</button>
+  <my-widget></my-widget>
+  <div style="position:absolute;left:0;top:300px"><button id="hidden-under">Covered button</button></div>
+  <div id="cover">An overlay</div>
+  <button id="far">Far away</button>
+</main>
+<script>
+customElements.define('my-widget', class extends HTMLElement { constructor() { super();
+  this.attachShadow({mode: 'open'}).innerHTML = '<button>Shadow OK</button>'; } });
+document.getElementById('save').addEventListener('click', e => { e.target.textContent = 'Saved'; });
+document.querySelector('[type=search]').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault();
+  document.getElementById('hits').textContent = 'Results for ' + e.target.value; } });
+</script></body></html>

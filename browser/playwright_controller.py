@@ -115,29 +115,30 @@ def _launch_automation_chrome(port: int) -> dict[str, Any]:
     return {"success": False, "error": "Chrome launched but its debugging port never opened."}
 
 
-def _is_visible_tab(page) -> bool:
+def _tab_visibility(page) -> str:
     try:
-        return page.evaluate("document.visibilityState") == "visible"
+        return page.evaluate("document.visibilityState")
     except Exception:
-        return False
+        return "unknown"      # still loading or crashed: not evidence that it is hidden
 
 
 def _visible_page(pages, current):
-    """The tab the user is looking at, so tools act on what is on screen.
+    """The tab HoloDesk is working in, unless Chrome is certain the user moved.
 
-    The user can switch tabs by hand, and links can open a new tab; staying on
-    the tab HoloDesk opened first would then read and click a hidden page.
-    Other tabs are only probed when the current one is hidden or gone.
+    Visibility is unreliable under the full-screen overlay (live test: tools
+    read the old tab while a new one was on screen). So the current tab is
+    kept unless it reports "hidden" and exactly one other tab reports
+    "visible". Tabs HoloDesk opens itself are followed with use_tab() instead.
     """
     alive = [p for p in pages if not p.is_closed()]
-    if current in alive and _is_visible_tab(current):
-        return current
-    for page in alive:
-        if page is not current and _is_visible_tab(page):
-            return page
-    # Nothing reports visible (window minimised or covered): keep the working tab.
     if current in alive:
-        return current
+        if _tab_visibility(current) != "hidden":
+            return current
+        visible = [p for p in alive if p is not current and _tab_visibility(p) == "visible"]
+        return visible[0] if len(visible) == 1 else current
+    visible = [p for p in alive if _tab_visibility(p) == "visible"]
+    if len(visible) == 1:
+        return visible[0]
     return alive[-1] if alive else None
 
 
@@ -191,6 +192,15 @@ class PlaywrightController:
             self._playwright = playwright_api.sync_playwright().start()
         if self._browser is None or not self._browser.is_connected():
             self._browser = self._playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
+        else:
+            # is_connected() stays True for a while after Chrome is killed, and the
+            # old tab then fails on first use. Ask the browser itself; a dead one
+            # raises here and ensure_page() rebuilds the connection.
+            session = self._browser.new_browser_cdp_session()
+            try:
+                session.send("Browser.getVersion")
+            finally:
+                session.detach()
         context = self._browser.contexts[0] if self._browser.contexts else self._browser.new_context()
         current = self._page if self._page is not None and self._page.context is context else None
         self._page = _visible_page(context.pages, current) or context.new_page()
@@ -283,6 +293,8 @@ def with_page(fn, *args, **kwargs) -> dict[str, Any]:
     rest on what the browser shows, not on what we meant to do.
     """
 
+    call_timeout = kwargs.pop("call_timeout", 45)   # waiting on a chatbot answer takes longer
+
     def job():
         got = controller.ensure_page()
         if not got["success"]:
@@ -296,7 +308,7 @@ def with_page(fn, *args, **kwargs) -> dict[str, Any]:
             pass
         return result
 
-    return browser_call(job)
+    return browser_call(job, timeout=call_timeout)
 
 
 # ---------------------------------------------------------------------------
