@@ -8,3 +8,9 @@ __pycache__/
 holodesk.log
 .pytest_cache/
 evals/RESULTS.md
+
+# graphify: commit only graph.json and GRAPH_REPORT.md
+graphify-out/.graphify_*
+graphify-out/cache/
+graphify-out/graph.html
+graphify-out/manifest.json
