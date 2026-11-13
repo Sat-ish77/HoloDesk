@@ -70,6 +70,10 @@ class BrainConfig:
     vision_model: str = field(default_factory=lambda: _env("HOLODESK_VISION_MODEL"))
     llm_timeout_sec: int = field(default_factory=lambda: _env_int(
         "HOLODESK_LLM_TIMEOUT_SEC", 45))
+    # Used when the primary (Groq) call fails. Empty key = no fallback.
+    fallback_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
+    fallback_model: str = field(default_factory=lambda: _env(
+        "HOLODESK_FALLBACK_MODEL", "gpt-4o-mini"))
 
     # --- Agent loop ---
     max_turns: int = field(default_factory=lambda: _env_int("HOLODESK_MAX_TURNS", 8))

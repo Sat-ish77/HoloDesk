@@ -5,6 +5,22 @@ import queue
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
+# Debugging means reading the conversation; MediaPipe/protobuf warnings and
+# per-stage logs drown it out. HOLODESK_QUIET=0 brings the full log back.
+if os.getenv("HOLODESK_QUIET", "1") == "1":
+    import builtins, logging, warnings
+    os.environ.setdefault("GLOG_minloglevel", "2")  # must be set before mediapipe loads
+    os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+    warnings.filterwarnings("ignore")
+    logging.getLogger().setLevel(logging.ERROR)
+    _print = builtins.print
+
+    def _quiet_print(*args, **kwargs):
+        line = " ".join(str(a) for a in args)
+        if line.startswith(("YOU:", "HOLO:", "TOOL:")) or "ERROR" in line.upper():
+            _print(*args, **kwargs)
+
+    builtins.print = _quiet_print
 from groq import Groq
 import time
 import speech_recognition as sr
@@ -791,7 +807,7 @@ class VoiceAssistantThread(threading.Thread):
         except queue.Full:
             return None
 
-        print(f"[VOICE] Dispatched: '{text}' — waiting for response...")
+        print(f"YOU: {text}")
         try:
             reply = voice_reply_queue.get(timeout=60)
         except queue.Empty:
@@ -803,7 +819,7 @@ class VoiceAssistantThread(threading.Thread):
 
         reply_text = reply["text"] if isinstance(reply, dict) else reply
 
-        print(f"[VOICE] Speaking: {reply_text[:60]}...")
+        print(f"HOLO: {reply_text}")
         self._last_ai_response = reply_text
         speak(reply_text)
         time.sleep(1.5)

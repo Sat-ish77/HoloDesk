@@ -265,6 +265,7 @@ class ReplyEngine:
         return text, None
 
     def _execute(self, tool: Tool, args: dict, ctx: ToolContext):
+        print(f"TOOL: {tool.name} {args or {}}")
         try:
             result = tool.handler(args or {}, ctx)
         except ToolError as e:
@@ -388,6 +389,9 @@ class ReplyEngine:
                              "can be read aloud correctly.")
             else:
                 parts.append("The user wrote Romanized Nepali. Reply in Romanized Nepali.")
+        else:
+            # Without this the Nepali-heavy rules above pull English requests into Nepali.
+            parts.append("The user wrote in English. Reply in English.")
 
         if source == "voice":
             parts.append("STYLE: Your reply is spoken aloud. One to three short sentences, no "

@@ -90,7 +90,8 @@ class OpenAICompatibleBackend(LLMBackend):
     """Plain `requests` on purpose: no SDK version drift, trivial to mock."""
 
     def __init__(self, base_url: str, api_key: str, default_model: str,
-                 timeout_sec: int = 45, session=None):
+                 timeout_sec: int = 45, session=None, attempts: int = 3):
+        self.attempts = attempts
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.default_model = default_model
@@ -119,7 +120,7 @@ class OpenAICompatibleBackend(LLMBackend):
             headers["Authorization"] = f"Bearer {self.api_key}"
 
         last_error = ""
-        for attempt in range(3):
+        for attempt in range(self.attempts):
             try:
                 resp = self._http().post(
                     f"{self.base_url}/chat/completions",
@@ -206,10 +207,43 @@ class FakeBackend(LLMBackend):
         return nxt(messages, tools) if callable(nxt) else nxt
 
 
+class FallbackBackend(LLMBackend):
+    """Groq's free tier rate-limits and sometimes rejects a tool call; a paid
+    key answers those at once instead of making a spoken request wait."""
+
+    def __init__(self, primary: LLMBackend, fallback: LLMBackend):
+        self.primary = primary
+        self.fallback = fallback
+
+    def chat(self, messages, tools=None, model=None, max_tokens=700,
+             temperature=0.2) -> LLMResponse:
+        try:
+            return self.primary.chat(messages, tools=tools, model=model,
+                                     max_tokens=max_tokens, temperature=temperature)
+        except LLMError as e:
+            print(f"LLM ERROR on primary, switching to fallback: {e}")
+            # Primary model names (e.g. Groq's) mean nothing to the fallback provider.
+            return self.fallback.chat(messages, tools=tools, max_tokens=max_tokens,
+                                      temperature=temperature)
+
+    def list_models(self) -> list[str]:
+        return self.primary.list_models()
+
+
 def make_backend(cfg) -> LLMBackend:
-    return OpenAICompatibleBackend(
+    primary = OpenAICompatibleBackend(
         base_url=cfg.llm_base_url,
         api_key=cfg.llm_api_key,
         default_model=cfg.chat_model or "auto",
         timeout_sec=cfg.llm_timeout_sec,
+        # With a fallback, one failed try reroutes immediately instead of retrying.
+        attempts=1 if cfg.fallback_api_key else 3,
     )
+    if not cfg.fallback_api_key:
+        return primary
+    return FallbackBackend(primary, OpenAICompatibleBackend(
+        base_url="https://api.openai.com/v1",
+        api_key=cfg.fallback_api_key,
+        default_model=cfg.fallback_model,
+        timeout_sec=cfg.llm_timeout_sec,
+    ))
