@@ -15,6 +15,51 @@ Per-site CSS selectors (`RESULT_SELECTORS`, `LIKE_SELECTORS`, Gmail's `Reply`)
 cannot scale to "any page". Round 3 replaces guessing with a page map the
 model reads.
 
+## 1a. What the user truly wants (the north star; this is THE main focus now)
+
+HoloDesk should do, by voice (laptop mic now, phone via Telegram later),
+anything the user could do sitting at the laptop: **literally see the screen
+and act on it**, properly and reliably, and never pretend.
+
+First, in this order, these must really work end to end:
+
+1. **Social:** like a specific post the user is looking at, and **comment** on
+   it (write the comment, read it back, post after one confirmation).
+2. **Gmail:** draft a new email (recipient by name, subject, body), read it
+   back, **send** after one confirmation; also reply to an open email; search mail.
+3. **Talk to Claude (claude.ai, also ChatGPT):** open it, type a prompt into
+   the chat box, send, wait for the answer to finish, **read the answer back**.
+4. **Files:** save, find ("where is my resume?"), open, move and rename files
+   and folders by voice. The tools exist (`find_files`, `move_path`,
+   `open_path`, `write_text_file`); make sure they are reachable and reliable by
+   voice, and that "save this" works from a page/app where it makes sense.
+5. **General UI:** click any button/link/menu/tab, fill any field, scroll to
+   something, pick from a dropdown, in the browser first, then native Windows
+   apps (Windows UI Automation tree via `list_ui_elements`/`click_ui_element`).
+
+Every action is **see → act → verify**: look at the current state, act on one
+element, look again, and report only what is verified. If it can't, it says
+so plainly and says what it tried.
+
+**Think first, then build.** Before coding, write `docs/DESIGN_UI_CONTROL.md`
+(one page max): how HoloDesk should see and act on any UI, and how it gets as
+close as possible to the north star. Cover at least:
+- browser: accessibility snapshot + act-by-ref (section 3.1) vs DOM selectors
+  vs screenshots; how to point at "this post" (the one in the viewport centre);
+- native apps: the Windows UIA tree, and when a vision fallback (screenshot →
+  coordinates, e.g. Claude computer use or OmniParser-style element detection)
+  is needed, with its cost/latency. Recommend; don't build vision this round;
+- the see→act→verify loop: where it lives (tools vs engine), step limits,
+  how failures are reported;
+- multi-step tasks (compose: open → fill To → pick suggestion → subject →
+  body → read back → confirm → send) without the model losing its place;
+- safety: what stays DANGER (post, comment, send, delete, buy), one
+  confirmation that quotes exactly what will happen;
+- what you'd measure to know it works (task success on a fixed list of voice
+  tasks, steps, seconds).
+Then implement section 3 following that design. If the design shows a better
+path than section 3 says, take it and explain why in section 6.
+
 ## 2. Live voice test of round 2 (2026-11-13, Windows, real mic)
 
 Worked: Google search plus `browser_open_result` 1; `look_at_screen` summary;
@@ -119,14 +164,19 @@ All 171 tests pass. Commit after `f34b8bb`.
 
 ## 5. Done means
 
+- `docs/DESIGN_UI_CONTROL.md` written first (section 1a).
 - Section 3 items 1–4 done (5–6 if cheap), Playwright mocked in tests, existing
-  tests green (171 now).
+  tests green (171 now). Commenting on a post and the Claude.ai
+  type → send → read-answer flow work through the snapshot tools (or a thin
+  wrapper), and file find/move/open is reachable by voice.
 - Eval cases for snapshot→click flows in en / ne / ne-roman.
 - Commit and push to `brain-v3-test` only. Say plainly what you could not run,
   and list voice checks: like the post on screen (verify it shows liked), Gmail
   "write an email to Smarika Koirala, subject Hello, saying good morning" (draft
-  then send with one confirmation), open a new tab and read it, go back, click
-  a named button on Claude.ai or ChatGPT.
+  then send with one confirmation), comment "congrats!" on the post on screen
+  (one confirmation), ask Claude.ai "what is MCP in one line" and hear the
+  answer, "find my resume and move it to Documents", open a new tab and read
+  it, go back.
 
 ## 6. Your notes for the next round
 
