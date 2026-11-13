@@ -220,3 +220,9 @@ def test_claimed_action_without_a_tool_is_challenged():
 def test_plain_chat_is_not_challenged():
     engine, _, log = make_engine([say("I'm doing well, thanks for asking!")])
     assert engine.reply("how are you").text == "I'm doing well, thanks for asking!"
+
+
+def test_spelled_names_are_joined():
+    from brain.engine import _join_spelled
+    assert _join_spelled("search S-M-A-R-I-K-A K-O-I-R-A-L-A") == "search Smarika Koirala"
+    assert _join_spelled("open a new tab") == "open a new tab"

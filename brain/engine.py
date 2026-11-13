@@ -33,6 +33,13 @@ from .tools.registry import Tool, ToolContext, ToolError, ToolRegistry, tokenize
 
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 
+# Spelled names arrive as "S-M-A-R-I-K-A" and were typed into Gmail with the dashes.
+_SPELLED = re.compile(r"\b[A-Za-z](?:-[A-Za-z]){2,}\b")
+
+
+def _join_spelled(text: str) -> str:
+    return _SPELLED.sub(lambda m: m.group(0).replace("-", "").capitalize(), text)
+
 # ponytail: English-only claim check; Nepali claims ("खोलियो") pass unchecked until it matters.
 _CLAIMS_ACTION = re.compile(
     r"\b(i've|i have|i)\s+(just\s+)?(opened|closed|scrolled|clicked|liked|sent|searched|typed|"
@@ -169,7 +176,7 @@ class ReplyEngine:
         if self.memory:
             for turn in self.memory.recent_turns(limit=self.cfg.history_turns):
                 messages.append({"role": turn["role"], "content": turn["content"]})
-        messages.append({"role": "user", "content": text})
+        messages.append({"role": "user", "content": _join_spelled(text)})
 
         ctx = ToolContext(source=source, cfg=self.cfg, memory=self.memory,
                           notify=self.notify, send_photo=self.send_photo, engine=self,

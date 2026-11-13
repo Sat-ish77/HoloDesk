@@ -12,6 +12,10 @@ if os.getenv("HOLODESK_QUIET", "1") == "1":
     os.environ.setdefault("GLOG_minloglevel", "2")  # must be set before mediapipe loads
     os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
     warnings.filterwarnings("ignore")
+    # Filters alone don't hold: libraries re-enable warnings inside
+    # warnings.catch_warnings() mid-session, and MediaPipe's protobuf warning then
+    # floods once per frame. Silencing the printer survives any filter change.
+    warnings.showwarning = lambda *a, **k: None
     logging.getLogger().setLevel(logging.ERROR)
     _print = builtins.print
 
@@ -820,9 +824,29 @@ class VoiceAssistantThread(threading.Thread):
             return True
         return any(kw in t for kw in self.EXIT_KEYWORDS)
 
+    @staticmethod
+    def _strip_echo_prefix(text, tts_text=None):
+        """The mic catches HOLO's last words and then the user ("Would you like me
+        to click it? Yes, please click it."). The whole-line echo check keeps such
+        lines because they hold real speech, so cut the echoed head off instead."""
+        if tts_text is None:
+            tts_text, _ = read_tts_state()
+        norm = lambda w: "".join(c for c in w.lower() if c.isalnum())
+        words = text.split()
+        heard = [norm(w) for w in words]
+        said = [n for n in (norm(w) for w in (tts_text or "").split()) if n]
+        for k in range(min(len(said), len(heard)), 2, -1):
+            if heard[:k] == said[-k:]:
+                print(f"YOU: (dropped own echo) {' '.join(words[:k])}")
+                return " ".join(words[k:]).strip()
+        return text
+
     def _dispatch_and_speak(self, text):
         """Send command to main loop, wait for reply, speak it.
         Returns the reply dict or None on failure."""
+        text = self._strip_echo_prefix(text)
+        if not text:
+            return None
         try:
             command_queue.put_nowait({"type": "USER_COMMAND", "text": text, "source": "voice", "ts": time.time()})
         except queue.Full:
