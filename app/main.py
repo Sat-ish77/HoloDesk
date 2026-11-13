@@ -21,7 +21,7 @@ if os.getenv("HOLODESK_QUIET", "1") == "1":
 
     def _quiet_print(*args, **kwargs):
         line = " ".join(str(a) for a in args)
-        if line.startswith(("YOU:", "HOLO:", "TOOL:")) or "ERROR" in line.upper():
+        if line.startswith(("YOU:", "HOLO:", "TOOL:", "EXIT:")) or "ERROR" in line.upper():
             _print(*args, **kwargs)
 
     builtins.print = _quiet_print
@@ -822,7 +822,13 @@ class VoiceAssistantThread(threading.Thread):
         # "don't stop" / "never stop" asks for the opposite.
         if words and words[-1] == "stop" and words[-2:-1] not in (["t"], ["dont"], ["not"], ["never"]):
             return True
-        return any(kw in t for kw in self.EXIT_KEYWORDS)
+        # Whole words in a short sentence only: as substrings, "see you" ended
+        # "can you see youtube" and "thank you" ended "thank you, now open gmail".
+        if len(words) > 6:
+            return False
+        norm = lambda s: " " + " ".join("".join(c if c.isalnum() or c.isspace() else " " for c in s).split()) + " "
+        said = norm(t)
+        return any(norm(kw) in said for kw in self.EXIT_KEYWORDS)
 
     @staticmethod
     def _strip_echo_prefix(text, tts_text=None):
@@ -951,6 +957,7 @@ class VoiceAssistantThread(threading.Thread):
                         continue
 
                     if self._is_exit_phrase(followup_text):
+                        print(f"YOU: {followup_text}   (ended the conversation)")
                         speak("Alright, I'm here if you need me.")
                         break
 
@@ -1042,13 +1049,15 @@ while running :
     # 1 Handles events ( like closing the window) 
     # this checks : did the user click the X button to close the window? if yes, stop the loop. 
     for event in pygame.event.get():
-        if event.type == pygame.QUIT: 
-            running = False 
+        if event.type == pygame.QUIT:
+            # An unexplained shutdown mid-session was invisible in quiet mode.
+            print("EXIT: window closed (pygame QUIT event)")
+            running = False
 
         # ===== STEP 6: ESC KEY TO EXIT (no title bar = no X button!) =====
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:  # ESC key pressed
-                print("ESC pressed - Exiting HoloDesk...")
+                print("EXIT: ESC pressed")
                 running = False
 
         # 2 Press spacebar to toggle voice command (still works as backup)
