@@ -268,3 +268,14 @@ def test_a_confirmed_action_that_failed_can_be_retried_once_without_asking_again
 def test_short_spelled_runs_stay_upper_case():
     from brain.engine import _join_spelled
     assert _join_spelled("I study at U-N-T") == "I study at UNT"
+
+
+def test_unanswered_request_from_history_is_not_replayed():
+    # Live test: the last run was killed before its reply was saved, and the next
+    # "hello" re-ran that old search.
+    engine, backend, log = make_engine([say("Hi! How can I help?")])
+    engine.memory.add_turn("voice", "user", "search difference between MCP and API keys")
+    reply = engine.reply("hey hello how you doing")
+    sent = [m["content"] for m in backend.calls[0]["messages"]]
+    assert not any("MCP and API keys" in c for c in sent)
+    assert log == [] and reply.text == "Hi! How can I help?"

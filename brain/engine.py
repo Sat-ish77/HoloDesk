@@ -182,7 +182,13 @@ class ReplyEngine:
 
         messages: list[dict] = [{"role": "system", "content": self._system_prompt(source, lang)}]
         if self.memory:
-            for turn in self.memory.recent_turns(limit=self.cfg.history_turns):
+            turns = self.memory.recent_turns(limit=self.cfg.history_turns)
+            for i, turn in enumerate(turns):
+                # A request with no saved reply (the run was killed mid-answer)
+                # was re-executed on the next "hello". History is context, not a to-do list.
+                nxt = turns[i + 1]["role"] if i + 1 < len(turns) else None
+                if turn["role"] == "user" and nxt != "assistant":
+                    continue
                 messages.append({"role": turn["role"], "content": turn["content"]})
         messages.append({"role": "user", "content": _join_spelled(text)})
 
