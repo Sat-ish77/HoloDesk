@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 try:
-    import cv2
+    cv2 = None
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
@@ -36,6 +36,14 @@ class CameraThread(threading.Thread):
     def run(self):
         if not CV2_AVAILABLE:
             return
+        global cv2
+        if cv2 is None:
+            try:
+                import cv2 as _cv2
+                cv2 = _cv2
+            except Exception as exc:
+                logger.warning("opencv-python unavailable - CameraThread disabled: %s", exc)
+                return
 
         # Try multiple indices — handles laptops where built-in is not index 0
         for idx in self._camera_indices:

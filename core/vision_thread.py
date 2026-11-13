@@ -13,36 +13,58 @@ still accurate for the gestures we need.
 import threading
 import queue
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
 try:
-    import cv2
-    import mediapipe as mp
+    cv2 = None
+    mp = None
     MEDIAPIPE_AVAILABLE = True
 except ImportError:
     MEDIAPIPE_AVAILABLE = False
     logger.warning("mediapipe or opencv not installed — VisionThread disabled")
 
 from core.queues import frame_queue, landmark_queue, gesture_queue
-from vision.gesture_detector import GestureDetector
+from vision.gesture_detector import GestureDetector, SwipeDetector
 
 
 class VisionThread(threading.Thread):
+
+    TIMING_LOG_EVERY = 300  # frames (~20 s at the measured ~15 fps)
 
     def __init__(self):
         super().__init__(name="VisionThread", daemon=True)
         self._running = False
         self._detector = GestureDetector()
+        self._swipe = SwipeDetector()
+        self._timings: list[float] = []
 
     def run(self):
         if not MEDIAPIPE_AVAILABLE:
             return
+        global cv2, mp
+        if cv2 is None or mp is None:
+            try:
+                import cv2 as _cv2
+                import mediapipe as _mp
+                cv2 = _cv2
+                mp = _mp
+            except Exception as exc:
+                logger.warning("mediapipe/opencv unavailable - VisionThread disabled: %s", exc)
+                return
+
+        # Re-apply here: importing mediapipe/absl resets the warning filters set in
+        # main.py, and protobuf then warns once per frame, burying every real log line.
+        import warnings
+
+        warnings.filterwarnings("ignore", message=r".*SymbolDatabase\.GetPrototype\(\) is deprecated.*")
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
 
         # Initialize MediaPipe on THIS thread (not the main thread)
         hands = mp.solutions.hands.Hands(
             static_image_mode=False,
-            max_num_hands=1,
+            max_num_hands=2,
             model_complexity=0,          # Faster than default (1), good enough for gestures
             min_detection_confidence=0.5,
             min_tracking_confidence=0.5,
@@ -55,18 +77,27 @@ class VisionThread(threading.Thread):
                 frame = frame_queue.get(timeout=0.1)
             except queue.Empty:
                 # No frame yet — signal "no hand" so main loop cursor disappears
-                self._put_landmarks(None)
+                self._put_landmarks([])
                 continue
 
+            started = time.perf_counter()
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             results = hands.process(rgb)
+            self._log_timing(time.perf_counter() - started)
 
             if results.multi_hand_landmarks:
-                hand_lm = results.multi_hand_landmarks[0]
-                self._put_landmarks(hand_lm)
+                hands_payload = self._build_hands_payload(results)
+                self._put_landmarks(hands_payload)
 
-                # Run debounced gesture detector (intent zone + 8-frame buffer)
-                gesture = self._detector.detect(hand_lm)
+                landmarks = hands_payload[0]["landmarks"]
+                gesture = self._swipe.update(landmarks.landmark[0].x)
+                if gesture is None:
+                    detected = self._detector.detect(landmarks)
+                    # Open palm is the emergency stop: raising a hand always involves
+                    # movement, so suppressing it while moving meant it never fired.
+                    # Only the V (start listening) waits for the hand to settle.
+                    if detected == "OPEN_PALM" or (detected and not self._swipe.is_moving()):
+                        gesture = detected
                 if gesture is not None:
                     try:
                         gesture_queue.put_nowait(gesture)
@@ -74,9 +105,17 @@ class VisionThread(threading.Thread):
                     except queue.Full:
                         pass  # Drop if queue full — no backlog
             else:
-                self._put_landmarks(None)
+                self._swipe.reset()
+                self._put_landmarks([])
 
         hands.close()
+
+    def _log_timing(self, seconds: float) -> None:
+        self._timings.append(seconds * 1000)
+        if len(self._timings) >= self.TIMING_LOG_EVERY:
+            ms = sorted(self._timings)
+            print(f"[VISION] hand tracking {ms[len(ms) // 2]:.1f} ms median, {ms[int(len(ms) * 0.9)]:.1f} ms p90 over {len(ms)} frames", flush=True)
+            self._timings.clear()
 
     def _put_landmarks(self, landmarks):
         """Replace stale landmark data with fresh (maxsize=1 queue)."""
@@ -88,6 +127,20 @@ class VisionThread(threading.Thread):
                 landmark_queue.put_nowait(landmarks)
             except Exception:
                 pass
+
+    @staticmethod
+    def _build_hands_payload(results):
+        payload = []
+        handedness = results.multi_handedness or []
+        for idx, hand_lm in enumerate(results.multi_hand_landmarks):
+            label = ""
+            score = 0.0
+            if idx < len(handedness) and handedness[idx].classification:
+                cls = handedness[idx].classification[0]
+                label = cls.label or ""
+                score = float(cls.score or 0.0)
+            payload.append({"landmarks": hand_lm, "label": label, "score": score})
+        return payload
 
     def stop(self):
         self._running = False

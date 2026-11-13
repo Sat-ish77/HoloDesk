@@ -1,0 +1,361 @@
+# HoloDesk Handoff: Accessibility Desktop Agent
+
+Read this file first and only this file. It is the single source of truth.
+Any model (Fable, Sonnet, Opus) must be able to resume from it cold.
+
+## 0. Rules for the agent doing this work
+
+1. Do one phase at a time, in order. Do not read files a phase does not list.
+2. Use Grep to find a symbol, then Read only ~40 lines around it. Never read whole large files (`app/main.py`, `agents/task_agent.py`, `agents/desktop_grounding_agent.py` are 700-1000+ lines).
+3. After finishing a phase: run its check, then update section 9 (Progress Log) with what changed, the check result, and anything left. This is how the next model resumes.
+4. Never read `node_modules`, `.venv`, `graphify-out/`, `artifacts/`.
+5. Python on this machine: `python` resolves to the Windows Store stub. Use `C:\Users\Dipendra\AppData\Local\Programs\Python\Python312\python.exe` (in bash: `/c/Users/Dipendra/AppData/Local/Programs/Python/Python312/python`).
+6. Test command: `<python> -m pytest -q`. Baseline: 54 passed. Never end a phase with fewer passing.
+7. Commit per phase on branch `codex/holo-chatbot-3d-overlay` (PR #4 open). The post-commit hook prints "Python was not found"; that is a known harmless warning.
+8. Trust nothing in this file that is not marked VERIFIED. Most of section 3 comes from docs and code reading, not from running the app. Phase 0 exists to find out what really works. If you find this file wrong, fix the file.
+
+## 1. Goal
+
+A voice-first personal agent that lets someone who cannot comfortably use a mouse/keyboard operate the whole Windows laptop:
+open/switch/close any app or tab, scroll, click anything, fill forms, use ElevateU (job side first), open Canvas and Claude, help with assignments, answer "what's on my screen", remember facts and habits, and lock/sleep/shut down.
+Hand gestures are a low-latency secondary input (scroll, switch tab, start/stop listening).
+
+Hard requirement: it must not hallucinate actions. It only claims what a tool actually did and observed.
+
+## 2. Non-negotiable safety rules (keep in code, not just prompts)
+
+- Confirm before: send (email/message), submit (job application/form), delete, purchase/payment, shutdown/restart. Reuse `TaskAgent._set_pending_confirm` / `_confirm_yes` / `_confirm_cancel` in `agents/task_agent.py`. Do not invent a second confirmation system.
+- Passwords: HoloDesk never stores, logs, speaks, or sends passwords to any LLM. Login is done by Chrome's own password manager inside the "HoloDesk Automation" profile: agent focuses the username field, Chrome shows its saved-credential suggestion, agent selects it (ArrowDown + Enter). The user saves each login once in that profile manually. `GroundingSafetyPolicy.BLOCKED_KEYWORDS` in `agents/desktop_grounding_agent.py` currently blocks "login"/"sign in"/"password"; relax only for the autofill tool described in Phase 3, nowhere else.
+- Every action tool returns an observation (new window title, page URL, field value, visible text). The brain's reply must be built from observations only.
+
+## 3. Current state (after Phase 0, 2026-09-18)
+
+Design and full analysis: `DESIGN.md` (every claim tagged VERIFIED or ASSUMED). Phase 0 evidence is in section 9.
+
+VERIFIED (actually run):
+- `pytest -q`: 54 passed (unit tests with fakes).
+- App startup with the full Python path: overlay window appears (transparent, topmost, orb visible, ~29 FPS), camera and vision threads start, Whisper "small" loads, voice thread starts, no tracebacks. The overlay takes foreground focus at launch.
+- Orchestrator routing and actions, driven by a script with the same agents as `app/main.py` (not via mic or the pygame chat box): `open notepad`, `minimize`, `open youtube in chrome` (opens in the default browser; "in chrome" is dropped by the production router), `what's on my screen` (GPT-4o answered in ~20 s), `game menu khola` (routes to overlay `open_game_menu`), `shutdown` then `cancel` (arms, then cancels; no OS shutdown pending afterwards).
+- Chrome attach: with `--user-data-dir=%LOCALAPPDATA%\HoloDesk\chrome-profile`, a separate automation Chrome launches while normal Chrome is open and Playwright reads `Example Domain` over CDP.
+- Commands run sequentially on the `OrchestratorAgent` thread (code read). The `threading.Thread(target=_run)` at `app/main.py:1046` is screen vision, not command dispatch.
+- Real Python is first on PATH in both PowerShell and Git Bash on this machine.
+
+BROKEN (found in Phase 0):
+- `scroll down` scrolls but replies "That didn't work." `TaskAgent.scroll` returns success with an empty response and `_merge_results` turns an all-empty result into the failure text. False failure report. Fix in Phase 1.
+- The app exited on its own after ~2 minutes with exit code 0 and no log line. The main loop only exits on `pygame.QUIT` or Esc; the overlay had keyboard focus, so a stray key press is the likely cause. Not proven.
+- One smoke run hung for over 7 minutes with no output and was killed; the identical rerun finished in ~30 s. Cause unknown; OpenAI calls have no short timeout, which is the prime suspect.
+
+NOT YET TESTED (needs the user at the laptop): real voice input and Whisper accuracy/latency, gestures and their delay, the pygame chat box, overlay focus behavior during use, second monitor.
+
+CODE EXISTS, NOT VERIFIED LIVE: site adapters `browser/sites/*` and their selectors, Gmail draft flow, OmniParser, `MemoryAgent` habit output.
+
+KNOWN ISSUES status (numbers match the original list):
+1. Chrome debugging on default profile: FIXED in Phase 0 (`_launch_automation_chrome` uses `--user-data-dir`), verified live.
+2. Playwright thread-binding: real but narrower than described. Only the orchestrator's parallel thread pool can cross threads today. Browser worker thread is Phase 3.
+3. Gmail recipient autocomplete: real, Phase 3.
+4. Site selectors unverified: still unverified, Phase 3.
+5. `OMNIPARSER_SERVER_URL` pointed at ElevateU: FIXED in `.env` (commented out).
+6. Browser automation enabled: FIXED in `.env` (set to 0). `HOLODESK_OPENAI_PLANNER_ENABLED=0` also added.
+7. `python` is the Store stub: NOT REPRODUCED here; the full path still works and is safest.
+8. Two ElevateU backends: not checked, Phase 4.
+9. Broken `~penai` folders: warnings only; `openai` imports and works.
+10. `_workflow_for` dead: confirmed, leave.
+11. Win+R app launch: confirmed, Phase 2.
+12. `pywinauto`/`uiautomation` unused: confirmed, Phase 2.
+13. `if False` in a test: confirmed, cosmetic.
+Additional issues 14-20 are listed in `DESIGN.md` section 2.2 (planner LLM hop, 60 s voice wait and stale reply, Brain insertion point, forced-English Whisper, dead `ask_ai`, Next.js API env name, pinch gesture conflict).
+
+ElevateU (separate repo `C:\Users\Dipendra\Desktop\study-helper`, FastAPI backend in `backend/`, live site https://www.elevateuapp.org):
+- Local backend: `uvicorn main:app --port 8000`. Routes (prefix `/api/v1`): `/assignments`, `/canvas`, `/dashboard`, and job routes under `/api/v1/job`: `GET /jobs/feed`, `GET /jobs/search`, `GET /jobs/{job_id}/workspace`, `POST /jobs/score/{job_id}`, `GET|POST /applications`, `PUT /applications/{id}`, `GET /profile`, `GET /profile/setup-status`, `GET /autopilot/status`, `POST /autopilot/run-now`.
+- All routes require `Depends(get_current_user)`. VERIFY FIRST (Phase 4 step 1): the auth scheme in `backend/dependencies.py` (likely Supabase JWT bearer) and the production API host the site calls. Do not guess these.
+
+## 4. Target architecture (keep it this small)
+
+```
+voice/gesture/typed text
+  -> OrchestratorAgent (existing fast deterministic intents; unchanged, low latency)
+  -> if no intent matched: BrainAgent (NEW, one LLM tool-calling loop)
+        tools = thin wrappers over EXISTING functions + a few new ones
+        loop: model picks tool -> tool runs -> observation -> model continues (max 8 steps)
+        risky tools go through TaskAgent confirmation
+  -> reply spoken from observations only
+```
+
+Perception order for "click X" (cheapest and most exact first):
+1. Browser page: Playwright locators (DOM/accessibility tree).
+2. Native app: Windows UI Automation via `pywinauto` (`Desktop(backend="uia")`), find control by name/role.
+3. Last resort: vision on the active window only (`OpenAIVisionUIParser` on a cropped screenshot), then click the box.
+
+## 5. Phases
+
+Each phase: files, exact changes, check. Keep diffs minimal; reuse existing helpers named here.
+
+### Phase 0: Prove the foundation (do this before building anything)
+
+Goal: replace guesses in section 3 with facts. Record every result in section 9 as PASS/FAIL with one line of evidence.
+
+1. Config fixes (issues 5, 6): in `.env`, comment out `OMNIPARSER_SERVER_URL`, set `HOLODESK_BROWSER_AUTOMATION_ENABLED=0`.
+2. Start the app with the full Python path (issue 7). Record: does the overlay appear, does the camera start, does Whisper load, any tracebacks. Save the startup log to `artifacts/phase0_startup.log`.
+3. Typed/voice smoke tests, one at a time, record PASS/FAIL and the spoken reply: `open notepad`, `open youtube in chrome`, `scroll down`, `minimize`, `what's on my screen`, `game menu khola`, `shutdown` then `cancel`.
+4. Gestures: V starts listening, open palm stops. Record rough delay in seconds.
+5. Threading (issue 2): read `app/main.py` around the `threading.Thread(target=_run` call (~line 1046, read ~30 lines) and write down which thread runs orchestrator commands.
+6. Chrome (issue 1): apply the `--user-data-dir` fix, then run one script that calls `controller.ensure_page("https://example.com")` and prints `page.title()`. PASS = "Example Domain".
+7. Playwright threading (issue 2): fix with a single worker thread; test that two `ensure_page` calls from two different threads both succeed.
+8. Only now set `HOLODESK_BROWSER_AUTOMATION_ENABLED=1`, log into Gmail in the new automation profile, and try the Gmail draft flow. Fix issue 3. Stop before Send.
+9. Rewrite section 3: move each item to VERIFIED or BROKEN based on the results. Delete claims that turned out false.
+
+Check: section 9 has a PASS/FAIL line for every step above; `pytest -q` still passes.
+
+### Phase 1: BrainAgent with tool calling
+
+Files: CREATE `agents/brain_agent.py`, CREATE `tests/test_brain_agent.py`, UPDATE `agents/orchestrator.py`, UPDATE `.env.example`, UPDATE `requirement.txt`.
+
+- Model: Anthropic Messages API with tools. `pip install anthropic`, add `anthropic` to `requirement.txt`, add `ANTHROPIC_API_KEY=` and `HOLODESK_BRAIN_MODEL=claude-sonnet-5` to `.env.example`. Use `claude-haiku-4-5-20251001` if latency matters more; set it via the env var, not code.
+- `BrainAgent.__init__(self, task_agent, memory_agent)`; `run(self, text: str) -> dict` returning `{"success", "response"}` like every other agent.
+- Tool registry: a plain dict `name -> (json_schema, callable)`. Phase 1 tools, all wrapping existing code:
+  - `open_app(name)` -> `task_agent.execute("open_app", {"app_name": name, "raw": ...})`
+  - `open_website(url_or_name)` -> `task_agent.execute("open_web", ...)`
+  - `scroll(direction, amount)`, `type_text(text)`, `press_keys(keys)` (pyautogui hotkey), `minimize`, `maximize`, `close_app(name)` (already confirm-gated)
+  - `get_active_window()` -> title + process via module-level `_get_active_window` in `agents/memory_agent.py`
+  - `remember(fact)`, `recall(query)` (Phase 6 fills these; stub returns "not yet available")
+- System prompt must say: act only through tools; after each action check the observation; if a tool fails, say so plainly; ask when the target is ambiguous; never claim an action you didn't observe.
+- Loop cap 8 tool calls; on cap, stop and report what was done.
+- Orchestrator: find where it falls back to chat when no intents matched (grep `chat_agent` in `agents/orchestrator.py`). Route there to `BrainAgent.run` first; keep ChatAgent for pure conversation.
+- Test: fake Anthropic client returning a scripted tool_use then text; assert the right tool callable was invoked and the reply text returned. No network.
+
+Check: `pytest -q` passes; manually, typed "open notepad and type hello" works end to end.
+
+### Phase 2: Native app control via UI Automation
+
+Files: CREATE `automation/win_ui.py`, UPDATE `agents/brain_agent.py` (register tools), UPDATE `agents/desktop_grounding_agent.py` (`_run_step` open_application branch).
+
+- `win_ui.py` functions (each returns dict, never raises):
+  - `list_windows()` -> titles of top-level windows
+  - `focus_window(title_substring)`
+  - `click_control(name, control_type=None)` in the foreground window: `Desktop(backend="uia").window(active_only=True)` then `child_window(title_re=..., control_type=...)`, `.click_input()`
+  - `read_controls(limit=40)` -> names/types of visible controls in the foreground window (lets the brain "see" native UI as text, no vision cost)
+  - `set_text(name, text)`
+- Replace Win+R app launch in `_run_step` "open_application" with `os.startfile` on a Start Menu shortcut found by fuzzy match: scan `.lnk` files under `%APPDATA%\Microsoft\Windows\Start Menu\Programs` and `%PROGRAMDATA%\Microsoft\Windows\Start Menu\Programs`, match with `rapidfuzz` (already a dependency). This makes "open any app" work without a hardcoded map. Keep `APP_MAP` as the first lookup.
+- Brain tools: `open_any_app(name)`, `switch_to(window)`, `list_windows`, `read_screen_controls`, `click(name)`, `set_field(name, text)`.
+
+Check: unit test with pywinauto mocked; manually "open calculator, click seven" works.
+
+### Phase 3: Generic browser tools + password autofill
+
+Files: UPDATE `browser/playwright_controller.py` (add `snapshot_text(page, limit=60)` returning visible interactive elements as `role: name` lines, via `page.locator("a,button,input,textarea,select,[role]")`), UPDATE `agents/brain_agent.py`.
+
+- Brain tools: `browser_open(url)`, `browser_read()` (snapshot_text), `browser_click(text_or_label)`, `browser_fill(label, value)`, `browser_press(key)`, `browser_tabs()`, `browser_switch_tab(index)`, `browser_new_tab(url)`, `browser_close_tab()`.
+- `browser_login_autofill(site)`: open login page, focus username field, press ArrowDown, Enter (selects Chrome's saved credential), click sign-in. Never reads or passes password values. Exempt only this tool from the login block.
+- Site shortcuts: Canvas `https://untsystem.instructure.com` (already in `WEBSITE_MAP`), Claude `https://claude.ai`, ElevateU `https://www.elevateuapp.org`.
+- Set `HOLODESK_BROWSER_AUTOMATION_ENABLED=1` in `.env` for manual testing. On first launch the user logs in and saves passwords in the "HoloDesk Automation" Chrome profile.
+
+Check: FakePage tests in `tests/test_browser_automation.py` style; manually "open canvas and read my dashboard".
+
+### Phase 4: ElevateU connector
+
+Files: CREATE `connectors/elevateu_client.py`, UPDATE `agents/brain_agent.py`, UPDATE `.env.example`.
+
+1. VERIFY: grep `get_current_user` in `C:\Users\Dipendra\Desktop\study-helper\backend\dependencies.py` (read ~40 lines) and find the production API base URL (grep `VITE_API` in `study-helper-frontend`). Write findings into section 9 before coding.
+2. Env: `ELEVATEU_API_BASE` (default `http://127.0.0.1:8000`), `ELEVATEU_TOKEN`. If tokens are short-lived Supabase JWTs, store the refresh token with `keyring`, not in `.env`.
+3. `ElevateUClient` methods, `requests` with 20s timeout, return dicts: `job_feed()`, `search_jobs(q)`, `job_workspace(job_id)`, `list_applications()`, `update_application(id, status)`, `profile()`, `assignments()`, `autopilot_status()`.
+4. Brain tools: `elevateu_jobs(query=None)`, `elevateu_job_details(job_id)`, `elevateu_applications()`, `elevateu_assignments()`. Speak the top 3-5 results, not everything.
+
+Check: tests with `requests` mocked; manually "what jobs did ElevateU find today".
+
+### Phase 5: Job application form filling
+
+Files: CREATE `browser/form_filler.py`, UPDATE `agents/brain_agent.py`.
+
+- `fill_application(page, profile: dict) -> dict`: scan form fields (labels, placeholders, input types), map to profile keys with a small alias table (name, email, phone, linkedin, github, location, work authorization, sponsorship, years of experience) plus `rapidfuzz` match; fill only confident matches; return `{"filled": [...], "unfilled": [...]}`.
+- Unfilled fields: brain asks the user by voice, then calls `browser_fill`. Resume upload: `locator.set_input_files(path)` with `HOLODESK_RESUME_PATH`.
+- Submit is a separate tool `browser_submit()` that always goes through `_set_pending_confirm`.
+- Flow: "apply to job 3" -> `elevateu_job_details` -> open apply URL -> `fill_application` -> report filled/unfilled -> confirm -> submit -> `update_application(id, "applied")`.
+
+Check: FakePage test with a fake form; manually on one real posting, stop before submit.
+
+### Phase 6: Memory of the user
+
+Files: UPDATE `storage/schema.sql` (add `facts(id, text, created_at)`), UPDATE `agents/memory_agent.py` (`remember(text)`, `recall(query, limit=5)` using `LIKE` + rapidfuzz), UPDATE `agents/brain_agent.py`.
+
+- Brain system prompt includes `format_habits_for_prompt()` plus top recalled facts for the current request. Tools `remember`/`recall` become real.
+- Never store secrets: reject facts matching password/token/card-number patterns.
+
+Check: unit test remember then recall; manually "remember my advisor is Dr. X" then "who is my advisor".
+
+### Phase 7: Low-lag gestures
+
+Files: UPDATE `core/vision_thread.py`, UPDATE the gesture handler in `app/main.py` (grep `gesture_queue`).
+
+- Keep the gesture set tiny and reliable: V = start listening, open palm = stop, pinch + vertical move = continuous scroll (speed by distance), two-finger swipe left/right = `ctrl+shift+tab` / `ctrl+tab`, fist held 1s = `alt+tab`.
+- Latency: process frames at 320x240, drop stale frames instead of queueing, debounce with N consecutive frames (existing debouncer), emit scroll deltas instead of repeated discrete events. Log ms per frame; target under 40 ms.
+
+Check: log shows per-frame ms; manual scroll feels continuous.
+
+### Phase 8: "What's on my screen" and assignments help
+
+Files: UPDATE `agents/brain_agent.py`.
+
+- Tool `look_at_screen(question)`: screenshot the active window only (crop by window rect from `win_ui`), send to Claude vision (same Anthropic client), return the answer. Used for understanding, never for coordinates when DOM/UIA can do it.
+- Assignments: `elevateu_assignments()` + `browser_open` Canvas + `browser_read`. The brain explains and outlines; it does not auto-submit coursework.
+
+### Phase 9: System control
+
+- Tools: `lock()` (existing `lock_screen`), `sleep()` (`rundll32.exe powrprof.dll,SetSuspendState 0,1,0`), `shutdown()` / `restart()` (existing, confirm-gated), `volume(up/down/mute)`.
+
+## 6. Latency budget
+
+- Deterministic intents (orchestrator regex) handle common commands with no LLM call. Add new common phrases there, not in the brain.
+- Brain model via env var; Haiku for speed, Sonnet for reliability.
+- Whisper "small" on CPU is the biggest voice delay. Measure before changing; `base` is the fallback option.
+
+## 7. Out of scope
+
+Mac/Linux, multi-monitor coordinate mapping, wake word engine changes, overlay visual redesign, payments.
+
+## 8. Open decisions (defaults chosen; user may override)
+
+| Decision | Default |
+|---|---|
+| Brain LLM | Anthropic, `claude-sonnet-5` via `HOLODESK_BRAIN_MODEL` |
+| Password handling | Chrome password manager in automation profile, never HoloDesk |
+| ElevateU auth | Verify in Phase 4; bearer token from env or refresh token in `keyring` |
+| OmniParser | Last resort only, port 8001, active-window crop |
+
+## 9. Progress log (update after every phase)
+
+- 2026-09-18: Handoff written. Baseline 54 tests passing (unit tests only; app never run live this session). PR #4 open. Known issues 1-13 listed in section 3. Next: Phase 0.
+- 2026-09-18 Phase 0 (DESIGN.md written and approved first). Results:
+  - PASS `.env`: OMNIPARSER_SERVER_URL commented out, HOLODESK_BROWSER_AUTOMATION_ENABLED=0, HOLODESK_OPENAI_PLANNER_ENABLED=0.
+  - PASS startup: overlay, camera, vision, Whisper, voice thread up, no tracebacks. Log in artifacts/phase0_startup.log (gitignored). App later exited with code 0, cause unproven (likely Esc on the focused overlay).
+  - Smoke via orchestrator script (not mic): PASS open notepad; FAIL scroll down (scrolls, but replies "That didn't work."); PASS minimize; PASS open youtube in chrome (default browser, "in chrome" dropped); PASS what's on my screen (~20 s); PASS game menu khola (overlay action, stubbed); PASS shutdown then cancel.
+  - NOT RUN real voice and gestures: need the user present. Owner: user, before or during Phase 1 manual test.
+  - PASS threading read: commands run on the OrchestratorAgent thread.
+  - PASS Chrome attach: `Example Domain` via CDP with separate --user-data-dir, while normal Chrome was open.
+  - Moved to Phase 3 per DESIGN.md: Playwright worker thread, Gmail draft flow.
+  - pytest: 54 passed.
+  - Next: Phase 1 (BrainAgent), including the scroll false-failure fix.
+- 2026-09-18 Phase 1 (BrainAgent). Results:
+  - Added `agents/brain_agent.py`: Claude tool loop (model from HOLODESK_BRAIN_MODEL, default claude-sonnet-5, effort low), cap 8 tool calls / 45 s, stops on a pending TaskAgent confirmation. Tools: open_app, open_website, scroll, type_text, press_keys (delete and alt+f4 confirm-gated), minimize, maximize, close_app (gated), get_active_window, lock_screen, sleep_pc, shutdown/restart (gated), volume, look_at_screen. Phases 8 and 9 folded in here per DESIGN.md.
+  - Honesty backstops in code: an action claim with zero tool calls is replaced; a failed tool the reply omits is appended.
+  - Orchestrator sends unmatched commands to the Brain when ANTHROPIC_API_KEY is set, before the declared-action refusal. Without the key, behavior is unchanged.
+  - FIXED scroll false failure: `_merge_results` returns "Done." for silent successes. PASS: `scroll down` now replies "Done." (smoke script).
+  - FIXED (found this phase) "what's on my screen" in the real app: `app/main.py` passed `screen_agent=None` to the orchestrator (lazy-load never ran; `analyze_screen()` has no callers). Now imported at startup. Phase 0's PASS for that step came from the smoke script, which built the real ScreenAgent.
+  - Removed dead `ask_ai()` and its Groq client from `app/main.py`. Voice reply wait raised 60 -> 120 s.
+  - PASS pytest: 63 passed (54 + 9 new in tests/test_brain_agent.py, fake client, no network).
+  - PASS app startup with Phase 1 changes (artifacts/phase1_startup.log), closed via WM_CLOSE.
+  - BLOCKED manual check "open notepad and type hello": no ANTHROPIC_API_KEY on this machine (.env, environment, CLI). Owner: user adds the key to .env, then rerun. Real API request shape is untested until then.
+  - Next: Phase 6 (memory facts), then Phase 2.
+- 2026-09-18 Phase 6 (memory facts), done before Phase 2 per DESIGN.md. Results:
+  - `facts` table in storage/schema.sql; `MemoryAgent.remember(text)` rejects passwords, PINs, API keys, tokens, card numbers; `recall(query)` ranks the newest 500 facts with rapidfuzz token_set_ratio >= 50.
+  - Brain tools `remember` and `recall`; recalled facts and habits go in a second system block after the cached prefix.
+  - PASS pytest: 66 passed (3 new: remember/recall, secret rejection incl. "shopping" not tripping the PIN rule, facts placed after the cache breakpoint).
+  - PASS real DB: `facts` table created in data/holodesk.db on init.
+  - BLOCKED manual "remember my advisor is Dr. X" / "who is my advisor": needs ANTHROPIC_API_KEY.
+  - Note for future agents: the Bash tool here halves backslashes inside heredocs and python -c. Use the Edit/Write tools, or chr(92), for any text containing backslashes.
+  - Next: Phase 2 (native UI automation).
+- 2026-09-18 Phase 2 (native app control). Results:
+  - Added `automation/win_ui.py`: launch_app (Windows' own installed-app list via shell:AppsFolder, covers Store apps like Calculator/Notepad that have no .lnk), list_windows, focus_window, read_controls, click_control (UIA invoke, then click_input), set_text (reads back the value). All return dicts, never raise; COM initialized per thread.
+  - `TaskAgent.open_app` tries the installed-app list for names not in APP_MAP before the old fuzzy guess. Grounding `_run_step` open_application tries it before Win+R (kept as fallback).
+  - Brain tools: list_windows, switch_to, read_screen_controls, click (send/submit/delete/buy/... names are confirm-gated), set_field.
+  - PASS live, worker thread, no Brain: launch Calculator, focus it, read controls in 0.42 s, click Clear/Seven/Plus/Two/Equals, display read back "Display is 9".
+  - PASS live set_text on the Run dialog: value read back exactly, including + ( ) { } characters.
+  - PASS live "open settings" through the orchestrator (not in APP_MAP): Settings opened, reply "Opening Settings." Took 5.5 s cold; the window opened behind Chrome (Windows focus rules), so the Brain may need switch_to after launching.
+  - Found and fixed while testing: pywinauto 0.6.9 descendants(depth=) raises AttributeError (no depth limit now); rapidfuzz 3 matching is case-sensitive by default (now default_process everywhere); WRatio sent "vs code" to "Developer PowerShell for VS 2022" (now exact-ignoring-spaces, shortest first, then token_set_ratio >= 85). Checked names: chrome, calculator, word, note pad, notepad, notepad plus plus, edge, file explorer, settings all correct; vs code, teams, spotify give no match (not installed or ambiguous) and fall back to the old path.
+  - Installed-app list takes 3-10 s to build; cached for the process, rebuilt at most once a minute on a miss, warmed in a background thread at app startup.
+  - PASS pytest: 71 passed (5 new in tests/test_win_ui.py).
+  - BLOCKED "open calculator, click seven" by voice through the Brain: needs ANTHROPIC_API_KEY. The same actions pass when called directly.
+  - Left open: Calculator, Settings windows from the tests.
+  - Next: Phase 3 (browser worker thread, generic browser tools, password autofill). Needs the user to log in to sites once in the automation Chrome profile.
+- 2026-09-18 Phase 3 (browser worker, generic browser tools, password autofill). Results:
+  - `browser/playwright_controller.py`: single BrowserWorker thread (`browser_call`), `with_page` returns url/title with every result, current-tab tracking, and page tools: snapshot, page_text, click_best, fill_field (refuses password fields), press, list/switch/new/close tab, login_autofill (Chrome saved password; checks only whether the password field is non-empty, never its value).
+  - Existing Gmail/Facebook/Instagram draft flow and the confirmed Send now run on the worker thread.
+  - Brain tools: browser_open (knows canvas, claude, elevateu, ...), browser_read, browser_page_text, browser_click (send/submit/delete/buy... gated), browser_fill, browser_press, browser_tabs, browser_switch_tab, browser_new_tab, browser_close_tab, browser_login. Registered only when HOLODESK_BROWSER_AUTOMATION_ENABLED=1.
+  - Gmail `fill_recipient` now waits for Gmail's contact suggestion, presses Enter, and checks a chip formed. The chip selector `[email]` is UNVERIFIED.
+  - PASS live (artifacts/phase3_live.log), via the Brain's tool wiring against the automation Chrome: open a local test page, read headings/links/buttons/fields, fill "Full name" and read it back, password fill refused, click "Say hi" and page text shows the change, "Submit application" click gated, login autofill honestly reports no saved password, new tab from a second thread, list/switch/close tabs.
+  - PASS pytest: 75 passed (4 new in tests/test_browser_tools.py).
+  - `.env`: HOLODESK_BROWSER_AUTOMATION_ENABLED=1 again.
+  - NOT DONE (needs the user): log in once to Canvas, Gmail, ElevateU, Claude in the HoloDesk Chrome window (profile folder %LOCALAPPDATA%\HoloDesk\chrome-profile) and let Chrome save each password; then verify Gmail/Facebook/Instagram selectors on the real logged-in pages and "open canvas and read my dashboard" by voice.
+  - Next: Phase 4 (ElevateU connector).
+- 2026-09-18 Phase 4 (ElevateU connector). Results:
+  - VERIFIED from source (study-helper/backend): auth is `Authorization: Bearer <token>`, Supabase `auth.get_user(token)`; `Bearer dev-token` works only when ALLOW_DEV_AUTH=true, which backend/.env sets, and maps to DEV_USER_ID (currently `local-dev-user`, not your real account). The job app (`jobhunt/core/auth.py`) uses the same rule.
+  - VERIFIED routes: GET /api/v1/job/jobs/feed (returns {jobs, total}), GET /api/v1/job/jobs/search?role=, GET /api/v1/job/jobs/{id}/workspace, GET|PUT /api/v1/job/applications[/{id}], GET /api/v1/job/profile, GET /api/v1/job/autopilot/status, GET /api/v1/assignments (returns {assignments, count}, ordered by due_at).
+  - Handoff correction: the frontend is Next.js; its API base is NEXT_PUBLIC_API_URL (study-helper-frontend/lib/api.ts), not VITE_API. The production API host is not in the repo.
+  - Added `connectors/elevateu_client.py` (requests, 20 s timeout, dict results, plain messages for backend down / 401 / HTTP errors) and Brain tools elevateu_jobs, elevateu_job_details, elevateu_applications, elevateu_assignments (top 5 spoken, ids kept).
+  - PASS pytest: 79 passed (4 new, requests mocked).
+  - PASS live failure path: backend not running on 8000 -> "The ElevateU backend isn't running at http://127.0.0.1:8000." Issue 8 (two backends on 8000) could not be checked: nothing was listening.
+  - NOT DONE (user decision): start the backend and set DEV_USER_ID in study-helper/backend/.env to your real Supabase user id (DESIGN.md open question 3). I did not edit the other repo or start its server. Then "what jobs did ElevateU find today" by voice.
+  - Next: Phase 5 (job application form filling).
+- 2026-09-18 Phase 5 (job application form filling). Results:
+  - VERIFIED from source: ElevateU's autofill answers come from GET /api/v1/job/ats/profile ({profile, suggested, missing, ready}); fields include legal_first_name, legal_last_name, email, phone, address, linkedin/github/portfolio urls, school, degree, authorized_to_work_us, requires_sponsorship_now/future, visa_status, salary_expectation, EEO answers.
+  - Added `browser/form_filler.py`: scans visible fields, matches the whole label against an alias table (rapidfuzz ratio >= 88, so "Company name" never matches "name"), fills text and selects, uploads HOLODESK_RESUME_PATH to resume/CV file inputs, skips password/checkbox/radio fields, never overwrites filled fields, never submits.
+  - Brain tools: browser_fill_application (profile from ElevateU) and browser_submit_application (always confirm-gated; on "yes" clicks submit, then PUT application status "applied").
+  - PASS live (artifacts/phase5_live.log) on a local application form with a synthetic profile and fake ElevateU: filled First/Last Name, Email, Phone, LinkedIn, Work authorization (select "Yes"), Resume/CV upload; left "Company name" and the free-text question empty and reported them; submit only happened after "yes"; page showed "Application submitted"; application marked applied.
+  - PASS pytest: 92 passed (13 new in tests/test_form_filler.py).
+  - NOT DONE (needs the user): one real posting, stopping before submit. Radio-button questions (common on ATS forms) are reported as empty for the Brain to ask about; there is no radio tool yet beyond browser_click.
+  - Next: Phase 7 (gestures). Phases 8 and 9 were folded into Phase 1; Phase 8's Canvas part is covered by browser_open canvas + browser_page_text and elevateu_assignments.
+- 2026-09-18 Phase 7 (low-lag gestures). Results:
+  - MEASURED on this laptop's camera (no hand in view): MediaPipe 23.1 ms median at 640x480, 19.0 ms at 320x240; the camera delivers only ~15 fps. Downscaling was NOT applied: it saves ~4 ms, the camera is the bottleneck, and smaller frames can miss distant hands. Note the debounce constants assume 30 fps, so V/palm take ~0.4 s and cooldowns ~1 s at 15 fps.
+  - Added `SwipeDetector` (vision/gesture_detector.py): fast sideways sweep of >= 30% of the frame within 8 frames -> SWIPE_RIGHT (ctrl+tab) / SWIPE_LEFT (ctrl+shift+tab), handled in app/main.py. V/open palm detection is skipped while the hand is moving so a sweep doesn't also fire them. Calibration knob: HOLODESK_SWIPE_DISTANCE.
+  - Not added (per DESIGN.md): pinch-scroll (pinch already drags the card; thumbs up/down already scroll) and fist alt+tab (overlaps the thumbs-down pose).
+  - VisionThread logs hand-tracking time every 300 frames. PASS in the running app: "21.7 ms median, 39.3 ms p90 over 300 frames" (artifacts/phase7_startup.log).
+  - PASS pytest: 95 passed (3 new in tests/test_swipe.py).
+  - NOT VERIFIED (needs the user's hand): swipe distance feel, that V/palm still fire reliably, and gesture delays.
+  - Phases 8 and 9: folded into Phase 1 (look_at_screen, lock, sleep, shutdown/restart gated, volume) and Phase 3/4 (Canvas via browser_open + browser_page_text, elevateu_assignments). No separate work left.
+- 2026-10-16 Fixes from the user's first live voice test (terminal evidence). Results:
+  - FIXED the "say yes to confirm" loop. Root cause: the orchestrator only treated an utterance as an answer when the WHOLE utterance was one of {yes, ok, cancel, ...}. "yes cancel the chrome." fell through, re-matched the close-chrome intent and armed a SECOND confirmation, forever. Now: while a confirmation is pending every utterance goes to TaskAgent; `TaskAgent.confirm_signal()` reads whole sentences and the first signal wins; an utterance that answers neither re-asks instead of re-arming; confirmations go stale after 120 s.
+  - FIXED "open gmail" opening a separate Chrome. `open_website` used webbrowser.open (default browser, new window, no handle). It now opens in HoloDesk's automation Chrome tab and raises it, so follow-ups (read, click, draft) act on that page. Verified live: "open gmail" then "open youtube" reused one tab.
+  - ADDED an escape hatch: open palm sets `core.queues.abort_event` -> the voice thread stops waiting (polls every 0.5 s instead of one 120 s block), any pending confirmation is cancelled, and the Brain stops between tool calls. Previously a command in flight could not be stopped and the mic stayed closed.
+  - ADDED timing/diagnostics, since latency was unmeasurable: "[VOICE] transcribed in Xs", "[ROUTE] <agents> handled <cmd> in Xs", "[BRAIN] tool(args) -> ok/FAILED in Xs". Also silenced the per-frame protobuf UserWarning that buried every real line.
+  - PASS pytest: 108 passed (13 new in tests/test_confirmation.py, using the exact phrases from the failed session).
+  - STILL OPEN: speech recognition accuracy (Whisper small, forced English); end-to-end latency (now instrumented, not yet tuned); ANTHROPIC_API_KEY still absent so the Brain never ran; site logins not saved in the automation profile yet.
+- 2026-10-16 First real Claude API calls (key now in .env). Results:
+  - PASS end to end: "which window is in front right now?" -> get_active_window -> correct spoken answer. The request shape (tools, cached system prompt, tool_result round trip) works against the live API.
+  - FIXED: `output_config={"effort": "low"}` is rejected by claude-haiku-4-5 ("This model does not support the effort parameter"), so every Haiku command failed with BadRequestError. The Brain now sends effort only to models that accept it.
+  - MEASURED Brain latency (one-tool command, excludes speech): claude-sonnet-5 about 3 s cold and 1.8-2.3 s warm; claude-haiku-4-5 1.4 s warm. Prompt caching is working (warm calls are much faster). Network variance is large, one Haiku cold call took 20 s.
+  - Default stays claude-sonnet-5; set HOLODESK_BRAIN_MODEL=claude-haiku-4-5 for speed.
+  - Remaining latency is in the voice pipeline (Whisper + VAD + TTS), not the Brain; the new [VOICE] transcribed timing line will show it.
+- 2026-10-16 Second live test, from the user's own terminal. Findings and fixes:
+  - MEASURED the latency complaint: "[VOICE] transcribed in 11.6s" on a long sentence. Whisper on a 13.5 s sample: small 6.0 s, base 2.0 s, tiny 1.3 s, all three transcribing it identically. Default is now HOLODESK_WHISPER_MODEL=base.
+  - FIXED the real dumbness: a 30-word request ("...why do you open so many chrome tabs, I just want one tab with facebook gmail and instagram") was grabbed by keyword matching, which saw "facebook" and replied "Opening facebook." The Brain never ran. Commands of 12+ words now go straight to the Brain; short ones keep the instant deterministic path.
+  - FIXED a crash seen live: the Playwright node driver died with "EPIPE broken pipe" and every later browser command failed until restart. The browser worker now rebuilds the connection and retries once.
+  - FIXED display scaling (root cause of bad clicking). The process ran scaling-unaware, so UI Automation reported physical pixels while window rects and screenshots used scaled ones: Calculator reported 334x540 while its buttons sat at x=366. Now set per-monitor aware v2 before pygame is imported (the handle must be pointer-width; a plain -4 silently fails). Verified: overlay rect is now 0,0,1920,1080 and UIA rects fall inside the window.
+  - TRIED AND REMOVED vision click-by-coordinates. Measured against UIA ground truth on Calculator, gpt-4o was 440-722 px off on a 418x675 window, and during testing it clicked blindly inside the user's Claude window. Clicking by sight needs a real element detector (OmniParser on a cropped window), not a general vision model. Native clicking via UIA (click_control) stays exact.
+  - ADDED Nepali: Whisper language is no longer forced to English (HOLODESK_STT_LANGUAGE=auto) and the Brain replies in the user's language, romanised for Nepali because the only installed voices are English (David and Zira). VERIFIED: a romanised Nepali command was understood and answered in Nepali. NOT VERIFIED: Nepali speech recognition, which needs the user's voice; "base" may be too small for Nepali, so small/medium may be needed.
+  - PASS pytest: 112 passed (6 new: long-request routing, short-command fast path, EPIPE recovery).
+- 2026-10-16 Third live test ("open notepad" misheard, sometimes not heard at all). Evidence from the user's terminal and fixes:
+  - HEARD ITSELF: the mic picked up "i'm not confident which app that is. please repeat. can you please open the north ad" - HoloDesk's own reply plus a real command - and answered itself. The echo guard only rejected a transcript that was ENTIRELY its own speech, so mixed ones passed. Added `strip_echo`: each sentence is compared to the last spoken text and dropped if it matches, keeping the rest.
+  - MISHEARD: "notepad" came back as "north pad" and "not bad". Caused by my own switch to the base model. MEASURED on this laptop (app closed, 8 cores): local small takes 8.0 s on a 2.5 s clip, base 2.5 s. So small is accurate but unusable, base is fast but wrong.
+  - FIXED by moving speech to Groq's hosted whisper-large-v3 (the GROQ_API_KEY was already there): 0.3-0.8 s per command and the most accurate model, with the local model as an offline fallback loaded only if Groq fails. HOLODESK_STT_ENGINE=local keeps everything on the machine. Audio now leaves the laptop for transcription; the user was told.
+  - Added a vocabulary hint (app and site names, yes/cancel) to both engines to bias decoding.
+  - DEAD END FIXED: "I heard 'not bad', but I'm not confident which app that is" ended the conversation. When every deterministic result fails, the Brain now gets a chance before giving up.
+  - PASS pytest: 112 passed.
+  - STILL UNVERIFIED: Nepali speech (needs the user's voice; synthetic Nepali spoken by an English TTS voice is not a valid test), and everything that needs the Gmail login.
+- 2026-10-16 Fourth round, from live use. Fixes:
+  - FIXED the open palm not stopping speech. My Phase 7 swipe work suppressed GestureDetector whenever the hand was moving, and raising a palm is movement, so OPEN_PALM rarely fired. Open palm is now exempt; only the V still waits for the hand to settle.
+  - FIXED the protobuf warning flood for real. The module filter never matched (mediapipe re-triggers it from its own module); matching the message text does. Verified: 0 warning lines in a fresh run.
+  - ADDED always-on wake word: HOLODESK_WAKE_WORD_ENABLED=1 with the local tiny Whisper engine ("hey holo"), so HoloDesk can be woken without the V gesture. New `core.queues.mic_busy` pauses the wake listener while the main voice thread records or HoloDesk speaks, so the two never fight for the microphone and it cannot wake itself on its own voice. Verified live: "[WAKE] Listener started. engine=whisper phrase='hey holo'" and stable afterwards.
+  - ADDED sleep phrases, English and Nepali, spoken or written: stop listening, go to sleep, be quiet, stop talking, suta, chup laag, band gara, nasun, plus Devanagari forms. They end the conversation window and return to idle.
+  - Nepali: the speech vocabulary hint now names Nepali commands in both Devanagari and Latin script so the model commits to Nepali instead of forcing English words. The Brain already replies in the language it was addressed in.
+  - KNOWN LIMIT, told to the user: Windows has only English voices installed (David, Zira), so Nepali replies are pronounced with an English voice. A Nepali voice needs a cloud TTS, which is not wired up.
+  - PASS pytest: 112 passed. Startup verified live, including the wake listener.
+- 2026-10-16 Nepali voice added. Windows here has only English voices (David, Zira), so Nepali replies were spoken with an English accent.
+  - Added `core/speech.py` using Microsoft's edge-tts endpoint: real Nepali neural voices (ne-NP-SagarNeural, ne-NP-HemkalaNeural), free, no API key, about 0.6 s to synthesise. Playback goes through pygame's mixer; open palm stops it via `stop_nepali()`.
+  - Routing is by script: Devanagari -> Nepali voice, anything else -> the Windows voice. Romanised Nepali is indistinguishable from English to a script check, so the Brain is now told to answer Nepali in Devanagari.
+  - Falls back to the Windows voice when there is no network, no audio device, or edge-tts fails, and says so in the log.
+  - CAUGHT WHILE WRITING IT: the first version returned early from `speak()` on the Nepali path, which skipped the finally block that clears `mic_busy` and the speaking state. That would have left the wake listener paused forever after the first Nepali reply. The Nepali attempt now sits inside the same try.
+  - VERIFIED live: a Nepali question returned Devanagari ("अहिले तपाईंको कम्प्युटरमा Claude एप्लिकेसन अगाडि छ।") and was spoken by the Nepali voice; the same question in English stayed English. App startup re-checked.
+  - PASS pytest: 114 passed (2 new in tests/test_speech.py).
+- 2026-10-16 Font fix: pygame's built-in font has no Devanagari, so Nepali replies drew as empty boxes in the overlay (confirmed by rendering both fonts side by side). Added `ui_font()` in app/holo_overlay.py which loads Windows' Nirmala.ttc (falls back to mangal.ttf, then the default). Used for the overlay's four fonts and the six HUD fonts in app/main.py. VERIFIED: "अहिले Claude अगाडि छ। Opening notepad." renders correctly, mixed scripts in one line. 114 tests pass; app startup re-checked.
+- 2026-10-16 Fifth round. The user reported a browser timeout, slow replies, Nepali answered in English, and "hey holo" ignored. Evidence from their terminal: speech itself was fast ("transcribed in 0.7s (groq)"), then "I stopped after browser_open: The browser didn't respond in time."
+  - ROOT CAUSE of both the browser timeout and the ignored wake word: TWO HoloDesk instances were running (one I had left running in the background plus the user's). They fight over the same automation Chrome profile and over the microphone. Added a single-instance guard (named mutex): a second copy now exits with "HoloDesk is already running. Close that window first." VERIFIED live.
+  - Browser latency: the automation Chrome is now started in a background thread at startup ("[STARTUP] Automation browser ready"), so the first spoken "open gmail" no longer pays for launching Chrome. Warm opens measured 2.6 s. browser_call timeout cut from 90 s to 45 s, and the message now names the duplicate-instance cause.
+  - Nepali answered in English: the transcription prompt was almost entirely English, which steers Whisper's OUTPUT language. It is now Nepali-first and bilingual. English still transcribes correctly ("Can you please open the notepad?").
+  - Wake word: phrase matching is now fuzzy (rapidfuzz >= 80, so "hey hollow" counts) and every non-matching attempt is logged as "[WAKE] heard '...' (match N%) - not waking", so a miss can be diagnosed instead of guessed at.
+  - PASS pytest: 114 passed. Startup, warm-up, and the instance guard verified live.
+- 2026-10-17 Sixth round: "it reads the whole web page and won't stop; palm doesn't stop it; a Nepali command left it silent."
+  - FIXED the runaway reading. `BrainAgent._summarize()` joined the FULL text of every tool result, and `browser_page_text` returns a page's worth of text. Whenever the loop ended early (8-call cap, abort, or no text from the model) that whole page became the spoken reply. Each tool response is now clipped to 90 characters in summaries, `page_text` returns 1500 instead of 3000, `speak()` refuses to say more than HOLODESK_SPOKEN_LIMIT (600) characters, and the system prompt forbids reading a page aloud.
+  - FIXED the silent reply after a palm. `stop_ai_speech()` set `stop_speaking_flag` even when nothing was speaking, and `speak()` consumes that flag by swallowing the NEXT utterance. So a palm press while idle muted the following answer, which is exactly the Nepali command that "went idle". The flag is now only set while speech is in progress, and every new command clears it.
+  - Open palm now also ends the conversation window, not just the current sentence.
+  - FIXED the warning flood for real this time. Importing mediapipe/absl RESETS the warning filters set at the top of main.py, so the filters are re-applied inside VisionThread.run after those imports. VERIFIED: 0 protobuf lines in a run that completed a full 300-frame vision cycle (previously 18 and climbing).
+  - PASS pytest: 116 passed (2 new, covering the clipped summaries).
+  - NOTE: 10 automation Chrome processes were left over from testing; they are the one Chrome instance's child processes, not duplicate HoloDesks.

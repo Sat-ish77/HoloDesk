@@ -27,7 +27,9 @@ voice_reply_queue = queue.Queue(maxsize=1)
 # Raw BGR frames from the camera (latest only — old frames discarded)
 frame_queue = queue.Queue(maxsize=1)
 
-# MediaPipe hand_landmarks object OR None when no hand detected (latest only)
+# Latest hand payload from MediaPipe. New shape is a list of
+# {"landmarks": hand_landmarks, "label": "Left"/"Right", "score": float}.
+# Older code may still treat the first hand as the primary hand.
 landmark_queue = queue.Queue(maxsize=1)
 
 # Confirmed gesture strings: "V_GESTURE" | "OPEN_PALM"
@@ -42,6 +44,16 @@ response_queue = queue.Queue(maxsize=50)
 # end_ts:     monotonic-ish wall clock when speech finished (0.0 if never spoken).
 # The lock is held only for the brief assignment; reads can be dirty — that's
 # fine because a stale read just makes the echo guard slightly more lenient.
+# Set by the open-palm gesture to abandon whatever is running: the voice thread
+# stops waiting for a reply, and the Brain stops between tool calls. Cleared when
+# the next command is dispatched.
+abort_event = threading.Event()
+
+# Set while the main voice thread owns the microphone or HoloDesk is speaking. The
+# always-on wake listener pauses then, so it neither fights for the mic nor wakes
+# itself on HoloDesk's own voice.
+mic_busy = threading.Event()
+
 tts_state = {
     "text": "",
     "end_ts": 0.0,

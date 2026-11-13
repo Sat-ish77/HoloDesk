@@ -9,7 +9,7 @@
       "source_file": "start_logger.py",
       "source_location": "L1",
       "id": "start_logger_py",
-      "community": 9
+      "community": 10
     },
     {
       "label": "main()",
@@ -17,7 +17,7 @@
       "source_file": "start_logger.py",
       "source_location": "L39",
       "id": "start_logger_main",
-      "community": 9
+      "community": 10
     },
     {
       "label": "HoloDesk Memory Logger \u2014 Run this NOW to start collecting habit data.  This is",
@@ -25,7 +25,7 @@
       "source_file": "start_logger.py",
       "source_location": "L1",
       "id": "start_logger_rationale_1",
-      "community": 9
+      "community": 10
     },
     {
       "label": "chat_agent.py",
@@ -33,7 +33,7 @@
       "source_file": "agents\\chat_agent.py",
       "source_location": "L1",
       "id": "agents_chat_agent_py",
-      "community": 3
+      "community": 1
     },
     {
       "label": "ChatResult",
@@ -41,7 +41,7 @@
       "source_file": "agents\\chat_agent.py",
       "source_location": "L8",
       "id": "chat_agent_chatresult",
-      "community": 3
+      "community": 1
     },
     {
       "label": "ChatAgent",
@@ -113,7 +113,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L1",
       "id": "agents_memory_agent_py",
-      "community": 1
+      "community": 2
     },
     {
       "label": "_is_blocked()",
@@ -121,7 +121,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L56",
       "id": "memory_agent_is_blocked",
-      "community": 1
+      "community": 2
     },
     {
       "label": "_get_active_window()",
@@ -129,7 +129,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L61",
       "id": "memory_agent_get_active_window",
-      "community": 1
+      "community": 2
     },
     {
       "label": "MemoryAgent",
@@ -137,7 +137,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L92",
       "id": "memory_agent_memoryagent",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".__init__()",
@@ -145,7 +145,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L100",
       "id": "memory_agent_memoryagent_init",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".start_session()",
@@ -153,7 +153,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L109",
       "id": "memory_agent_memoryagent_start_session",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".end_session()",
@@ -161,7 +161,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L130",
       "id": "memory_agent_memoryagent_end_session",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".start_background_logging()",
@@ -169,7 +169,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L153",
       "id": "memory_agent_memoryagent_start_background_logging",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".stop_background_logging()",
@@ -177,7 +177,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L170",
       "id": "memory_agent_memoryagent_stop_background_logging",
-      "community": 1
+      "community": 2
     },
     {
       "label": "._logging_loop()",
@@ -185,7 +185,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L174",
       "id": "memory_agent_memoryagent_logging_loop",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".log_app_event()",
@@ -193,7 +193,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L192",
       "id": "memory_agent_memoryagent_log_app_event",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".detect_habits()",
@@ -201,7 +201,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L222",
       "id": "memory_agent_memoryagent_detect_habits",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".get_unfinished_context()",
@@ -209,7 +209,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L242",
       "id": "memory_agent_memoryagent_get_unfinished_context",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".get_todays_app_summary()",
@@ -217,7 +217,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L261",
       "id": "memory_agent_memoryagent_get_todays_app_summary",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".get_days_active()",
@@ -225,7 +225,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L280",
       "id": "memory_agent_memoryagent_get_days_active",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".generate_morning_context()",
@@ -233,7 +233,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L287",
       "id": "memory_agent_memoryagent_generate_morning_context",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".log_voice_command()",
@@ -241,7 +241,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L299",
       "id": "memory_agent_memoryagent_log_voice_command",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".format_habits_for_prompt()",
@@ -249,7 +249,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L315",
       "id": "memory_agent_memoryagent_format_habits_for_prompt",
-      "community": 1
+      "community": 2
     },
     {
       "label": ".format_unfinished_for_prompt()",
@@ -257,7 +257,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L334",
       "id": "memory_agent_memoryagent_format_unfinished_for_prompt",
-      "community": 1
+      "community": 2
     },
     {
       "label": "MemoryAgent \u2014 Passive session logging and habit detection.  What this does:",
@@ -265,7 +265,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L1",
       "id": "memory_agent_rationale_1",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Return (app_name, window_title) for the currently focused window.     Returns (",
@@ -273,7 +273,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L62",
       "id": "memory_agent_rationale_62",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Passive logger + habit detector.     One instance is shared across the applicat",
@@ -281,7 +281,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L93",
       "id": "memory_agent_rationale_93",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Create a new session row and return its id.         Call this once when HoloDes",
@@ -289,7 +289,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L110",
       "id": "memory_agent_rationale_110",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Close the current session. Call this on HoloDesk exit.",
@@ -297,7 +297,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L131",
       "id": "memory_agent_rationale_131",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Start the 60-second background logger thread.         Safe to call multiple tim",
@@ -305,7 +305,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L154",
       "id": "memory_agent_rationale_154",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Signal the logger thread to stop gracefully.",
@@ -313,7 +313,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L171",
       "id": "memory_agent_rationale_171",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Runs on the background thread.         Logs the active window every LOG_INTERVA",
@@ -321,7 +321,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L175",
       "id": "memory_agent_rationale_175",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Write one row to app_events for the currently active window.         Called by",
@@ -329,7 +329,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L193",
       "id": "memory_agent_rationale_193",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Find apps that appear consistently at the same hour on the same weekday.",
@@ -337,7 +337,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L223",
       "id": "memory_agent_rationale_223",
-      "community": 1
+      "community": 2
     },
     {
       "label": "What was the user working on at the end of the PREVIOUS session?         Return",
@@ -345,7 +345,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L243",
       "id": "memory_agent_rationale_243",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Which apps have been used today, and for how long (in 60-second slots)?",
@@ -353,7 +353,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L262",
       "id": "memory_agent_rationale_262",
-      "community": 1
+      "community": 2
     },
     {
       "label": "How many distinct calendar days has HoloDesk been running?",
@@ -361,7 +361,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L281",
       "id": "memory_agent_rationale_281",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Aggregate all context needed to generate the morning briefing.         Called b",
@@ -369,7 +369,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L288",
       "id": "memory_agent_rationale_288",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Persist a voice command to the database.         Call this from main.py wheneve",
@@ -377,7 +377,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L301",
       "id": "memory_agent_rationale_301",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Convert habit data to a short human-readable string for LLM prompts.         Ex",
@@ -385,7 +385,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L316",
       "id": "memory_agent_rationale_316",
-      "community": 1
+      "community": 2
     },
     {
       "label": "Format last-session context for the morning briefing LLM prompt.         Exampl",
@@ -393,7 +393,7 @@
       "source_file": "agents\\memory_agent.py",
       "source_location": "L335",
       "id": "memory_agent_rationale_335",
-      "community": 1
+      "community": 2
     },
     {
       "label": "morning_briefing.py",
@@ -401,7 +401,7 @@
       "source_file": "agents\\morning_briefing.py",
       "source_location": "L1",
       "id": "agents_morning_briefing_py",
-      "community": 3
+      "community": 1
     },
     {
       "label": "generate_briefing()",
@@ -409,7 +409,7 @@
       "source_file": "agents\\morning_briefing.py",
       "source_location": "L40",
       "id": "morning_briefing_generate_briefing",
-      "community": 3
+      "community": 1
     },
     {
       "label": "MorningBriefingAgent \u2014 generates a personalized spoken briefing on startup.  R",
@@ -417,7 +417,7 @@
       "source_file": "agents\\morning_briefing.py",
       "source_location": "L1",
       "id": "morning_briefing_rationale_1",
-      "community": 3
+      "community": 1
     },
     {
       "label": "Generate a morning briefing string.      Args:         demo_mode: If True, sk",
@@ -425,7 +425,7 @@
       "source_file": "agents\\morning_briefing.py",
       "source_location": "L41",
       "id": "morning_briefing_rationale_41",
-      "community": 3
+      "community": 1
     },
     {
       "label": "orchestrator.py",
@@ -433,7 +433,7 @@
       "source_file": "agents\\orchestrator.py",
       "source_location": "L1",
       "id": "agents_orchestrator_py",
-      "community": 6
+      "community": 4
     },
     {
       "label": "OrchestratorAgent",
@@ -441,7 +441,7 @@
       "source_file": "agents\\orchestrator.py",
       "source_location": "L9",
       "id": "orchestrator_orchestratoragent",
-      "community": 6
+      "community": 4
     },
     {
       "label": ".__init__()",
@@ -449,7 +449,7 @@
       "source_file": "agents\\orchestrator.py",
       "source_location": "L19",
       "id": "orchestrator_orchestratoragent_init",
-      "community": 6
+      "community": 4
     },
     {
       "label": ".stop()",
@@ -457,7 +457,7 @@
       "source_file": "agents\\orchestrator.py",
       "source_location": "L25",
       "id": "orchestrator_orchestratoragent_stop",
-      "community": 6
+      "community": 4
     },
     {
       "label": ".run()",
@@ -465,103 +465,111 @@
       "source_file": "agents\\orchestrator.py",
       "source_location": "L28",
       "id": "orchestrator_orchestratoragent_run",
-      "community": 6
+      "community": 4
     },
     {
       "label": "._process()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L44",
+      "source_location": "L51",
       "id": "orchestrator_orchestratoragent_process",
-      "community": 6
+      "community": 4
     },
     {
       "label": "._reply()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L65",
+      "source_location": "L102",
       "id": "orchestrator_orchestratoragent_reply",
-      "community": 6
+      "community": 4
     },
     {
       "label": "._execute_one()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L73",
+      "source_location": "L110",
       "id": "orchestrator_orchestratoragent_execute_one",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_format_habits()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L108",
+      "source_location": "L145",
       "id": "orchestrator_format_habits",
-      "community": 6
+      "community": 4
+    },
+    {
+      "label": "._looks_like_declared_action()",
+      "file_type": "code",
+      "source_file": "agents\\orchestrator.py",
+      "source_location": "L176",
+      "id": "orchestrator_orchestratoragent_looks_like_declared_action",
+      "community": 4
     },
     {
       "label": "._detect_intents()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L127",
+      "source_location": "L180",
       "id": "orchestrator_orchestratoragent_detect_intents",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_looks_parallel()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L236",
+      "source_location": "L315",
       "id": "orchestrator_looks_parallel",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_merge_results()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L241",
+      "source_location": "L320",
       "id": "orchestrator_merge_results",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_extract_after_any()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L265",
+      "source_location": "L344",
       "id": "orchestrator_extract_after_any",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_extract_number()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L274",
+      "source_location": "L353",
       "id": "orchestrator_extract_number",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_looks_like_web_intent()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L279",
+      "source_location": "L358",
       "id": "orchestrator_looks_like_web_intent",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_looks_like_site_name_or_url()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L285",
+      "source_location": "L364",
       "id": "orchestrator_looks_like_site_name_or_url",
-      "community": 6
+      "community": 4
     },
     {
       "label": "_extract_urlish()",
       "file_type": "code",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L291",
+      "source_location": "L370",
       "id": "orchestrator_extract_urlish",
-      "community": 6
+      "community": 4
     },
     {
       "label": "OrchestratorAgent     - Reads natural language commands from command_queue",
@@ -569,15 +577,15 @@
       "source_file": "agents\\orchestrator.py",
       "source_location": "L10",
       "id": "orchestrator_rationale_10",
-      "community": 6
+      "community": 4
     },
     {
       "label": "Returns a list of (agent_name, action, context).",
       "file_type": "rationale",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L128",
-      "id": "orchestrator_rationale_128",
-      "community": 6
+      "source_location": "L181",
+      "id": "orchestrator_rationale_181",
+      "community": 4
     },
     {
       "label": "screen_agent.py",
@@ -585,7 +593,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L1",
       "id": "agents_screen_agent_py",
-      "community": 4
+      "community": 1
     },
     {
       "label": "ScreenAgent",
@@ -593,7 +601,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L61",
       "id": "screen_agent_screenagent",
-      "community": 4
+      "community": 1
     },
     {
       "label": ".__init__()",
@@ -601,7 +609,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L63",
       "id": "screen_agent_screenagent_init",
-      "community": 4
+      "community": 1
     },
     {
       "label": ".execute()",
@@ -609,7 +617,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L72",
       "id": "screen_agent_screenagent_execute",
-      "community": 4
+      "community": 1
     },
     {
       "label": "._get_active_window_title()",
@@ -617,7 +625,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L137",
       "id": "screen_agent_screenagent_get_active_window_title",
-      "community": 4
+      "community": 1
     },
     {
       "label": "._is_blocked()",
@@ -625,7 +633,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L146",
       "id": "screen_agent_screenagent_is_blocked",
-      "community": 4
+      "community": 1
     },
     {
       "label": "._capture_and_resize()",
@@ -633,7 +641,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L150",
       "id": "screen_agent_screenagent_capture_and_resize",
-      "community": 4
+      "community": 1
     },
     {
       "label": "._encode_to_base64()",
@@ -641,7 +649,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L159",
       "id": "screen_agent_screenagent_encode_to_base64",
-      "community": 4
+      "community": 1
     },
     {
       "label": "_error()",
@@ -649,7 +657,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L166",
       "id": "screen_agent_error",
-      "community": 4
+      "community": 1
     },
     {
       "label": "ScreenAgent \u2014 Takes a screenshot and asks GPT-4o Vision to explain it.  Trigge",
@@ -657,7 +665,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L1",
       "id": "screen_agent_rationale_1",
-      "community": 4
+      "community": 1
     },
     {
       "label": "Capture the screen and ask GPT-4o Vision the given question.          Returns",
@@ -665,7 +673,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L73",
       "id": "screen_agent_rationale_73",
-      "community": 4
+      "community": 1
     },
     {
       "label": "Take a full screenshot and resize to TARGET_WIDTH.",
@@ -673,7 +681,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L151",
       "id": "screen_agent_rationale_151",
-      "community": 4
+      "community": 1
     },
     {
       "label": "Convert a PIL Image to a base64 PNG string.",
@@ -681,7 +689,7 @@
       "source_file": "agents\\screen_agent.py",
       "source_location": "L160",
       "id": "screen_agent_rationale_160",
-      "community": 4
+      "community": 1
     },
     {
       "label": "task_agent.py",
@@ -689,271 +697,447 @@
       "source_file": "agents\\task_agent.py",
       "source_location": "L1",
       "id": "agents_task_agent_py",
-      "community": 2
+      "community": 0
     },
     {
       "label": "TaskAgent",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L96",
+      "source_location": "L130",
       "id": "task_agent_taskagent",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".__init__()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L104",
+      "source_location": "L138",
       "id": "task_agent_taskagent_init",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".execute()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L120",
+      "source_location": "L157",
       "id": "task_agent_taskagent_execute",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_contains_blocked()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L177",
+      "source_location": "L234",
       "id": "task_agent_contains_blocked",
-      "community": 2
+      "community": 0
     },
     {
       "label": "._needs_confirmation()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L181",
+      "source_location": "L238",
       "id": "task_agent_taskagent_needs_confirmation",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_looks_like_yes()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L186",
+      "source_location": "L243",
       "id": "task_agent_looks_like_yes",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_looks_like_cancel()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L191",
+      "source_location": "L248",
       "id": "task_agent_looks_like_cancel",
-      "community": 2
+      "community": 0
     },
     {
       "label": "._confirm_yes()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L195",
+      "source_location": "L252",
       "id": "task_agent_taskagent_confirm_yes",
-      "community": 2
+      "community": 0
     },
     {
       "label": "._confirm_cancel()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L206",
+      "source_location": "L263",
       "id": "task_agent_taskagent_confirm_cancel",
-      "community": 2
+      "community": 0
     },
     {
       "label": "._set_pending_confirm()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L215",
+      "source_location": "L272",
       "id": "task_agent_taskagent_set_pending_confirm",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".open_app()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L223",
+      "source_location": "L280",
       "id": "task_agent_taskagent_open_app",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".close_app()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L240",
+      "source_location": "L303",
       "id": "task_agent_taskagent_close_app",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".open_website()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L261",
+      "source_location": "L336",
       "id": "task_agent_taskagent_open_website",
-      "community": 2
+      "community": 0
+    },
+    {
+      "label": ".open_web_in_browser()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L361",
+      "id": "task_agent_taskagent_open_web_in_browser",
+      "community": 0
+    },
+    {
+      "label": "_build_url_from_site_name()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L403",
+      "id": "task_agent_build_url_from_site_name",
+      "community": 0
+    },
+    {
+      "label": "_find_browser_executable()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L415",
+      "id": "task_agent_find_browser_executable",
+      "community": 0
     },
     {
       "label": ".type_text()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L284",
+      "source_location": "L433",
       "id": "task_agent_taskagent_type_text",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".draft_email()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L302",
+      "source_location": "L451",
       "id": "task_agent_taskagent_draft_email",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".search()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L341",
+      "source_location": "L490",
       "id": "task_agent_taskagent_search",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".scroll()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L355",
+      "source_location": "L504",
       "id": "task_agent_taskagent_scroll",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".clipboard_action_from_raw()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L366",
+      "source_location": "L515",
       "id": "task_agent_taskagent_clipboard_action_from_raw",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".clipboard_action()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L377",
+      "source_location": "L526",
       "id": "task_agent_taskagent_clipboard_action",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".ask_chatgpt()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L393",
+      "source_location": "L542",
       "id": "task_agent_taskagent_ask_chatgpt",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".take_screenshot_and_save()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L427",
+      "source_location": "L576",
       "id": "task_agent_taskagent_take_screenshot_and_save",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".set_timer()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L439",
+      "source_location": "L588",
       "id": "task_agent_taskagent_set_timer",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".lock_screen()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L468",
+      "source_location": "L617",
       "id": "task_agent_taskagent_lock_screen",
-      "community": 2
+      "community": 0
+    },
+    {
+      "label": ".shutdown_with_confirm()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L627",
+      "id": "task_agent_taskagent_shutdown_with_confirm",
+      "community": 0
+    },
+    {
+      "label": ".restart_with_confirm()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L642",
+      "id": "task_agent_taskagent_restart_with_confirm",
+      "community": 0
+    },
+    {
+      "label": "._schedule_shutdown()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L649",
+      "id": "task_agent_taskagent_schedule_shutdown",
+      "community": 0
+    },
+    {
+      "label": "._schedule_restart()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L652",
+      "id": "task_agent_taskagent_schedule_restart",
+      "community": 0
+    },
+    {
+      "label": "._schedule_power_action()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L655",
+      "id": "task_agent_taskagent_schedule_power_action",
+      "community": 0
     },
     {
       "label": ".minimize_active_window()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L478",
+      "source_location": "L677",
       "id": "task_agent_taskagent_minimize_active_window",
-      "community": 2
+      "community": 0
     },
     {
       "label": ".maximize_active_window()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L488",
+      "source_location": "L687",
       "id": "task_agent_taskagent_maximize_active_window",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_extract_text_payload()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L502",
+      "source_location": "L701",
       "id": "task_agent_extract_text_payload",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_extract_search_query()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L508",
+      "source_location": "L707",
       "id": "task_agent_extract_search_query",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_extract_search_engine()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L517",
+      "source_location": "L716",
       "id": "task_agent_extract_search_engine",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_parse_scroll()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L524",
+      "source_location": "L723",
       "id": "task_agent_parse_scroll",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_extract_after()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L535",
+      "source_location": "L734",
       "id": "task_agent_extract_after",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_extract_email_recipient()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L543",
+      "source_location": "L742",
       "id": "task_agent_extract_email_recipient",
-      "community": 2
+      "community": 0
     },
     {
       "label": "_extract_subject()",
       "file_type": "code",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L548",
+      "source_location": "L747",
       "id": "task_agent_extract_subject",
-      "community": 2
+      "community": 0
+    },
+    {
+      "label": "._resolve_app_name()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L754",
+      "id": "task_agent_taskagent_resolve_app_name",
+      "community": 0
+    },
+    {
+      "label": "._resolve_running_process_name()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L782",
+      "id": "task_agent_taskagent_resolve_running_process_name",
+      "community": 0
+    },
+    {
+      "label": "._resolve_website_name()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L808",
+      "id": "task_agent_taskagent_resolve_website_name",
+      "community": 0
+    },
+    {
+      "label": "._resolve_browser_name()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L825",
+      "id": "task_agent_taskagent_resolve_browser_name",
+      "community": 0
+    },
+    {
+      "label": "._strip_speech_filler()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L847",
+      "id": "task_agent_taskagent_strip_speech_filler",
+      "community": 0
+    },
+    {
+      "label": "._sanitize_site_target()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L865",
+      "id": "task_agent_taskagent_sanitize_site_target",
+      "community": 0
+    },
+    {
+      "label": "_list_running_process_basenames()",
+      "file_type": "code",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L898",
+      "id": "task_agent_list_running_process_basenames",
+      "community": 0
     },
     {
       "label": "TaskAgent: Desktop automation on Windows with strong safety guardrails.      P",
       "file_type": "rationale",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L97",
-      "id": "task_agent_rationale_97",
-      "community": 3
+      "source_location": "L131",
+      "id": "task_agent_rationale_131",
+      "community": 1
+    },
+    {
+      "label": "Deterministic two-step behavior:           1) resolve a real browser executable",
+      "file_type": "rationale",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L362",
+      "id": "task_agent_rationale_362",
+      "community": 1
+    },
+    {
+      "label": "Turn 'facebook' / 'facebook.com' / 'https://...' into a usable URL.",
+      "file_type": "rationale",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L404",
+      "id": "task_agent_rationale_404",
+      "community": 1
+    },
+    {
+      "label": "Resolve a browser name ('chrome', 'brave', ...) to an absolute exe path.",
+      "file_type": "rationale",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L416",
+      "id": "task_agent_rationale_416",
+      "community": 1
+    },
+    {
+      "label": "Two-stage safety:           1. First call arms the pending confirmation. User m",
+      "file_type": "rationale",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L628",
+      "id": "task_agent_rationale_628",
+      "community": 1
+    },
+    {
+      "label": "Resolve misheard app names using APP_MAP keys (and optionally running processes)",
+      "file_type": "rationale",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L755",
+      "id": "task_agent_rationale_755",
+      "community": 0
+    },
+    {
+      "label": "Resolve to an actually running process basename (best for close_app).",
+      "file_type": "rationale",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L783",
+      "id": "task_agent_rationale_783",
+      "community": 1
+    },
+    {
+      "label": "Extract a usable site/url token from noisy speech like:           'facebook.com",
+      "file_type": "rationale",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L866",
+      "id": "task_agent_rationale_866",
+      "community": 1
     },
     {
       "label": "__init__.py",
@@ -969,215 +1153,239 @@
       "source_file": "app\\main.py",
       "source_location": "L1",
       "id": "app_main_py",
-      "community": 0
+      "community": 3
     },
     {
       "label": "setup_transparent_window()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L72",
+      "source_location": "L82",
       "id": "main_setup_transparent_window",
-      "community": 0
+      "community": 3
     },
     {
       "label": "ask_ai()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L114",
+      "source_location": "L124",
       "id": "main_ask_ai",
-      "community": 0
+      "community": 3
     },
     {
       "label": "speak()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L262",
+      "source_location": "L288",
       "id": "main_speak",
-      "community": 0
+      "community": 6
     },
     {
       "label": "stop_ai_speech()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L318",
+      "source_location": "L347",
       "id": "main_stop_ai_speech",
-      "community": 0
+      "community": 3
     },
     {
       "label": "VoiceAssistantThread",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L324",
+      "source_location": "L353",
       "id": "main_voiceassistantthread",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".__init__()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L337",
+      "source_location": "L366",
       "id": "main_voiceassistantthread_init",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".request_wake()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L343",
+      "source_location": "L372",
       "id": "main_voiceassistantthread_request_wake",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".request_redirect_listen()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L346",
+      "source_location": "L375",
       "id": "main_voiceassistantthread_request_redirect_listen",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".push_state()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L349",
+      "source_location": "L378",
       "id": "main_voiceassistantthread_push_state",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".transcribe_audio()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L358",
+      "source_location": "L387",
       "id": "main_voiceassistantthread_transcribe_audio",
-      "community": 0
+      "community": 6
+    },
+    {
+      "label": "_normalize_transcript()",
+      "file_type": "code",
+      "source_file": "app\\main.py",
+      "source_location": "L467",
+      "id": "main_normalize_transcript",
+      "community": 3
+    },
+    {
+      "label": "._moonshine_transcribe()",
+      "file_type": "code",
+      "source_file": "app\\main.py",
+      "source_location": "L484",
+      "id": "main_voiceassistantthread_moonshine_transcribe",
+      "community": 6
     },
     {
       "label": ".strip_fillers()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L377",
+      "source_location": "L527",
       "id": "main_voiceassistantthread_strip_fillers",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".record_with_vad()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L385",
+      "source_location": "L535",
       "id": "main_voiceassistantthread_record_with_vad",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".detect_wake_word()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L426",
+      "source_location": "L634",
       "id": "main_voiceassistantthread_detect_wake_word",
-      "community": 0
+      "community": 6
     },
     {
       "label": "._is_echo_of_ai()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L463",
+      "source_location": "L677",
       "id": "main_voiceassistantthread_is_echo_of_ai",
-      "community": 0
+      "community": 6
     },
     {
       "label": "._is_exit_phrase()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L480",
+      "source_location": "L727",
       "id": "main_voiceassistantthread_is_exit_phrase",
-      "community": 0
+      "community": 6
     },
     {
       "label": "._dispatch_and_speak()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L486",
+      "source_location": "L733",
       "id": "main_voiceassistantthread_dispatch_and_speak",
-      "community": 0
+      "community": 6
     },
     {
       "label": ".run()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L513",
+      "source_location": "L760",
       "id": "main_voiceassistantthread_run",
-      "community": 0
+      "community": 6
     },
     {
       "label": "analyze_screen()",
       "file_type": "code",
       "source_file": "app\\main.py",
-      "source_location": "L612",
+      "source_location": "L859",
       "id": "main_analyze_screen",
-      "community": 0
+      "community": 3
     },
     {
       "label": "Makes the Pygame window transparent and always-on-top.          What this does",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L73",
-      "id": "main_rationale_73",
-      "community": 0
+      "source_location": "L83",
+      "id": "main_rationale_83",
+      "community": 3
     },
     {
       "label": "Ask the AI a question and get a response",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L115",
-      "id": "main_rationale_115",
-      "community": 0
+      "source_location": "L125",
+      "id": "main_rationale_125",
+      "community": 3
     },
     {
       "label": "Stop the AI from speaking immediately",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L319",
-      "id": "main_rationale_319",
-      "community": 0
+      "source_location": "L348",
+      "id": "main_rationale_348",
+      "community": 3
     },
     {
       "label": "Sequential state machine \u2014 the production pattern used by every working     voi",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L325",
-      "id": "main_rationale_325",
-      "community": 0
+      "source_location": "L354",
+      "id": "main_rationale_354",
+      "community": 3
     },
     {
-      "label": "Detect if transcribed text is actually the AI's own speech (echo).",
+      "label": "Moonshine fallback transcription.         Requires:           ENABLE_MOONSHINE",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L464",
-      "id": "main_rationale_464",
-      "community": 0
+      "source_location": "L485",
+      "id": "main_rationale_485",
+      "community": 4
+    },
+    {
+      "label": "Detect if transcribed text is our own TTS bleeding back into the mic.         S",
+      "file_type": "rationale",
+      "source_file": "app\\main.py",
+      "source_location": "L678",
+      "id": "main_rationale_678",
+      "community": 3
     },
     {
       "label": "Send command to main loop, wait for reply, speak it.         Returns the reply",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L487",
-      "id": "main_rationale_487",
-      "community": 0
+      "source_location": "L734",
+      "id": "main_rationale_734",
+      "community": 3
     },
     {
       "label": "Run GPT-4o Vision in a background thread so the UI never freezes.     Notifies",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L613",
-      "id": "main_rationale_613",
-      "community": 0
+      "source_location": "L860",
+      "id": "main_rationale_860",
+      "community": 3
     },
     {
       "label": "# NOTE: CameraThread already flips the frame with cv2.flip(frame, 1)",
       "file_type": "rationale",
       "source_file": "app\\main.py",
-      "source_location": "L754",
-      "id": "main_rationale_754",
-      "community": 0
+      "source_location": "L1001",
+      "id": "main_rationale_1001",
+      "community": 3
     },
     {
       "label": "startup.py",
@@ -1233,7 +1441,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L1",
       "id": "connectors_groq_client_py",
-      "community": 3
+      "community": 1
     },
     {
       "label": "GroqClient",
@@ -1241,7 +1449,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L19",
       "id": "groq_client_groqclient",
-      "community": 3
+      "community": 1
     },
     {
       "label": ".__init__()",
@@ -1249,7 +1457,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L23",
       "id": "groq_client_groqclient_init",
-      "community": 3
+      "community": 1
     },
     {
       "label": "._get_client()",
@@ -1257,7 +1465,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L26",
       "id": "groq_client_groqclient_get_client",
-      "community": 3
+      "community": 1
     },
     {
       "label": ".complete()",
@@ -1265,7 +1473,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L48",
       "id": "groq_client_groqclient_complete",
-      "community": 3
+      "community": 1
     },
     {
       "label": "GroqClient \u2014 wrapper around the Groq Python SDK.  Used by morning_briefing.py",
@@ -1273,7 +1481,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L1",
       "id": "groq_client_rationale_1",
-      "community": 3
+      "community": 1
     },
     {
       "label": "Initialize the Groq client on first use. Raises clearly if key is missing.",
@@ -1281,7 +1489,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L27",
       "id": "groq_client_rationale_27",
-      "community": 3
+      "community": 1
     },
     {
       "label": "Send a prompt to Groq and return the response text.          Args:",
@@ -1289,7 +1497,7 @@
       "source_file": "connectors\\groq_client.py",
       "source_location": "L50",
       "id": "groq_client_rationale_50",
-      "community": 3
+      "community": 1
     },
     {
       "label": "openai_client.py",
@@ -1297,7 +1505,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L1",
       "id": "connectors_openai_client_py",
-      "community": 4
+      "community": 1
     },
     {
       "label": "OpenAIClient",
@@ -1305,7 +1513,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L19",
       "id": "openai_client_openaiclient",
-      "community": 4
+      "community": 1
     },
     {
       "label": ".__init__()",
@@ -1313,7 +1521,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L24",
       "id": "openai_client_openaiclient_init",
-      "community": 4
+      "community": 1
     },
     {
       "label": "._get_client()",
@@ -1321,7 +1529,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L27",
       "id": "openai_client_openaiclient_get_client",
-      "community": 4
+      "community": 1
     },
     {
       "label": ".vision_query()",
@@ -1329,7 +1537,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L49",
       "id": "openai_client_openaiclient_vision_query",
-      "community": 4
+      "community": 1
     },
     {
       "label": "OpenAI client for GPT-4o Vision.  Only used for screen analysis \u2014 triggered ex",
@@ -1337,7 +1545,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L1",
       "id": "openai_client_rationale_1",
-      "community": 4
+      "community": 1
     },
     {
       "label": "Lazy-load the OpenAI client. Raises clear error if key is missing.",
@@ -1345,7 +1553,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L28",
       "id": "openai_client_rationale_28",
-      "community": 4
+      "community": 1
     },
     {
       "label": "Send a base64-encoded image to GPT-4o Vision and return the response.",
@@ -1353,7 +1561,7 @@
       "source_file": "connectors\\openai_client.py",
       "source_location": "L51",
       "id": "openai_client_rationale_51",
-      "community": 4
+      "community": 1
     },
     {
       "label": "__init__.py",
@@ -1369,7 +1577,7 @@
       "source_file": "core\\camera_thread.py",
       "source_location": "L1",
       "id": "core_camera_thread_py",
-      "community": 0
+      "community": 3
     },
     {
       "label": "CameraThread",
@@ -1377,7 +1585,7 @@
       "source_file": "core\\camera_thread.py",
       "source_location": "L28",
       "id": "camera_thread_camerathread",
-      "community": 0
+      "community": 3
     },
     {
       "label": ".__init__()",
@@ -1385,7 +1593,7 @@
       "source_file": "core\\camera_thread.py",
       "source_location": "L30",
       "id": "camera_thread_camerathread_init",
-      "community": 0
+      "community": 3
     },
     {
       "label": ".run()",
@@ -1393,7 +1601,7 @@
       "source_file": "core\\camera_thread.py",
       "source_location": "L36",
       "id": "camera_thread_camerathread_run",
-      "community": 0
+      "community": 3
     },
     {
       "label": ".stop()",
@@ -1401,7 +1609,7 @@
       "source_file": "core\\camera_thread.py",
       "source_location": "L76",
       "id": "camera_thread_camerathread_stop",
-      "community": 0
+      "community": 3
     },
     {
       "label": "CameraThread \u2014 captures webcam frames on a dedicated daemon thread.  The main",
@@ -1409,7 +1617,7 @@
       "source_file": "core\\camera_thread.py",
       "source_location": "L1",
       "id": "camera_thread_rationale_1",
-      "community": 0
+      "community": 3
     },
     {
       "label": "queues.py",
@@ -1417,15 +1625,39 @@
       "source_file": "core\\queues.py",
       "source_location": "L1",
       "id": "core_queues_py",
-      "community": 10
+      "community": 9
     },
     {
-      "label": "Shared queues \u2014 the only communication channel between threads.  Rules:   - T",
+      "label": "record_tts_finished()",
+      "file_type": "code",
+      "source_file": "core\\queues.py",
+      "source_location": "L52",
+      "id": "queues_record_tts_finished",
+      "community": 9
+    },
+    {
+      "label": "read_tts_state()",
+      "file_type": "code",
+      "source_file": "core\\queues.py",
+      "source_location": "L60",
+      "id": "queues_read_tts_state",
+      "community": 9
+    },
+    {
+      "label": "Shared queues + small shared state \u2014 the only communication channel between thre",
       "file_type": "rationale",
       "source_file": "core\\queues.py",
       "source_location": "L1",
       "id": "queues_rationale_1",
-      "community": 10
+      "community": 9
+    },
+    {
+      "label": "Called by speak() after a TTS utterance completes.",
+      "file_type": "rationale",
+      "source_file": "core\\queues.py",
+      "source_location": "L53",
+      "id": "queues_rationale_53",
+      "community": 9
     },
     {
       "label": "vision_thread.py",
@@ -1433,7 +1665,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L1",
       "id": "core_vision_thread_py",
-      "community": 0
+      "community": 7
     },
     {
       "label": "VisionThread",
@@ -1441,7 +1673,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L31",
       "id": "vision_thread_visionthread",
-      "community": 0
+      "community": 3
     },
     {
       "label": ".__init__()",
@@ -1449,7 +1681,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L33",
       "id": "vision_thread_visionthread_init",
-      "community": 0
+      "community": 3
     },
     {
       "label": ".run()",
@@ -1457,7 +1689,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L38",
       "id": "vision_thread_visionthread_run",
-      "community": 0
+      "community": 3
     },
     {
       "label": "._put_landmarks()",
@@ -1465,7 +1697,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L81",
       "id": "vision_thread_visionthread_put_landmarks",
-      "community": 0
+      "community": 3
     },
     {
       "label": ".stop()",
@@ -1473,7 +1705,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L92",
       "id": "vision_thread_visionthread_stop",
-      "community": 0
+      "community": 3
     },
     {
       "label": "VisionThread \u2014 reads camera frames, runs MediaPipe, detects gestures.  Outputs",
@@ -1481,7 +1713,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L1",
       "id": "vision_thread_rationale_1",
-      "community": 0
+      "community": 7
     },
     {
       "label": "Replace stale landmark data with fresh (maxsize=1 queue).",
@@ -1489,7 +1721,7 @@
       "source_file": "core\\vision_thread.py",
       "source_location": "L82",
       "id": "vision_thread_rationale_82",
-      "community": 0
+      "community": 3
     },
     {
       "label": "__init__.py",
@@ -1929,7 +2161,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
       "_src": "main_voiceassistantthread",
       "_tgt": "chat_agent_chatagent",
@@ -1941,84 +2173,96 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
-      "_src": "main_rationale_73",
+      "_src": "main_rationale_83",
       "_tgt": "chat_agent_chatagent",
       "source": "chat_agent_chatagent",
-      "target": "main_rationale_73",
+      "target": "main_rationale_83",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
-      "_src": "main_rationale_115",
+      "_src": "main_rationale_125",
       "_tgt": "chat_agent_chatagent",
       "source": "chat_agent_chatagent",
-      "target": "main_rationale_115",
+      "target": "main_rationale_125",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
-      "_src": "main_rationale_319",
+      "_src": "main_rationale_348",
       "_tgt": "chat_agent_chatagent",
       "source": "chat_agent_chatagent",
-      "target": "main_rationale_319",
+      "target": "main_rationale_348",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
-      "_src": "main_rationale_325",
+      "_src": "main_rationale_354",
       "_tgt": "chat_agent_chatagent",
       "source": "chat_agent_chatagent",
-      "target": "main_rationale_325",
+      "target": "main_rationale_354",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
-      "_src": "main_rationale_464",
+      "_src": "main_rationale_485",
       "_tgt": "chat_agent_chatagent",
       "source": "chat_agent_chatagent",
-      "target": "main_rationale_464",
+      "target": "main_rationale_485",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
-      "_src": "main_rationale_487",
+      "_src": "main_rationale_678",
       "_tgt": "chat_agent_chatagent",
       "source": "chat_agent_chatagent",
-      "target": "main_rationale_487",
+      "target": "main_rationale_678",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L218",
+      "source_location": "L244",
       "weight": 0.8,
-      "_src": "main_rationale_613",
+      "_src": "main_rationale_734",
       "_tgt": "chat_agent_chatagent",
       "source": "chat_agent_chatagent",
-      "target": "main_rationale_613",
+      "target": "main_rationale_734",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "app\\main.py",
+      "source_location": "L244",
+      "weight": 0.8,
+      "_src": "main_rationale_860",
+      "_tgt": "chat_agent_chatagent",
+      "source": "chat_agent_chatagent",
+      "target": "main_rationale_860",
       "confidence_score": 0.5
     },
     {
@@ -2361,7 +2605,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
       "_src": "main_voiceassistantthread",
       "_tgt": "memory_agent_memoryagent",
@@ -2373,84 +2617,96 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
-      "_src": "main_rationale_73",
+      "_src": "main_rationale_83",
       "_tgt": "memory_agent_memoryagent",
       "source": "memory_agent_memoryagent",
-      "target": "main_rationale_73",
+      "target": "main_rationale_83",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
-      "_src": "main_rationale_115",
+      "_src": "main_rationale_125",
       "_tgt": "memory_agent_memoryagent",
       "source": "memory_agent_memoryagent",
-      "target": "main_rationale_115",
+      "target": "main_rationale_125",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
-      "_src": "main_rationale_319",
+      "_src": "main_rationale_348",
       "_tgt": "memory_agent_memoryagent",
       "source": "memory_agent_memoryagent",
-      "target": "main_rationale_319",
+      "target": "main_rationale_348",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
-      "_src": "main_rationale_325",
+      "_src": "main_rationale_354",
       "_tgt": "memory_agent_memoryagent",
       "source": "memory_agent_memoryagent",
-      "target": "main_rationale_325",
+      "target": "main_rationale_354",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
-      "_src": "main_rationale_464",
+      "_src": "main_rationale_485",
       "_tgt": "memory_agent_memoryagent",
       "source": "memory_agent_memoryagent",
-      "target": "main_rationale_464",
+      "target": "main_rationale_485",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
-      "_src": "main_rationale_487",
+      "_src": "main_rationale_678",
       "_tgt": "memory_agent_memoryagent",
       "source": "memory_agent_memoryagent",
-      "target": "main_rationale_487",
+      "target": "main_rationale_678",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L219",
+      "source_location": "L245",
       "weight": 0.8,
-      "_src": "main_rationale_613",
+      "_src": "main_rationale_734",
       "_tgt": "memory_agent_memoryagent",
       "source": "memory_agent_memoryagent",
-      "target": "main_rationale_613",
+      "target": "main_rationale_734",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "app\\main.py",
+      "source_location": "L245",
+      "weight": 0.8,
+      "_src": "main_rationale_860",
+      "_tgt": "memory_agent_memoryagent",
+      "source": "memory_agent_memoryagent",
+      "target": "main_rationale_860",
       "confidence_score": 0.5
     },
     {
@@ -2781,7 +3037,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L108",
+      "source_location": "L145",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_format_habits",
@@ -2793,7 +3049,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L236",
+      "source_location": "L315",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_looks_parallel",
@@ -2805,7 +3061,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L241",
+      "source_location": "L320",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_merge_results",
@@ -2817,7 +3073,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L265",
+      "source_location": "L344",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_extract_after_any",
@@ -2829,7 +3085,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L274",
+      "source_location": "L353",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_extract_number",
@@ -2841,7 +3097,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L279",
+      "source_location": "L358",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_looks_like_web_intent",
@@ -2853,7 +3109,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L285",
+      "source_location": "L364",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_looks_like_site_name_or_url",
@@ -2865,7 +3121,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L291",
+      "source_location": "L370",
       "weight": 1.0,
       "_src": "agents_orchestrator_py",
       "_tgt": "orchestrator_extract_urlish",
@@ -2913,7 +3169,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L44",
+      "source_location": "L51",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent",
       "_tgt": "orchestrator_orchestratoragent_process",
@@ -2925,7 +3181,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L65",
+      "source_location": "L102",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent",
       "_tgt": "orchestrator_orchestratoragent_reply",
@@ -2937,7 +3193,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L73",
+      "source_location": "L110",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent",
       "_tgt": "orchestrator_orchestratoragent_execute_one",
@@ -2949,7 +3205,19 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L127",
+      "source_location": "L176",
+      "weight": 1.0,
+      "_src": "orchestrator_orchestratoragent",
+      "_tgt": "orchestrator_orchestratoragent_looks_like_declared_action",
+      "source": "orchestrator_orchestratoragent",
+      "target": "orchestrator_orchestratoragent_looks_like_declared_action",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\orchestrator.py",
+      "source_location": "L180",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent",
       "_tgt": "orchestrator_orchestratoragent_detect_intents",
@@ -2973,7 +3241,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
       "_src": "main_voiceassistantthread",
       "_tgt": "orchestrator_orchestratoragent",
@@ -2985,84 +3253,96 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
-      "_src": "main_rationale_73",
+      "_src": "main_rationale_83",
       "_tgt": "orchestrator_orchestratoragent",
       "source": "orchestrator_orchestratoragent",
-      "target": "main_rationale_73",
+      "target": "main_rationale_83",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
-      "_src": "main_rationale_115",
+      "_src": "main_rationale_125",
       "_tgt": "orchestrator_orchestratoragent",
       "source": "orchestrator_orchestratoragent",
-      "target": "main_rationale_115",
+      "target": "main_rationale_125",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
-      "_src": "main_rationale_319",
+      "_src": "main_rationale_348",
       "_tgt": "orchestrator_orchestratoragent",
       "source": "orchestrator_orchestratoragent",
-      "target": "main_rationale_319",
+      "target": "main_rationale_348",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
-      "_src": "main_rationale_325",
+      "_src": "main_rationale_354",
       "_tgt": "orchestrator_orchestratoragent",
       "source": "orchestrator_orchestratoragent",
-      "target": "main_rationale_325",
+      "target": "main_rationale_354",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
-      "_src": "main_rationale_464",
+      "_src": "main_rationale_485",
       "_tgt": "orchestrator_orchestratoragent",
       "source": "orchestrator_orchestratoragent",
-      "target": "main_rationale_464",
+      "target": "main_rationale_485",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
-      "_src": "main_rationale_487",
+      "_src": "main_rationale_678",
       "_tgt": "orchestrator_orchestratoragent",
       "source": "orchestrator_orchestratoragent",
-      "target": "main_rationale_487",
+      "target": "main_rationale_678",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L216",
+      "source_location": "L242",
       "weight": 0.8,
-      "_src": "main_rationale_613",
+      "_src": "main_rationale_734",
       "_tgt": "orchestrator_orchestratoragent",
       "source": "orchestrator_orchestratoragent",
-      "target": "main_rationale_613",
+      "target": "main_rationale_734",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "app\\main.py",
+      "source_location": "L242",
+      "weight": 0.8,
+      "_src": "main_rationale_860",
+      "_tgt": "orchestrator_orchestratoragent",
+      "source": "orchestrator_orchestratoragent",
+      "target": "main_rationale_860",
       "confidence_score": 0.5
     },
     {
@@ -3093,54 +3373,6 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L45",
-      "weight": 1.0,
-      "_src": "orchestrator_orchestratoragent_process",
-      "_tgt": "orchestrator_orchestratoragent_detect_intents",
-      "source": "orchestrator_orchestratoragent_process",
-      "target": "orchestrator_orchestratoragent_detect_intents",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "agents\\orchestrator.py",
-      "source_location": "L50",
-      "weight": 1.0,
-      "_src": "orchestrator_orchestratoragent_process",
-      "_tgt": "orchestrator_looks_parallel",
-      "source": "orchestrator_orchestratoragent_process",
-      "target": "orchestrator_looks_parallel",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "agents\\orchestrator.py",
-      "source_location": "L60",
-      "weight": 1.0,
-      "_src": "orchestrator_orchestratoragent_process",
-      "_tgt": "orchestrator_orchestratoragent_execute_one",
-      "source": "orchestrator_orchestratoragent_process",
-      "target": "orchestrator_orchestratoragent_execute_one",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "agents\\orchestrator.py",
-      "source_location": "L62",
-      "weight": 1.0,
-      "_src": "orchestrator_orchestratoragent_process",
-      "_tgt": "orchestrator_merge_results",
-      "source": "orchestrator_orchestratoragent_process",
-      "target": "orchestrator_merge_results",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": "agents\\orchestrator.py",
       "source_location": "L63",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent_process",
@@ -3153,7 +3385,67 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L89",
+      "source_location": "L66",
+      "weight": 1.0,
+      "_src": "orchestrator_orchestratoragent_process",
+      "_tgt": "orchestrator_orchestratoragent_detect_intents",
+      "source": "orchestrator_orchestratoragent_process",
+      "target": "orchestrator_orchestratoragent_detect_intents",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\orchestrator.py",
+      "source_location": "L74",
+      "weight": 1.0,
+      "_src": "orchestrator_orchestratoragent_process",
+      "_tgt": "orchestrator_orchestratoragent_looks_like_declared_action",
+      "source": "orchestrator_orchestratoragent_process",
+      "target": "orchestrator_orchestratoragent_looks_like_declared_action",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\orchestrator.py",
+      "source_location": "L87",
+      "weight": 1.0,
+      "_src": "orchestrator_orchestratoragent_process",
+      "_tgt": "orchestrator_looks_parallel",
+      "source": "orchestrator_orchestratoragent_process",
+      "target": "orchestrator_looks_parallel",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\orchestrator.py",
+      "source_location": "L97",
+      "weight": 1.0,
+      "_src": "orchestrator_orchestratoragent_process",
+      "_tgt": "orchestrator_orchestratoragent_execute_one",
+      "source": "orchestrator_orchestratoragent_process",
+      "target": "orchestrator_orchestratoragent_execute_one",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\orchestrator.py",
+      "source_location": "L99",
+      "weight": 1.0,
+      "_src": "orchestrator_orchestratoragent_process",
+      "_tgt": "orchestrator_merge_results",
+      "source": "orchestrator_orchestratoragent_process",
+      "target": "orchestrator_merge_results",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\orchestrator.py",
+      "source_location": "L126",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent_execute_one",
       "_tgt": "orchestrator_format_habits",
@@ -3165,7 +3457,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L153",
+      "source_location": "L222",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent_detect_intents",
       "_tgt": "orchestrator_extract_number",
@@ -3177,7 +3469,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L170",
+      "source_location": "L239",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent_detect_intents",
       "_tgt": "orchestrator_extract_after_any",
@@ -3189,7 +3481,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L173",
+      "source_location": "L242",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent_detect_intents",
       "_tgt": "orchestrator_looks_like_site_name_or_url",
@@ -3201,7 +3493,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L190",
+      "source_location": "L262",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent_detect_intents",
       "_tgt": "orchestrator_looks_like_web_intent",
@@ -3213,7 +3505,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L191",
+      "source_location": "L264",
       "weight": 1.0,
       "_src": "orchestrator_orchestratoragent_detect_intents",
       "_tgt": "orchestrator_extract_urlish",
@@ -3225,12 +3517,12 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "agents\\orchestrator.py",
-      "source_location": "L128",
+      "source_location": "L181",
       "weight": 1.0,
-      "_src": "orchestrator_rationale_128",
+      "_src": "orchestrator_rationale_181",
       "_tgt": "orchestrator_orchestratoragent_detect_intents",
       "source": "orchestrator_orchestratoragent_detect_intents",
-      "target": "orchestrator_rationale_128",
+      "target": "orchestrator_rationale_181",
       "confidence_score": 1.0
     },
     {
@@ -3501,7 +3793,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L96",
+      "source_location": "L130",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_taskagent",
@@ -3513,7 +3805,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L177",
+      "source_location": "L234",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_contains_blocked",
@@ -3525,7 +3817,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L186",
+      "source_location": "L243",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_looks_like_yes",
@@ -3537,7 +3829,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L191",
+      "source_location": "L248",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_looks_like_cancel",
@@ -3549,7 +3841,31 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L502",
+      "source_location": "L403",
+      "weight": 1.0,
+      "_src": "agents_task_agent_py",
+      "_tgt": "task_agent_build_url_from_site_name",
+      "source": "agents_task_agent_py",
+      "target": "task_agent_build_url_from_site_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L415",
+      "weight": 1.0,
+      "_src": "agents_task_agent_py",
+      "_tgt": "task_agent_find_browser_executable",
+      "source": "agents_task_agent_py",
+      "target": "task_agent_find_browser_executable",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L701",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_extract_text_payload",
@@ -3561,7 +3877,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L508",
+      "source_location": "L707",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_extract_search_query",
@@ -3573,7 +3889,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L517",
+      "source_location": "L716",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_extract_search_engine",
@@ -3585,7 +3901,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L524",
+      "source_location": "L723",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_parse_scroll",
@@ -3597,7 +3913,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L535",
+      "source_location": "L734",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_extract_after",
@@ -3609,7 +3925,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L543",
+      "source_location": "L742",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_extract_email_recipient",
@@ -3621,7 +3937,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L548",
+      "source_location": "L747",
       "weight": 1.0,
       "_src": "agents_task_agent_py",
       "_tgt": "task_agent_extract_subject",
@@ -3630,10 +3946,22 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L898",
+      "weight": 1.0,
+      "_src": "agents_task_agent_py",
+      "_tgt": "task_agent_list_running_process_basenames",
+      "source": "agents_task_agent_py",
+      "target": "task_agent_list_running_process_basenames",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L104",
+      "source_location": "L138",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_init",
@@ -3645,7 +3973,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L120",
+      "source_location": "L157",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_execute",
@@ -3657,7 +3985,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L181",
+      "source_location": "L238",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_needs_confirmation",
@@ -3669,7 +3997,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L195",
+      "source_location": "L252",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_confirm_yes",
@@ -3681,7 +4009,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L206",
+      "source_location": "L263",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_confirm_cancel",
@@ -3693,7 +4021,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L215",
+      "source_location": "L272",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_set_pending_confirm",
@@ -3705,7 +4033,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L223",
+      "source_location": "L280",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_open_app",
@@ -3717,7 +4045,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L240",
+      "source_location": "L303",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_close_app",
@@ -3729,7 +4057,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L261",
+      "source_location": "L336",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_open_website",
@@ -3741,7 +4069,19 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L284",
+      "source_location": "L361",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_open_web_in_browser",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_open_web_in_browser",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L433",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_type_text",
@@ -3753,7 +4093,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L302",
+      "source_location": "L451",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_draft_email",
@@ -3765,7 +4105,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L341",
+      "source_location": "L490",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_search",
@@ -3777,7 +4117,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L355",
+      "source_location": "L504",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_scroll",
@@ -3789,7 +4129,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L366",
+      "source_location": "L515",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_clipboard_action_from_raw",
@@ -3801,7 +4141,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L377",
+      "source_location": "L526",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_clipboard_action",
@@ -3813,7 +4153,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L393",
+      "source_location": "L542",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_ask_chatgpt",
@@ -3825,7 +4165,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L427",
+      "source_location": "L576",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_take_screenshot_and_save",
@@ -3837,7 +4177,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L439",
+      "source_location": "L588",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_set_timer",
@@ -3849,7 +4189,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L468",
+      "source_location": "L617",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_lock_screen",
@@ -3861,7 +4201,67 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L478",
+      "source_location": "L627",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_shutdown_with_confirm",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_shutdown_with_confirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L642",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_restart_with_confirm",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_restart_with_confirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L649",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_schedule_shutdown",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_schedule_shutdown",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L652",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_schedule_restart",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_schedule_restart",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L655",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_schedule_power_action",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_schedule_power_action",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L677",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_minimize_active_window",
@@ -3873,7 +4273,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L488",
+      "source_location": "L687",
       "weight": 1.0,
       "_src": "task_agent_taskagent",
       "_tgt": "task_agent_taskagent_maximize_active_window",
@@ -3882,22 +4282,94 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L754",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_resolve_app_name",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_resolve_app_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L782",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_resolve_running_process_name",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_resolve_running_process_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L808",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_resolve_website_name",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_resolve_website_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L825",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_resolve_browser_name",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_resolve_browser_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L847",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_strip_speech_filler",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_strip_speech_filler",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L865",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent",
+      "_tgt": "task_agent_taskagent_sanitize_site_target",
+      "source": "task_agent_taskagent",
+      "target": "task_agent_taskagent_sanitize_site_target",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L97",
+      "source_location": "L131",
       "weight": 1.0,
-      "_src": "task_agent_rationale_97",
+      "_src": "task_agent_rationale_131",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "task_agent_rationale_97",
+      "target": "task_agent_rationale_131",
       "confidence_score": 1.0
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L33",
+      "source_location": "L40",
       "weight": 0.8,
       "_src": "task_agent_taskagent",
       "_tgt": "groq_client_groqclient",
@@ -3909,7 +4381,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L34",
+      "source_location": "L41",
       "weight": 0.8,
       "_src": "task_agent_taskagent",
       "_tgt": "openai_client_openaiclient",
@@ -3921,7 +4393,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
       "_src": "main_voiceassistantthread",
       "_tgt": "task_agent_taskagent",
@@ -3933,91 +4405,103 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
-      "_src": "main_rationale_73",
+      "_src": "main_rationale_83",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "main_rationale_73",
+      "target": "main_rationale_83",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
-      "_src": "main_rationale_115",
+      "_src": "main_rationale_125",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "main_rationale_115",
+      "target": "main_rationale_125",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
-      "_src": "main_rationale_319",
+      "_src": "main_rationale_348",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "main_rationale_319",
+      "target": "main_rationale_348",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
-      "_src": "main_rationale_325",
+      "_src": "main_rationale_354",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "main_rationale_325",
+      "target": "main_rationale_354",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
-      "_src": "main_rationale_464",
+      "_src": "main_rationale_485",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "main_rationale_464",
+      "target": "main_rationale_485",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
-      "_src": "main_rationale_487",
+      "_src": "main_rationale_678",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "main_rationale_487",
+      "target": "main_rationale_678",
       "confidence_score": 0.5
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L217",
+      "source_location": "L243",
       "weight": 0.8,
-      "_src": "main_rationale_613",
+      "_src": "main_rationale_734",
       "_tgt": "task_agent_taskagent",
       "source": "task_agent_taskagent",
-      "target": "main_rationale_613",
+      "target": "main_rationale_734",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "app\\main.py",
+      "source_location": "L243",
+      "weight": 0.8,
+      "_src": "main_rationale_860",
+      "_tgt": "task_agent_taskagent",
+      "source": "task_agent_taskagent",
+      "target": "main_rationale_860",
       "confidence_score": 0.5
     },
     {
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L123",
+      "source_location": "L160",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_contains_blocked",
@@ -4029,7 +4513,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L129",
+      "source_location": "L166",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_looks_like_yes",
@@ -4041,7 +4525,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L130",
+      "source_location": "L167",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_confirm_yes",
@@ -4053,7 +4537,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L131",
+      "source_location": "L168",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_looks_like_cancel",
@@ -4065,7 +4549,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L132",
+      "source_location": "L169",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_confirm_cancel",
@@ -4077,7 +4561,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L136",
+      "source_location": "L173",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_open_app",
@@ -4089,7 +4573,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L138",
+      "source_location": "L175",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_close_app",
@@ -4101,7 +4585,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L140",
+      "source_location": "L177",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_open_website",
@@ -4113,7 +4597,19 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L142",
+      "source_location": "L179",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_execute",
+      "_tgt": "task_agent_taskagent_open_web_in_browser",
+      "source": "task_agent_taskagent_execute",
+      "target": "task_agent_taskagent_open_web_in_browser",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L185",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_type_text",
@@ -4125,7 +4621,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L142",
+      "source_location": "L185",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_extract_text_payload",
@@ -4137,7 +4633,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L144",
+      "source_location": "L187",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_draft_email",
@@ -4149,7 +4645,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L146",
+      "source_location": "L189",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_search",
@@ -4161,7 +4657,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L146",
+      "source_location": "L189",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_extract_search_query",
@@ -4173,7 +4669,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L146",
+      "source_location": "L189",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_extract_search_engine",
@@ -4185,7 +4681,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L148",
+      "source_location": "L191",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_parse_scroll",
@@ -4197,7 +4693,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L149",
+      "source_location": "L192",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_scroll",
@@ -4209,7 +4705,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L151",
+      "source_location": "L194",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_clipboard_action_from_raw",
@@ -4221,7 +4717,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L154",
+      "source_location": "L197",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_ask_chatgpt",
@@ -4233,7 +4729,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L156",
+      "source_location": "L199",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_take_screenshot_and_save",
@@ -4245,7 +4741,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L159",
+      "source_location": "L202",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_set_timer",
@@ -4257,7 +4753,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L163",
+      "source_location": "L206",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_lock_screen",
@@ -4269,7 +4765,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L165",
+      "source_location": "L208",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_minimize_active_window",
@@ -4281,7 +4777,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L167",
+      "source_location": "L210",
       "weight": 1.0,
       "_src": "task_agent_taskagent_execute",
       "_tgt": "task_agent_taskagent_maximize_active_window",
@@ -4293,7 +4789,187 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L374",
+      "source_location": "L212",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_execute",
+      "_tgt": "task_agent_taskagent_shutdown_with_confirm",
+      "source": "task_agent_taskagent_execute",
+      "target": "task_agent_taskagent_shutdown_with_confirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L214",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_execute",
+      "_tgt": "task_agent_taskagent_restart_with_confirm",
+      "source": "task_agent_taskagent_execute",
+      "target": "task_agent_taskagent_restart_with_confirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L636",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_shutdown_with_confirm",
+      "_tgt": "task_agent_taskagent_set_pending_confirm",
+      "source": "task_agent_taskagent_set_pending_confirm",
+      "target": "task_agent_taskagent_shutdown_with_confirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L643",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_restart_with_confirm",
+      "_tgt": "task_agent_taskagent_set_pending_confirm",
+      "source": "task_agent_taskagent_set_pending_confirm",
+      "target": "task_agent_taskagent_restart_with_confirm",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L660",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_schedule_power_action",
+      "_tgt": "task_agent_taskagent_set_pending_confirm",
+      "source": "task_agent_taskagent_set_pending_confirm",
+      "target": "task_agent_taskagent_schedule_power_action",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L286",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_open_app",
+      "_tgt": "task_agent_taskagent_resolve_app_name",
+      "source": "task_agent_taskagent_open_app",
+      "target": "task_agent_taskagent_resolve_app_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L311",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_close_app",
+      "_tgt": "task_agent_taskagent_resolve_running_process_name",
+      "source": "task_agent_taskagent_close_app",
+      "target": "task_agent_taskagent_resolve_running_process_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L314",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_close_app",
+      "_tgt": "task_agent_taskagent_resolve_app_name",
+      "source": "task_agent_taskagent_close_app",
+      "target": "task_agent_taskagent_resolve_app_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L337",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_open_website",
+      "_tgt": "task_agent_taskagent_sanitize_site_target",
+      "source": "task_agent_taskagent_open_website",
+      "target": "task_agent_taskagent_sanitize_site_target",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L342",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_open_website",
+      "_tgt": "task_agent_taskagent_resolve_website_name",
+      "source": "task_agent_taskagent_open_website",
+      "target": "task_agent_taskagent_resolve_website_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L373",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_open_web_in_browser",
+      "_tgt": "task_agent_taskagent_sanitize_site_target",
+      "source": "task_agent_taskagent_open_web_in_browser",
+      "target": "task_agent_taskagent_sanitize_site_target",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L377",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_open_web_in_browser",
+      "_tgt": "task_agent_taskagent_resolve_browser_name",
+      "source": "task_agent_taskagent_open_web_in_browser",
+      "target": "task_agent_taskagent_resolve_browser_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L381",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_open_web_in_browser",
+      "_tgt": "task_agent_build_url_from_site_name",
+      "source": "task_agent_taskagent_open_web_in_browser",
+      "target": "task_agent_build_url_from_site_name",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L383",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_open_web_in_browser",
+      "_tgt": "task_agent_find_browser_executable",
+      "source": "task_agent_taskagent_open_web_in_browser",
+      "target": "task_agent_find_browser_executable",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L362",
+      "weight": 1.0,
+      "_src": "task_agent_rationale_362",
+      "_tgt": "task_agent_taskagent_open_web_in_browser",
+      "source": "task_agent_taskagent_open_web_in_browser",
+      "target": "task_agent_rationale_362",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L523",
       "weight": 1.0,
       "_src": "task_agent_taskagent_clipboard_action_from_raw",
       "_tgt": "task_agent_taskagent_type_text",
@@ -4305,7 +4981,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L305",
+      "source_location": "L454",
       "weight": 1.0,
       "_src": "task_agent_taskagent_draft_email",
       "_tgt": "task_agent_extract_email_recipient",
@@ -4317,7 +4993,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L306",
+      "source_location": "L455",
       "weight": 1.0,
       "_src": "task_agent_taskagent_draft_email",
       "_tgt": "task_agent_extract_subject",
@@ -4329,7 +5005,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L504",
+      "source_location": "L703",
       "weight": 1.0,
       "_src": "task_agent_extract_text_payload",
       "_tgt": "task_agent_taskagent_search",
@@ -4341,7 +5017,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L544",
+      "source_location": "L743",
       "weight": 1.0,
       "_src": "task_agent_extract_email_recipient",
       "_tgt": "task_agent_taskagent_search",
@@ -4353,7 +5029,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L549",
+      "source_location": "L748",
       "weight": 1.0,
       "_src": "task_agent_extract_subject",
       "_tgt": "task_agent_taskagent_search",
@@ -4365,7 +5041,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L369",
+      "source_location": "L518",
       "weight": 1.0,
       "_src": "task_agent_taskagent_clipboard_action_from_raw",
       "_tgt": "task_agent_taskagent_clipboard_action",
@@ -4377,7 +5053,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L371",
+      "source_location": "L520",
       "weight": 1.0,
       "_src": "task_agent_taskagent_clipboard_action_from_raw",
       "_tgt": "task_agent_extract_after",
@@ -4386,14 +5062,122 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L628",
+      "weight": 1.0,
+      "_src": "task_agent_rationale_628",
+      "_tgt": "task_agent_taskagent_shutdown_with_confirm",
+      "source": "task_agent_taskagent_shutdown_with_confirm",
+      "target": "task_agent_rationale_628",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L650",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_schedule_shutdown",
+      "_tgt": "task_agent_taskagent_schedule_power_action",
+      "source": "task_agent_taskagent_schedule_shutdown",
+      "target": "task_agent_taskagent_schedule_power_action",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L653",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_schedule_restart",
+      "_tgt": "task_agent_taskagent_schedule_power_action",
+      "source": "task_agent_taskagent_schedule_restart",
+      "target": "task_agent_taskagent_schedule_power_action",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L765",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_resolve_app_name",
+      "_tgt": "task_agent_list_running_process_basenames",
+      "source": "task_agent_taskagent_resolve_app_name",
+      "target": "task_agent_list_running_process_basenames",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L755",
+      "weight": 1.0,
+      "_src": "task_agent_rationale_755",
+      "_tgt": "task_agent_taskagent_resolve_app_name",
+      "source": "task_agent_taskagent_resolve_app_name",
+      "target": "task_agent_rationale_755",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L792",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_resolve_running_process_name",
+      "_tgt": "task_agent_list_running_process_basenames",
+      "source": "task_agent_taskagent_resolve_running_process_name",
+      "target": "task_agent_list_running_process_basenames",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L783",
+      "weight": 1.0,
+      "_src": "task_agent_rationale_783",
+      "_tgt": "task_agent_taskagent_resolve_running_process_name",
+      "source": "task_agent_taskagent_resolve_running_process_name",
+      "target": "task_agent_rationale_783",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L894",
+      "weight": 1.0,
+      "_src": "task_agent_taskagent_sanitize_site_target",
+      "_tgt": "task_agent_taskagent_strip_speech_filler",
+      "source": "task_agent_taskagent_strip_speech_filler",
+      "target": "task_agent_taskagent_sanitize_site_target",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L866",
+      "weight": 1.0,
+      "_src": "task_agent_rationale_866",
+      "_tgt": "task_agent_taskagent_sanitize_site_target",
+      "source": "task_agent_taskagent_sanitize_site_target",
+      "target": "task_agent_rationale_866",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L33",
+      "source_location": "L40",
       "weight": 0.8,
-      "_src": "task_agent_rationale_97",
+      "_src": "task_agent_rationale_131",
       "_tgt": "groq_client_groqclient",
-      "source": "task_agent_rationale_97",
+      "source": "task_agent_rationale_131",
       "target": "groq_client_groqclient",
       "confidence_score": 0.5
     },
@@ -4401,11 +5185,155 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "agents\\task_agent.py",
-      "source_location": "L34",
+      "source_location": "L41",
       "weight": 0.8,
-      "_src": "task_agent_rationale_97",
+      "_src": "task_agent_rationale_131",
       "_tgt": "openai_client_openaiclient",
-      "source": "task_agent_rationale_97",
+      "source": "task_agent_rationale_131",
+      "target": "openai_client_openaiclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L40",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_362",
+      "_tgt": "groq_client_groqclient",
+      "source": "task_agent_rationale_362",
+      "target": "groq_client_groqclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L41",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_362",
+      "_tgt": "openai_client_openaiclient",
+      "source": "task_agent_rationale_362",
+      "target": "openai_client_openaiclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L40",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_404",
+      "_tgt": "groq_client_groqclient",
+      "source": "task_agent_rationale_404",
+      "target": "groq_client_groqclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L41",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_404",
+      "_tgt": "openai_client_openaiclient",
+      "source": "task_agent_rationale_404",
+      "target": "openai_client_openaiclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L40",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_416",
+      "_tgt": "groq_client_groqclient",
+      "source": "task_agent_rationale_416",
+      "target": "groq_client_groqclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L41",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_416",
+      "_tgt": "openai_client_openaiclient",
+      "source": "task_agent_rationale_416",
+      "target": "openai_client_openaiclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L40",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_628",
+      "_tgt": "groq_client_groqclient",
+      "source": "task_agent_rationale_628",
+      "target": "groq_client_groqclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L41",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_628",
+      "_tgt": "openai_client_openaiclient",
+      "source": "task_agent_rationale_628",
+      "target": "openai_client_openaiclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L40",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_783",
+      "_tgt": "groq_client_groqclient",
+      "source": "task_agent_rationale_783",
+      "target": "groq_client_groqclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L41",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_783",
+      "_tgt": "openai_client_openaiclient",
+      "source": "task_agent_rationale_783",
+      "target": "openai_client_openaiclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L40",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_866",
+      "_tgt": "groq_client_groqclient",
+      "source": "task_agent_rationale_866",
+      "target": "groq_client_groqclient",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "agents\\task_agent.py",
+      "source_location": "L41",
+      "weight": 0.8,
+      "_src": "task_agent_rationale_866",
+      "_tgt": "openai_client_openaiclient",
+      "source": "task_agent_rationale_866",
       "target": "openai_client_openaiclient",
       "confidence_score": 0.5
     },
@@ -4413,7 +5341,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L72",
+      "source_location": "L82",
       "weight": 1.0,
       "_src": "app_main_py",
       "_tgt": "main_setup_transparent_window",
@@ -4425,7 +5353,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L114",
+      "source_location": "L124",
       "weight": 1.0,
       "_src": "app_main_py",
       "_tgt": "main_ask_ai",
@@ -4437,7 +5365,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L262",
+      "source_location": "L288",
       "weight": 1.0,
       "_src": "app_main_py",
       "_tgt": "main_speak",
@@ -4449,7 +5377,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L318",
+      "source_location": "L347",
       "weight": 1.0,
       "_src": "app_main_py",
       "_tgt": "main_stop_ai_speech",
@@ -4461,7 +5389,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L324",
+      "source_location": "L353",
       "weight": 1.0,
       "_src": "app_main_py",
       "_tgt": "main_voiceassistantthread",
@@ -4473,7 +5401,19 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L612",
+      "source_location": "L467",
+      "weight": 1.0,
+      "_src": "app_main_py",
+      "_tgt": "main_normalize_transcript",
+      "source": "app_main_py",
+      "target": "main_normalize_transcript",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "app\\main.py",
+      "source_location": "L859",
       "weight": 1.0,
       "_src": "app_main_py",
       "_tgt": "main_analyze_screen",
@@ -4485,43 +5425,43 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L754",
+      "source_location": "L1001",
       "weight": 1.0,
-      "_src": "main_rationale_754",
+      "_src": "main_rationale_1001",
       "_tgt": "app_main_py",
       "source": "app_main_py",
-      "target": "main_rationale_754",
+      "target": "main_rationale_1001",
       "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L73",
+      "source_location": "L83",
       "weight": 1.0,
-      "_src": "main_rationale_73",
+      "_src": "main_rationale_83",
       "_tgt": "main_setup_transparent_window",
       "source": "main_setup_transparent_window",
-      "target": "main_rationale_73",
+      "target": "main_rationale_83",
       "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L115",
+      "source_location": "L125",
       "weight": 1.0,
-      "_src": "main_rationale_115",
+      "_src": "main_rationale_125",
       "_tgt": "main_ask_ai",
       "source": "main_ask_ai",
-      "target": "main_rationale_115",
+      "target": "main_rationale_125",
       "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L508",
+      "source_location": "L755",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_dispatch_and_speak",
       "_tgt": "main_speak",
@@ -4533,7 +5473,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L583",
+      "source_location": "L830",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_speak",
@@ -4545,19 +5485,19 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L319",
+      "source_location": "L348",
       "weight": 1.0,
-      "_src": "main_rationale_319",
+      "_src": "main_rationale_348",
       "_tgt": "main_stop_ai_speech",
       "source": "main_stop_ai_speech",
-      "target": "main_rationale_319",
+      "target": "main_rationale_348",
       "confidence_score": 1.0
     },
     {
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L337",
+      "source_location": "L366",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_init",
@@ -4569,7 +5509,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L343",
+      "source_location": "L372",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_request_wake",
@@ -4581,7 +5521,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L346",
+      "source_location": "L375",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_request_redirect_listen",
@@ -4593,7 +5533,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L349",
+      "source_location": "L378",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_push_state",
@@ -4605,7 +5545,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L358",
+      "source_location": "L387",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_transcribe_audio",
@@ -4617,7 +5557,19 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L377",
+      "source_location": "L484",
+      "weight": 1.0,
+      "_src": "main_voiceassistantthread",
+      "_tgt": "main_voiceassistantthread_moonshine_transcribe",
+      "source": "main_voiceassistantthread",
+      "target": "main_voiceassistantthread_moonshine_transcribe",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "app\\main.py",
+      "source_location": "L527",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_strip_fillers",
@@ -4629,7 +5581,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L385",
+      "source_location": "L535",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_record_with_vad",
@@ -4641,7 +5593,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L426",
+      "source_location": "L634",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_detect_wake_word",
@@ -4653,7 +5605,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L463",
+      "source_location": "L677",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_is_echo_of_ai",
@@ -4665,7 +5617,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L480",
+      "source_location": "L727",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_is_exit_phrase",
@@ -4677,7 +5629,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L486",
+      "source_location": "L733",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_dispatch_and_speak",
@@ -4689,7 +5641,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L513",
+      "source_location": "L760",
       "weight": 1.0,
       "_src": "main_voiceassistantthread",
       "_tgt": "main_voiceassistantthread_run",
@@ -4701,19 +5653,19 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L325",
+      "source_location": "L354",
       "weight": 1.0,
-      "_src": "main_rationale_325",
+      "_src": "main_rationale_354",
       "_tgt": "main_voiceassistantthread",
       "source": "main_voiceassistantthread",
-      "target": "main_rationale_325",
+      "target": "main_rationale_354",
       "confidence_score": 1.0
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
       "_src": "main_voiceassistantthread",
       "_tgt": "camera_thread_camerathread",
@@ -4725,7 +5677,7 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
       "_src": "main_voiceassistantthread",
       "_tgt": "vision_thread_visionthread",
@@ -4737,7 +5689,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L395",
+      "source_location": "L549",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_record_with_vad",
       "_tgt": "main_voiceassistantthread_push_state",
@@ -4749,7 +5701,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L515",
+      "source_location": "L762",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_push_state",
@@ -4761,7 +5713,31 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L438",
+      "source_location": "L416",
+      "weight": 1.0,
+      "_src": "main_voiceassistantthread_transcribe_audio",
+      "_tgt": "main_voiceassistantthread_moonshine_transcribe",
+      "source": "main_voiceassistantthread_transcribe_audio",
+      "target": "main_voiceassistantthread_moonshine_transcribe",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "app\\main.py",
+      "source_location": "L418",
+      "weight": 1.0,
+      "_src": "main_voiceassistantthread_transcribe_audio",
+      "_tgt": "main_normalize_transcript",
+      "source": "main_voiceassistantthread_transcribe_audio",
+      "target": "main_normalize_transcript",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": "app\\main.py",
+      "source_location": "L646",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_detect_wake_word",
       "_tgt": "main_voiceassistantthread_transcribe_audio",
@@ -4773,7 +5749,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L536",
+      "source_location": "L783",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_transcribe_audio",
@@ -4782,10 +5758,22 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "app\\main.py",
+      "source_location": "L485",
+      "weight": 1.0,
+      "_src": "main_rationale_485",
+      "_tgt": "main_voiceassistantthread_moonshine_transcribe",
+      "source": "main_voiceassistantthread_moonshine_transcribe",
+      "target": "main_rationale_485",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L536",
+      "source_location": "L783",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_strip_fillers",
@@ -4797,7 +5785,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L528",
+      "source_location": "L775",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_record_with_vad",
@@ -4809,7 +5797,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L521",
+      "source_location": "L768",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_detect_wake_word",
@@ -4821,7 +5809,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L589",
+      "source_location": "L836",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_is_echo_of_ai",
@@ -4833,19 +5821,19 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L464",
+      "source_location": "L678",
       "weight": 1.0,
-      "_src": "main_rationale_464",
+      "_src": "main_rationale_678",
       "_tgt": "main_voiceassistantthread_is_echo_of_ai",
       "source": "main_voiceassistantthread_is_echo_of_ai",
-      "target": "main_rationale_464",
+      "target": "main_rationale_678",
       "confidence_score": 1.0
     },
     {
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L582",
+      "source_location": "L829",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_is_exit_phrase",
@@ -4857,7 +5845,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L546",
+      "source_location": "L793",
       "weight": 1.0,
       "_src": "main_voiceassistantthread_run",
       "_tgt": "main_voiceassistantthread_dispatch_and_speak",
@@ -4869,35 +5857,35 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L487",
+      "source_location": "L734",
       "weight": 1.0,
-      "_src": "main_rationale_487",
+      "_src": "main_rationale_734",
       "_tgt": "main_voiceassistantthread_dispatch_and_speak",
       "source": "main_voiceassistantthread_dispatch_and_speak",
-      "target": "main_rationale_487",
+      "target": "main_rationale_734",
       "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "app\\main.py",
-      "source_location": "L613",
+      "source_location": "L860",
       "weight": 1.0,
-      "_src": "main_rationale_613",
+      "_src": "main_rationale_860",
       "_tgt": "main_analyze_screen",
       "source": "main_analyze_screen",
-      "target": "main_rationale_613",
+      "target": "main_rationale_860",
       "confidence_score": 1.0
     },
     {
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
-      "_src": "main_rationale_73",
+      "_src": "main_rationale_83",
       "_tgt": "camera_thread_camerathread",
-      "source": "main_rationale_73",
+      "source": "main_rationale_83",
       "target": "camera_thread_camerathread",
       "confidence_score": 0.5
     },
@@ -4905,11 +5893,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
-      "_src": "main_rationale_73",
+      "_src": "main_rationale_83",
       "_tgt": "vision_thread_visionthread",
-      "source": "main_rationale_73",
+      "source": "main_rationale_83",
       "target": "vision_thread_visionthread",
       "confidence_score": 0.5
     },
@@ -4917,11 +5905,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
-      "_src": "main_rationale_115",
+      "_src": "main_rationale_125",
       "_tgt": "camera_thread_camerathread",
-      "source": "main_rationale_115",
+      "source": "main_rationale_125",
       "target": "camera_thread_camerathread",
       "confidence_score": 0.5
     },
@@ -4929,11 +5917,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
-      "_src": "main_rationale_115",
+      "_src": "main_rationale_125",
       "_tgt": "vision_thread_visionthread",
-      "source": "main_rationale_115",
+      "source": "main_rationale_125",
       "target": "vision_thread_visionthread",
       "confidence_score": 0.5
     },
@@ -4941,11 +5929,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
-      "_src": "main_rationale_319",
+      "_src": "main_rationale_348",
       "_tgt": "camera_thread_camerathread",
-      "source": "main_rationale_319",
+      "source": "main_rationale_348",
       "target": "camera_thread_camerathread",
       "confidence_score": 0.5
     },
@@ -4953,11 +5941,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
-      "_src": "main_rationale_319",
+      "_src": "main_rationale_348",
       "_tgt": "vision_thread_visionthread",
-      "source": "main_rationale_319",
+      "source": "main_rationale_348",
       "target": "vision_thread_visionthread",
       "confidence_score": 0.5
     },
@@ -4965,11 +5953,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
-      "_src": "main_rationale_325",
+      "_src": "main_rationale_354",
       "_tgt": "camera_thread_camerathread",
-      "source": "main_rationale_325",
+      "source": "main_rationale_354",
       "target": "camera_thread_camerathread",
       "confidence_score": 0.5
     },
@@ -4977,11 +5965,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
-      "_src": "main_rationale_325",
+      "_src": "main_rationale_354",
       "_tgt": "vision_thread_visionthread",
-      "source": "main_rationale_325",
+      "source": "main_rationale_354",
       "target": "vision_thread_visionthread",
       "confidence_score": 0.5
     },
@@ -4989,11 +5977,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
-      "_src": "main_rationale_464",
+      "_src": "main_rationale_485",
       "_tgt": "camera_thread_camerathread",
-      "source": "main_rationale_464",
+      "source": "main_rationale_485",
       "target": "camera_thread_camerathread",
       "confidence_score": 0.5
     },
@@ -5001,11 +5989,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
-      "_src": "main_rationale_464",
+      "_src": "main_rationale_485",
       "_tgt": "vision_thread_visionthread",
-      "source": "main_rationale_464",
+      "source": "main_rationale_485",
       "target": "vision_thread_visionthread",
       "confidence_score": 0.5
     },
@@ -5013,11 +6001,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
-      "_src": "main_rationale_487",
+      "_src": "main_rationale_678",
       "_tgt": "camera_thread_camerathread",
-      "source": "main_rationale_487",
+      "source": "main_rationale_678",
       "target": "camera_thread_camerathread",
       "confidence_score": 0.5
     },
@@ -5025,11 +6013,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
-      "_src": "main_rationale_487",
+      "_src": "main_rationale_678",
       "_tgt": "vision_thread_visionthread",
-      "source": "main_rationale_487",
+      "source": "main_rationale_678",
       "target": "vision_thread_visionthread",
       "confidence_score": 0.5
     },
@@ -5037,11 +6025,11 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L40",
+      "source_location": "L50",
       "weight": 0.8,
-      "_src": "main_rationale_613",
+      "_src": "main_rationale_734",
       "_tgt": "camera_thread_camerathread",
-      "source": "main_rationale_613",
+      "source": "main_rationale_734",
       "target": "camera_thread_camerathread",
       "confidence_score": 0.5
     },
@@ -5049,11 +6037,35 @@
       "relation": "uses",
       "confidence": "INFERRED",
       "source_file": "app\\main.py",
-      "source_location": "L41",
+      "source_location": "L51",
       "weight": 0.8,
-      "_src": "main_rationale_613",
+      "_src": "main_rationale_734",
       "_tgt": "vision_thread_visionthread",
-      "source": "main_rationale_613",
+      "source": "main_rationale_734",
+      "target": "vision_thread_visionthread",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "app\\main.py",
+      "source_location": "L50",
+      "weight": 0.8,
+      "_src": "main_rationale_860",
+      "_tgt": "camera_thread_camerathread",
+      "source": "main_rationale_860",
+      "target": "camera_thread_camerathread",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "uses",
+      "confidence": "INFERRED",
+      "source_file": "app\\main.py",
+      "source_location": "L51",
+      "weight": 0.8,
+      "_src": "main_rationale_860",
+      "_tgt": "vision_thread_visionthread",
+      "source": "main_rationale_860",
       "target": "vision_thread_visionthread",
       "confidence_score": 0.5
     },
@@ -5382,6 +6394,30 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "core\\queues.py",
+      "source_location": "L52",
+      "weight": 1.0,
+      "_src": "core_queues_py",
+      "_tgt": "queues_record_tts_finished",
+      "source": "core_queues_py",
+      "target": "queues_record_tts_finished",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "core\\queues.py",
+      "source_location": "L60",
+      "weight": 1.0,
+      "_src": "core_queues_py",
+      "_tgt": "queues_read_tts_state",
+      "source": "core_queues_py",
+      "target": "queues_read_tts_state",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "core\\queues.py",
@@ -5391,6 +6427,18 @@
       "_tgt": "core_queues_py",
       "source": "core_queues_py",
       "target": "queues_rationale_1",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "core\\queues.py",
+      "source_location": "L53",
+      "weight": 1.0,
+      "_src": "queues_rationale_53",
+      "_tgt": "queues_record_tts_finished",
+      "source": "queues_record_tts_finished",
+      "target": "queues_rationale_53",
       "confidence_score": 1.0
     },
     {

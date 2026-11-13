@@ -1,21 +1,64 @@
+# FIRST: display-scaling awareness can only be set once per process, and importing
+# pygame claims it. Without this the process sees 1536x864 on a 1920x1080 screen, so
+# screenshots, window rects and clicks disagree and clicks miss their target.
+import ctypes
+import os as _os
+_os.environ.setdefault("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+try:
+    # The handle must be pointer-width: passing a plain -4 silently returns 0 and
+    # leaves the process scaling-unaware (verified: metrics stayed 1536x864).
+    _set_dpi = ctypes.windll.user32.SetProcessDpiAwarenessContext
+    _set_dpi.argtypes, _set_dpi.restype = [ctypes.c_void_p], ctypes.c_bool
+    if not _set_dpi(ctypes.c_void_p(-4)):  # per-monitor aware v2
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        pass
+
 import pygame
 import os
 import sys
 import queue
+import warnings
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
-from groq import Groq
 import time
-import speech_recognition as sr
-import pyttsx3
 import threading
-from faster_whisper import WhisperModel
 import tempfile
 import wave
-import pyautogui
 import audioop
 import re
+from holo_overlay import HoloOverlayRenderer, HoloOverlayState, MODE_NORMAL, MODE_TICTACTOE
+from holo_overlay import ui_font
+
+# MediaPipe/protobuf print a UserWarning per frame, which buried every real log line.
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="google.protobuf.*")
+# The module filter above does not catch it (mediapipe re-triggers it per frame from
+# its own module), so match the message itself.
+warnings.filterwarnings("ignore", message=r".*SymbolDatabase\.GetPrototype\(\) is deprecated.*")
+os.environ.setdefault("GLOG_minloglevel", "2")
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+
+print("[STARTUP] Base imports loaded", flush=True)
+
+# One instance only. Two copies fight over the microphone (so the wake listener
+# never hears you) and over the automation Chrome profile, which is what made a
+# browser command hang until "the browser didn't respond in time".
+_instance_lock = ctypes.windll.kernel32.CreateMutexW(None, False, "HoloDesk.SingleInstance")
+if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    print("[STARTUP] HoloDesk is already running. Close that window first.", flush=True)
+    raise SystemExit(1)
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"SymbolDatabase\.GetPrototype\(\) is deprecated.*",
+    category=UserWarning,
+    module=r"google\.protobuf\.symbol_database",
+)
 
 # Add project root to path so agents/, connectors/, core/, vision/ are importable
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -23,13 +66,17 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent))
 
 # ===== MORNING BRIEFING STARTUP =====
+print("[STARTUP] Loading startup module...", flush=True)
 from startup import on_startup
 from storage.db import db as _db
 
 DEMO_MODE = "--demo" in sys.argv
+print("[STARTUP] Running startup hooks...", flush=True)
 on_startup(DEMO_MODE)
+print("[STARTUP] Startup hooks done", flush=True)
 
 # ===== THREADING REFACTOR (Step 8) =====
+print("[STARTUP] Loading shared queues...", flush=True)
 from core.queues import (
     frame_queue,
     landmark_queue,
@@ -39,9 +86,13 @@ from core.queues import (
     voice_reply_queue,
     record_tts_finished,
     read_tts_state,
+    abort_event,
+    mic_busy,
 )
+print("[STARTUP] Shared queues ready", flush=True)
 
 # Optional: rapidfuzz for echo similarity (already used in task_agent).
+print("[STARTUP] Loading camera/vision modules...", flush=True)
 try:
     from rapidfuzz import fuzz as _rf_fuzz
     _RAPIDFUZZ_AVAILABLE = True
@@ -49,15 +100,14 @@ except Exception:
     _RAPIDFUZZ_AVAILABLE = False
 from core.camera_thread import CameraThread
 from core.vision_thread import VisionThread
+print("[STARTUP] Camera/vision modules ready", flush=True)
 
 # ===== SCREEN VISION (Step 7) =====
-try:
-    from agents.screen_agent import screen_agent
-    SCREEN_VISION_AVAILABLE = True
-    print("[OK] Screen vision loaded - say 'what's on my screen' to use it!")
-except Exception as e:
-    SCREEN_VISION_AVAILABLE = False
-    print(f"[INFO] Screen vision not available: {e}") 
+# Loaded eagerly: the orchestrator and BrainAgent receive this object at startup,
+# and a None here made "what's on my screen" fail. The OpenAI client inside stays lazy.
+from agents.screen_agent import screen_agent
+SCREEN_VISION_AVAILABLE = True
+print("[OK] Screen vision ready - say 'what's on my screen' to use it!")
 # ===== STEP 6: WINDOW TRANSPARENCY IMPORTS =====
 try: 
     import win32gui      # Access Windows window management
@@ -69,14 +119,25 @@ except ImportError:
     WIN32_AVAILABLE = False
     print("[WARNING] pywin32 not installed. Run: pip install pywin32")
 
-# Disable pyautogui's built-in delay (default is 0.1 sec between actions = SLOW!)
-pyautogui.PAUSE = 0
-pyautogui.FAILSAFE = False  # Disable fail-safe (moving mouse to corner won't crash)
+_pyautogui = None
+
+
+def get_pyautogui():
+    """Import pyautogui only when a desktop action actually needs it."""
+    global _pyautogui
+    if _pyautogui is None:
+        import pyautogui as _pg
+        _pg.PAUSE = 0
+        _pg.FAILSAFE = False
+        _pyautogui = _pg
+    return _pyautogui
+
+
+def scroll_desktop(delta: int) -> None:
+    get_pyautogui().scroll(delta)
 
 
 
-#====AI SETUP====
-grok_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ===== STEP 6: TRANSPARENCY SETUP FUNCTION =====
 def setup_transparent_window(hwnd):
@@ -119,37 +180,23 @@ def setup_transparent_window(hwnd):
     except Exception as e:
         print(f"[WARNING] Transparency setup failed: {e}")
 
-last_ai_response_cache = "I'm having trouble answering that right now."
-
-def ask_ai(question):
-    '''Ask the AI a question and get a response'''
-    global last_ai_response_cache
-    try: 
-        response = grok_client.chat.completions.create(
-            model = "llama-3.1-8b-instant",
-            messages= [
-            { "role": "system", "content": "You are HoloDesk, a helpful AI assistant on the user's Windows desktop. Keep responses short and conversational (2-3 sentences max). Always end with a brief, natural follow-up like 'Want to know more?' or 'Need help with anything else?' — vary it each time."},
-            {"role": "user", "content": question}
-            ],
-            max_tokens = 100,
-        )
-        last_ai_response_cache = response.choices[0].message.content
-        return last_ai_response_cache
-    except Exception as e:
-        print(f"AI ERROR: {e}")
-        return f"{last_ai_response_cache} I'm having connection issues."
 
 
 
 #settings 
-WINDOW_WIDTH = 1280 # width of window 
-WINDOW_HEIGHT = 720 # height of window 
+# Match the real screen. These were fixed at 1280x720, which covered most of the screen
+# only because the process was scaling-unaware; now that it sees true pixels, a fixed
+# size would leave the overlay (and the gesture cursor area) covering two thirds of it.
+WINDOW_WIDTH = ctypes.windll.user32.GetSystemMetrics(0)
+WINDOW_HEIGHT = ctypes.windll.user32.GetSystemMetrics(1)
 FPS_CAP = 30  # 30fps — matches camera thread rate, UI has no reason to run faster
 
 
 # SETUP 
+print("[STARTUP] Initializing Pygame...", flush=True)
 pygame.init()  #  start pygame engine 
 pygame.mixer.quit() # disable audio mixer to free microphone. 
+print("[STARTUP] Pygame ready", flush=True)
 
 # ===== STEP 6: CREATE BORDERLESS WINDOW =====
 # pygame.NOFRAME = removes title bar, minimize/maximize buttons, borders
@@ -168,6 +215,49 @@ if WIN32_AVAILABLE:
         print(f"[WARNING] Could not get window handle: {e}")
 
 clock = pygame.time.Clock()
+holo_overlay = HoloOverlayState(WINDOW_WIDTH, WINDOW_HEIGHT)
+holo_renderer = HoloOverlayRenderer(pygame)
+
+
+class OverlayControlAgent:
+    def __init__(self, overlay_state=None):
+        self.overlay_state = overlay_state
+
+    def execute(self, action: str, context: dict | None = None) -> dict:
+        if action == "open_chat":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "orb_menu"})
+            return {"success": True, "response": "Opening the Holo Orb menu."}
+        if action == "open_game_menu":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "game_menu"})
+            return {"success": True, "response": "Opening the game menu."}
+        if action == "start_mission":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "mission"})
+            return {"success": True, "response": "Starting Mission Mode."}
+        if action == "start_laser_game":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "laser_game"})
+            return {"success": True, "response": "Starting Laser Hands."}
+        if action == "start_flappy_game":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "game_menu"})
+            return {"success": False, "response": "Flappy Holo is disabled for now. Try Laser Hands or Tic Tac Toe."}
+        if action == "start_tictactoe":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "tictactoe_game"})
+            return {"success": True, "response": "Starting Tic Tac Toe."}
+        if action == "place_tictactoe":
+            cell = (context or {}).get("cell", "")
+            if self.overlay_state is None:
+                return {"success": False, "response": "Tic Tac Toe is not ready."}
+            if self.overlay_state.mode != MODE_TICTACTOE:
+                self.overlay_state.start_tictactoe()
+            if self.overlay_state.tictactoe_game.place(cell):
+                return {"success": True, "response": f"Placed {cell}."}
+            return {"success": False, "response": f"I couldn't place {cell}."}
+        if action == "close_overlay":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "normal"})
+            return {"success": True, "response": "Closing the HoloDesk panel."}
+        if action == "maximize_chat":
+            response_queue.put_nowait({"type": "OVERLAY_MODE", "mode": "chat_maximized"})
+            return {"success": True, "response": "Maximizing the chat panel."}
+        return {"success": False, "response": "I do not know that overlay mode yet."}
 
 # ===== START BACKGROUND THREADS =====
 # Camera and MediaPipe run on their own threads — main loop never blocks
@@ -197,6 +287,12 @@ is_grabbing = False
 # (V-gesture replaced with Call Me gesture 🤙) 
 
 #=============VOICE SETUP==============
+print("[STARTUP] Loading voice libraries...", flush=True)
+import speech_recognition as sr
+import pyttsx3
+from faster_whisper import WhisperModel
+print("[STARTUP] Voice/control libraries ready", flush=True)
+
 recognizer = sr.Recognizer()
 mic = None
 voice_available = True
@@ -212,9 +308,21 @@ tts_engine = pyttsx3.init()
 tts_engine.setProperty('rate', 150) #speed of speech( words per minute)
 
 #whisper model for speech-to-text ( steup - loads once at startup) 
-print("Loading Whisper model....please wait...")
-whisper_model = WhisperModel("small", device = "cpu", compute_type = "int8")  # "small" is more accurate than "base" 
-print("Whisper model loaded successfully!")
+# Speed scales with how long you speak, not with the model alone: on a 13.5 s sample
+# small took 6.0 s and base 2.0 s, but short commands cost a fraction of that. base
+# misheard "notepad" as "north pad" and "not bad" in live use, so accuracy wins here.
+# HOLODESK_WHISPER_MODEL=base trades it back for speed.
+_WHISPER_SIZE = os.getenv("HOLODESK_WHISPER_MODEL", "small").strip()
+_whisper_model = None
+
+
+def whisper_local():
+    """Load the local model on first use: with Groq handling speech it may never run."""
+    global _whisper_model
+    if _whisper_model is None:
+        print(f"Loading local Whisper '{_WHISPER_SIZE}'...", flush=True)
+        _whisper_model = WhisperModel(_WHISPER_SIZE, device="cpu", compute_type="int8")
+    return _whisper_model
 
 # Optional Moonshine STT fallback (requires model download/config)
 ENABLE_MOONSHINE_FALLBACK = os.getenv("ENABLE_MOONSHINE_FALLBACK", "0").strip() == "1"
@@ -222,6 +330,29 @@ MOONSHINE_MODEL_PATH = os.getenv("MOONSHINE_MODEL_PATH", "").strip()
 MOONSHINE_MODEL_ARCH = os.getenv("MOONSHINE_MODEL_ARCH", "").strip()
 _moonshine_transcriber = None
 HOLODESK_VOICE_DEBUG = os.getenv("HOLODESK_VOICE_DEBUG", "0").strip() == "1"
+# None lets Whisper detect the language, so Nepali is transcribed as Nepali instead of
+# being forced into English-sounding words. Set HOLODESK_STT_LANGUAGE=en to pin English.
+HOLODESK_STT_LANGUAGE = os.getenv("HOLODESK_STT_LANGUAGE", "auto").strip().lower()
+HOLODESK_STT_LANGUAGE = None if HOLODESK_STT_LANGUAGE in ("", "auto") else HOLODESK_STT_LANGUAGE
+HOLODESK_STT_ENGINE = os.getenv("HOLODESK_STT_ENGINE", "groq").strip().lower()
+_groq_stt = None
+if HOLODESK_STT_ENGINE == "groq" and os.getenv("GROQ_API_KEY", "").strip():
+    try:
+        from groq import Groq as _GroqSTT
+
+        _groq_stt = _GroqSTT(api_key=os.getenv("GROQ_API_KEY"))
+    except Exception as _exc:
+        print(f"[WARNING] Groq speech unavailable ({_exc}); using local Whisper", flush=True)
+print(f"[STARTUP] Speech: {'groq ' + os.getenv('HOLODESK_GROQ_STT_MODEL', 'whisper-large-v3') if _groq_stt else 'local only'}"
+      f" (fallback local '{_WHISPER_SIZE}', loaded on demand)", flush=True)
+# A transcription prompt also steers the OUTPUT language: the earlier English-only
+# version made Nepali speech come back translated into English. Nepali leads here and
+# both languages appear, so each is transcribed in its own script.
+STT_VOCABULARY = (
+    "क्रोममा फेसबुक खोल। नोटप्याड खोल। जिमेल हेर। बन्द गर। सुत। मेल पठाऊ। हुन्छ। पर्दैन। "
+    "Open Notepad, Chrome, Calculator, Gmail, YouTube, Facebook, Canvas, ElevateU. "
+    "Scroll down, minimize, close, shut down, yes, cancel."
+)
 
 # Voice tuning knobs (per-mic). Defaults are chosen for typical laptop mics.
 HOLODESK_VAD_START_THRESHOLD = int(os.getenv("HOLODESK_VAD_START_THRESHOLD", "240"))
@@ -231,6 +362,7 @@ HOLODESK_WHISPER_LOGPROB_THRESHOLD = float(os.getenv("HOLODESK_WHISPER_LOGPROB_T
 HOLODESK_INPUT_GAIN = float(os.getenv("HOLODESK_INPUT_GAIN", "1.0"))
 HOLODESK_AUTO_GAIN = os.getenv("HOLODESK_AUTO_GAIN", "1").strip() == "1"
 HOLODESK_AUTO_GAIN_TARGET_RMS = int(os.getenv("HOLODESK_AUTO_GAIN_TARGET_RMS", "220"))
+HOLODESK_WAKE_WORD_ENABLED = os.getenv("HOLODESK_WAKE_WORD_ENABLED", "0").strip() == "1"
 
 voice_ui_state = "IDLE"   # IDLE | WAKE | LISTENING | PROCESSING | SPEAKING | UNAVAILABLE
 audio_level = 0.0
@@ -243,19 +375,57 @@ from agents.orchestrator import OrchestratorAgent
 from agents.task_agent import TaskAgent
 from agents.chat_agent import ChatAgent
 from agents.memory_agent import MemoryAgent
+from agents.desktop_grounding_agent import DesktopGroundingAgent
+from agents.reminder_agent import ReminderAgent
+from agents.brain_agent import BrainAgent
 
 # Instantiate agents (singletons for the app lifetime)
 memory_agent = MemoryAgent()
+try:
+    memory_agent.start_session(user_id=1)
+    memory_agent.start_background_logging()
+    print("[OK] Memory session logging started")
+except Exception as exc:
+    print(f"[MEMORY] Session logging unavailable: {exc}")
 chat_agent = ChatAgent()
-task_agent = TaskAgent(screen_agent=screen_agent if SCREEN_VISION_AVAILABLE else None)
+desktop_grounding_agent = DesktopGroundingAgent()
+reminder_agent = ReminderAgent()
+overlay_control_agent = OverlayControlAgent(holo_overlay)
+task_agent = TaskAgent(
+    screen_agent=screen_agent if SCREEN_VISION_AVAILABLE else None,
+    desktop_grounding_agent=desktop_grounding_agent,
+)
 
 orchestrator = OrchestratorAgent(agents={
     "screen_agent": screen_agent if SCREEN_VISION_AVAILABLE else None,
     "task_agent": task_agent,
     "memory_agent": memory_agent,
+    "reminder_agent": reminder_agent,
     "chat_agent": chat_agent,
+    "desktop_grounding_agent": desktop_grounding_agent,
+    "overlay_agent": overlay_control_agent,
+    "brain_agent": BrainAgent(
+        task_agent, memory_agent, screen_agent if SCREEN_VISION_AVAILABLE else None
+    ),
 })
 orchestrator.start()
+
+# The installed-app list takes 3-10 s to build; build it now so the first "open X" is fast.
+from automation import win_ui
+threading.Thread(target=win_ui.find_installed_app, args=("notepad",), name="AppListWarmup", daemon=True).start()
+
+# Start the automation Chrome now, in the background: otherwise the first spoken
+# "open gmail" pays for launching Chrome and attaching to it, which is most of the
+# wait the user feels.
+def _warm_browser():
+    from browser import playwright_controller as _pw
+
+    if _pw.is_enabled():
+        result = _pw.browser_call(lambda: _pw.controller.ensure_page())
+        print(f"[STARTUP] Automation browser {'ready' if result.get('success') else 'not ready: ' + str(result.get('error'))}", flush=True)
+
+
+threading.Thread(target=_warm_browser, name="BrowserWarmup", daemon=True).start()
 
 # ====== Toggle States (Simplified) ======
 is_scrolling = False        # When True = continuously scrolling
@@ -274,6 +444,7 @@ screen_status_timer = 0       # Frames remaining to show screen_status_text
 
 # ===== THREADING STATE (Step 8) =====
 latest_landmarks = None   # Most recent hand landmarks from vision thread (or None)
+latest_hands = []         # One or two tracked hands from vision thread
 is_pinching = False       # Tracked here; reset when no hand detected
 
 # Thumbs debounce — require 5 consecutive frames to prevent accidental scroll start
@@ -285,21 +456,44 @@ THUMBS_REQUIRED_FRAMES = 5
 sapi_speaker = None
 
 #Function to speak using Windows SAPI directly (more reliable than pyttsx3)
-def speak(text): 
+SPOKEN_LIMIT = int(os.getenv("HOLODESK_SPOKEN_LIMIT", "600"))
+
+
+def speak(text):
     global is_ai_speaking, stop_speaking_flag, sapi_speaker
-    
+
     if stop_speaking_flag:
         stop_speaking_flag = False
         return
-        
+
+    # Nothing useful is ever this long out loud, and a runaway reply (a whole web
+    # page) used to take minutes with no way to sit through it.
+    if text and len(text) > SPOKEN_LIMIT:
+        print(f"[VOICE] Reply was {len(text)} characters; speaking the first {SPOKEN_LIMIT}.", flush=True)
+        text = text[:SPOKEN_LIMIT].rsplit(" ", 1)[0] + "... I'll stop there."
+
+
     is_ai_speaking = True
     tts_active.set()
+    mic_busy.set()  # the wake listener must not hear HoloDesk's own voice
     try:
         response_queue.put_nowait({"type": "VOICE_STATE", "state": "SPEAKING"})
     except queue.Full:
         pass
     print(f"SPEAKING: {text}")  # Debug
     try:
+        # Devanagari goes to a real Nepali voice; Windows only has English ones.
+        # Inside this try so the finally below always clears mic_busy and the
+        # speaking state - returning early from here would strand both.
+        try:
+            from core.speech import speak_nepali
+
+            if speak_nepali(text):
+                print("SPEECH DONE (nepali)")
+                return
+        except Exception as exc:
+            print(f"[VOICE] Nepali speech failed ({type(exc).__name__}); using the English voice", flush=True)
+
         import comtypes.client  # Windows COM interface
         sapi_speaker = comtypes.client.CreateObject("SAPI.SpVoice")
         sapi_speaker.Rate = 1  # Speed: -10 (slow) to 10 (fast)
@@ -335,6 +529,7 @@ def speak(text):
         is_ai_speaking = False
         time.sleep(0.8)
         tts_active.clear()
+        mic_busy.clear()
         stop_speaking_flag = False
         # Record exact end time so the echo guard can correlate TTS->mic
         # by latency, not by fuzzy word-matching alone.
@@ -347,6 +542,14 @@ def speak(text):
 def stop_ai_speech():
     """Stop the AI from speaking immediately"""
     global stop_speaking_flag
+    from core.speech import stop_nepali
+
+    stop_nepali()  # the Nepali voice plays through the mixer, not SAPI
+    if not is_ai_speaking:
+        # Setting the flag with nothing to stop made speak() swallow the NEXT reply
+        # instead, which looked like HoloDesk going silent for no reason.
+        print(">>> STOP SPEECH: nothing was speaking <<<")
+        return
     stop_speaking_flag = True
     print(">>> STOP SPEECH SIGNAL SENT <<<")
 
@@ -385,15 +588,39 @@ class VoiceAssistantThread(threading.Thread):
             pass
 
     def transcribe_audio(self, wav_path):
+        _stt_started = time.time()
+
+        # Groq hosts Whisper large v3: measured 0.3 s on a clip that took the local
+        # "small" model 8.0 s, and it is the most accurate model of the three, which
+        # matters for accented speech and Nepali. Audio leaves the machine for this;
+        # set HOLODESK_STT_ENGINE=local to keep everything offline.
+        if HOLODESK_STT_ENGINE == "groq" and _groq_stt is not None:
+            try:
+                with open(wav_path, "rb") as audio:
+                    result = _groq_stt.audio.transcriptions.create(
+                        file=(os.path.basename(wav_path), audio.read()),
+                        model=os.getenv("HOLODESK_GROQ_STT_MODEL", "whisper-large-v3"),
+                        prompt=STT_VOCABULARY,
+                        **({"language": HOLODESK_STT_LANGUAGE} if HOLODESK_STT_LANGUAGE else {}),
+                    )
+                text = self._normalize_transcript((result.text or "").strip().lower())
+                print(f"[VOICE] transcribed in {time.time() - _stt_started:.1f}s (groq): {text!r}", flush=True)
+                return text
+            except Exception as exc:
+                print(f"[VOICE] Groq transcription failed ({type(exc).__name__}), using local Whisper", flush=True)
+
         try:
             # Stricter no_speech_threshold + stricter log_prob gate. Whisper's
             # 'small' will happily hallucinate fluent English out of room noise
             # unless we raise the bar. These numbers were picked empirically to
             # drop near-silence hallucinations without killing real speech.
-            segments, info = whisper_model.transcribe(
+            segments, info = whisper_local().transcribe(
                 wav_path,
                 beam_size=5,
-                language="en",
+                language=HOLODESK_STT_LANGUAGE,
+                # Bias decoding towards the words this app actually hears. Without it
+                # "notepad" came back as "north pad" and "not bad".
+                initial_prompt=STT_VOCABULARY,
                 temperature=0.0,
                 # Tunable via env vars for different mics / noise floors.
                 no_speech_threshold=HOLODESK_WHISPER_NO_SPEECH_THRESHOLD,
@@ -449,6 +676,7 @@ class VoiceAssistantThread(threading.Thread):
             if text.strip(" .!?") in _HALLUCINATION_BLOCKLIST:
                 return ""
 
+            print(f"[VOICE] transcribed in {time.time() - _stt_started:.1f}s (local {_WHISPER_SIZE}): {text!r}", flush=True)
             return text
         except Exception as e:
             print(f"[WARNING] Whisper failed, fallback STT: {e}")
@@ -635,22 +863,25 @@ class VoiceAssistantThread(threading.Thread):
         if self.force_wake.is_set():
             self.force_wake.clear()
             return True
+        # Wake phrases are owned by agents.wake_word_agent when
+        # HOLODESK_WAKE_WORD_ENABLED=1. This thread only consumes wake events
+        # from gesture, spacebar, or the adapter's synthetic key event, so the
+        # microphone is never read by two wake loops at once.
+        time.sleep(0.2)
+        return False
+
+    def _record_from_mic(self, *, max_seconds: float, silence_ms: int):
         try:
+            mic_busy.set()  # pause the always-on wake listener while we own the mic
             with mic as source:
-                recognizer.energy_threshold = 300
-                audio = recognizer.listen(source, timeout=0.8, phrase_time_limit=1.8)
-            temp_path = tempfile.mktemp(suffix=".wav")
-            try:
-                with open(temp_path, "wb") as f:
-                    f.write(audio.get_wav_data(convert_rate=16000, convert_width=2))
-                text = self.transcribe_audio(temp_path)
-                return "hey desk" in text
-            finally:
-                if os.path.exists(temp_path):
-                    os.unlink(temp_path)
-        except Exception:
-            time.sleep(0.2)
-            return False
+                return self.record_with_vad(source, max_seconds=max_seconds, silence_ms=silence_ms)
+        except AttributeError as exc:
+            if "close" in str(exc).lower():
+                print("[VOICE] Mic stream closed during cleanup; retrying next wake.")
+                return None
+            raise
+        finally:
+            mic_busy.clear()
 
     EXIT_PHRASES_EXACT = {
         "no", "nah", "nope", "nothing", "bye", "goodbye", "bye bye",
@@ -662,6 +893,10 @@ class VoiceAssistantThread(threading.Thread):
         "have a good day", "have a nice day", "good night",
         "thank you", "thanks", "see you later", "see you",
         "talk to you later", "take care",
+        # Explicit "go idle" phrases, English and Nepali (spoken and written).
+        "stop listening", "go to sleep", "go idle", "sleep now", "be quiet",
+        "stop talking", "sutna jau", "suta", "chup laag", "band gara", "nasun",
+        "सुत", "चुप", "बन्द गर",
     ]
 
     CONVERSATION_WINDOW_SEC = 30
@@ -669,10 +904,40 @@ class VoiceAssistantThread(threading.Thread):
     FOLLOWUP_SILENCE_MS = 5000
 
     # Echo guard tuning — deliberately conservative so real user speech survives.
-    ECHO_LATENCY_WINDOW_SEC = 2.5   # only within this window after TTS end
+    ECHO_LATENCY_WINDOW_SEC = 8.0   # laptop speakers can bleed into mic for several seconds
     ECHO_SIMILARITY_CUTOFF = 86      # rapidfuzz token_set_ratio, 0..100
     ECHO_PARTIAL_CUTOFF = 92         # partial_ratio for short echoes
     ECHO_MAX_WORDS_FOR_PARTIAL = 12  # long transcripts are almost never echoes
+
+    def strip_echo(self, text):
+        """Remove sentences that are HoloDesk's own speech bleeding into the mic.
+
+        A whole-transcript check isn't enough: live, the mic picked up
+        "i'm not confident which app that is. please repeat. can you please open
+        the north ad" - its own reply plus a real command - and the mixed text
+        scored too low to be rejected, so the assistant answered itself.
+        """
+        t = (text or "").strip()
+        if not t or not _RAPIDFUZZ_AVAILABLE:
+            return t
+        tts_text, tts_end_ts = read_tts_state()
+        if not tts_text or tts_end_ts <= 0.0 or time.time() - tts_end_ts > self.ECHO_LATENCY_WINDOW_SEC:
+            return t
+
+        kept = []
+        for sentence in re.split(r"(?<=[.!?])\s+", t):
+            piece = sentence.strip()
+            if not piece:
+                continue
+            try:
+                echoed = _rf_fuzz.partial_ratio(piece.lower(), tts_text) >= self.ECHO_PARTIAL_CUTOFF
+            except Exception:
+                echoed = False
+            if echoed and len(piece.split()) >= 3:
+                print(f"[VOICE] Dropped my own words from the transcript: {piece[:60]!r}", flush=True)
+            else:
+                kept.append(piece)
+        return " ".join(kept).strip()
 
     def _is_echo_of_ai(self, text):
         """
@@ -726,9 +991,22 @@ class VoiceAssistantThread(threading.Thread):
 
     def _is_exit_phrase(self, text):
         t = text.lower().strip().rstrip(".!?,")
+        if self._looks_like_action_command(t):
+            return False
         if t in self.EXIT_PHRASES_EXACT:
             return True
         return any(kw in t for kw in self.EXIT_KEYWORDS)
+
+    @staticmethod
+    def _looks_like_action_command(text):
+        t = (text or "").lower()
+        action_words = [
+            "open", "close", "minimize", "maximize", "shut down", "shutdown",
+            "power off", "turn off", "restart", "reboot", "click", "press",
+            "tap", "draft", "email", "message", "reply", "search", "find",
+            "pause", "unpause", "resume", "play", "remind", "type", "write",
+        ]
+        return any(word in t for word in action_words)
 
     def _dispatch_and_speak(self, text):
         """Send command to main loop, wait for reply, speak it.
@@ -739,10 +1017,22 @@ class VoiceAssistantThread(threading.Thread):
             return None
 
         print(f"[VOICE] Dispatched: '{text}' — waiting for response...")
-        try:
-            reply = voice_reply_queue.get(timeout=60)
-        except queue.Empty:
-            print("[VOICE] Timeout waiting for reply")
+        abort_event.clear()
+        globals()["stop_speaking_flag"] = False  # a new command always gets its answer
+        reply, waited = None, 0.0
+        while waited < 120:  # BrainAgent caps itself at 45 s
+            try:
+                reply = voice_reply_queue.get(timeout=0.5)
+                break
+            except queue.Empty:
+                waited += 0.5
+                if abort_event.is_set():
+                    # Open palm during a long command: stop waiting, listen again.
+                    print("[VOICE] Aborted by open palm")
+                    speak("Okay, I stopped.")
+                    return None
+        if reply is None:
+            print(f"[VOICE] Timeout waiting for reply after {waited:.0f}s")
             return None
 
         if reply is None or (isinstance(reply, dict) and reply.get("text") is None):
@@ -753,6 +1043,11 @@ class VoiceAssistantThread(threading.Thread):
         print(f"[VOICE] Speaking: {reply_text[:60]}...")
         self._last_ai_response = reply_text
         speak(reply_text)
+        try:
+            memory_agent.log_voice_command(text, reply_text, agent_used="orchestrator")
+        except Exception as exc:
+            if HOLODESK_VOICE_DEBUG:
+                print(f"[VOICE][debug] memory log skipped: {exc}")
         time.sleep(1.5)
         print("[VOICE] Speech done — mic safe")
         return reply
@@ -771,8 +1066,8 @@ class VoiceAssistantThread(threading.Thread):
 
                 # --- STATE: LISTENING (record user speech) ---
                 self.push_state("WAKE")
-                with mic as source:
-                    wav_path = self.record_with_vad(source, max_seconds=45.0, silence_ms=5000)
+                speak("Mm-hmm?")
+                wav_path = self._record_from_mic(max_seconds=45.0, silence_ms=5000)
 
                 # --- STATE: PROCESSING (transcribe) ---
                 self.push_state("PROCESSING")
@@ -780,7 +1075,7 @@ class VoiceAssistantThread(threading.Thread):
                     self.push_state("IDLE")
                     continue
                 try:
-                    text = self.strip_fillers(self.transcribe_audio(wav_path))
+                    text = self.strip_fillers(self.strip_echo(self.transcribe_audio(wav_path)))
                 finally:
                     if os.path.exists(wav_path):
                         os.unlink(wav_path)
@@ -801,13 +1096,15 @@ class VoiceAssistantThread(threading.Thread):
                 # full 15s window, conversation ends naturally.
                 conversation_end = time.time() + self.CONVERSATION_WINDOW_SEC
                 while time.time() < conversation_end and self.running:
+                    if abort_event.is_set():
+                        # Open palm means stop everything, not just this sentence.
+                        print("[VOICE] Conversation ended by open palm", flush=True)
+                        break
                     self.push_state("IDLE")
-                    with mic as source:
-                        followup_wav = self.record_with_vad(
-                            source,
-                            max_seconds=self.FOLLOWUP_LISTEN_SEC,
-                            silence_ms=self.FOLLOWUP_SILENCE_MS,
-                        )
+                    followup_wav = self._record_from_mic(
+                        max_seconds=self.FOLLOWUP_LISTEN_SEC,
+                        silence_ms=self.FOLLOWUP_SILENCE_MS,
+                    )
 
                     if not followup_wav:
                         continue
@@ -815,7 +1112,7 @@ class VoiceAssistantThread(threading.Thread):
                     self.push_state("PROCESSING")
                     try:
                         followup_text = self.strip_fillers(
-                            self.transcribe_audio(followup_wav)
+                            self.strip_echo(self.transcribe_audio(followup_wav))
                         )
                     finally:
                         if os.path.exists(followup_wav):
@@ -826,15 +1123,15 @@ class VoiceAssistantThread(threading.Thread):
 
                     print(f"[VOICE] Follow-up heard: '{followup_text}'")
 
-                    if self._is_exit_phrase(followup_text):
-                        speak("Alright, I'm here if you need me.")
-                        break
-
                     if len(followup_text.split()) < 2:
                         continue
 
                     if self._is_echo_of_ai(followup_text):
                         continue
+
+                    if self._is_exit_phrase(followup_text):
+                        speak("Alright, I'm here if you need me.")
+                        break
 
                     result = self._dispatch_and_speak(followup_text)
                     if result is None:
@@ -854,6 +1151,22 @@ voice_thread = VoiceAssistantThread()
 voice_thread.start()
 print("[OK] Voice thread started")
 
+try:
+    from agents.wake_word_agent import launch_wake_word_listener
+
+    def _wake_keypress_callback() -> bool:
+        try:
+            ev = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE)
+            pygame.event.post(ev)
+            return True
+        except Exception as exc:
+            print(f"[WAKE] Could not post wake event: {exc}", flush=True)
+            return False
+
+    launch_wake_word_listener(_wake_keypress_callback)
+except Exception as exc:
+    print(f"[WAKE] Wake-word listener unavailable: {exc}", flush=True)
+
 
 # ===== SCREEN VISION HELPER (Step 7) =====
 def analyze_screen(question: str = "What is on this screen? Explain it clearly."):
@@ -862,7 +1175,7 @@ def analyze_screen(question: str = "What is on this screen? Explain it clearly."
     Notifies the user before sending (privacy transparency).
     Speaks the result when done.
     """
-    global is_analyzing_screen, screen_status_text, screen_status_timer
+    global is_analyzing_screen, screen_status_text, screen_status_timer, screen_agent
 
     if not SCREEN_VISION_AVAILABLE:
         threading.Thread(
@@ -888,6 +1201,10 @@ def analyze_screen(question: str = "What is on this screen? Explain it clearly."
             daemon=True
         ).start()
 
+        if screen_agent is None:
+            from agents.screen_agent import screen_agent as _screen_agent
+            screen_agent = _screen_agent
+
         result = screen_agent.execute(question=question)
 
         if result["success"]:
@@ -910,6 +1227,23 @@ def analyze_screen(question: str = "What is on this screen? Explain it clearly."
     threading.Thread(target=_run, daemon=True).start()
 
 
+def normalize_hands_payload(payload):
+    """Return a stable list-of-hand-dicts shape for new and old vision payloads."""
+    if not payload:
+        return []
+    if isinstance(payload, list):
+        hands = []
+        for item in payload:
+            if isinstance(item, dict) and item.get("landmarks") is not None:
+                hands.append(item)
+            elif hasattr(item, "landmark"):
+                hands.append({"landmarks": item, "label": "", "score": 0.0})
+        return hands
+    if hasattr(payload, "landmark"):
+        return [{"landmarks": payload, "label": "", "score": 0.0}]
+    return []
+
+
 #============MAIN LOOP============== 
 ''' everything happens inside the main loop  
 like 60 times per second (FPS_CAP)''' 
@@ -923,14 +1257,38 @@ while running :
 
         # ===== STEP 6: ESC KEY TO EXIT (no title bar = no X button!) =====
         if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:  # ESC key pressed
+            if event.key == pygame.K_F2:
+                holo_overlay.toggle_chat()
+            elif event.key == pygame.K_F3:
+                holo_overlay.start_mission()
+            elif event.key == pygame.K_F4:
+                holo_overlay.mission.advance()
+                holo_overlay.mode = "mission"
+            elif event.key == pygame.K_F5:
+                holo_overlay.start_laser_game()
+            elif holo_overlay.mode == "chat_expanded":
+                msg = holo_overlay.handle_text_key(event, pygame)
+                if msg:
+                    try:
+                        command_queue.put_nowait({
+                            "type": "USER_COMMAND",
+                            "text": msg,
+                            "source": "chat_ui",
+                            "ts": time.time(),
+                        })
+                    except queue.Full:
+                        holo_overlay.add_message("holo", "I am busy for a second. Try again.")
+            elif event.key == pygame.K_ESCAPE:  # ESC key pressed
                 print("ESC pressed - Exiting HoloDesk...")
                 running = False
 
         # 2 Press spacebar to toggle voice command (still works as backup)
         if event.type == pygame.KEYDOWN: 
-            if event.key == pygame.K_SPACE:
+            if event.key == pygame.K_SPACE and holo_overlay.mode != "chat_expanded":
                 voice_thread.request_wake()
+
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            holo_overlay.handle_mouse_down(event.pos, event.button)
     
     # ===== MORNING BRIEFING — speak once on the first frame =====
     if frame_count == 1:
@@ -944,7 +1302,8 @@ while running :
 
     # Pull latest hand landmarks from vision thread
     try:
-        latest_landmarks = landmark_queue.get_nowait()
+        latest_hands = normalize_hands_payload(landmark_queue.get_nowait())
+        latest_landmarks = latest_hands[0]["landmarks"] if latest_hands else None
     except queue.Empty:
         pass  # Keep last known value — cursor stays in place
 
@@ -959,14 +1318,28 @@ while running :
             is_v_gesture_active = True
 
         elif gesture == "OPEN_PALM" and open_palm_cooldown <= 0:
+            if holo_overlay.mode != MODE_NORMAL:
+                holo_overlay.stop_active_mode()
+                print("[GESTURE] OPEN_PALM — overlay mode stopped")
             if is_scrolling:
                 is_scrolling = False
                 scroll_direction = 0
                 print("[GESTURE] OPEN_PALM — scrolling stopped")
+            # Abandon any command still running, so a wrong one can be stopped.
+            abort_event.set()
+            if task_agent.pending_confirmation():
+                task_agent.execute(action="__confirm_reply__", context={"raw": "cancel"})
+                print("[GESTURE] OPEN_PALM — pending confirmation cancelled")
             if is_ai_speaking:
                 stop_ai_speech()
                 print("[GESTURE] OPEN_PALM — speech stopped")
             open_palm_cooldown = 15   # 0.5s at 30fps
+
+        elif gesture in ("SWIPE_RIGHT", "SWIPE_LEFT"):
+            # Tab switch in whatever window is in front (browser, editor, terminal).
+            keys = ("ctrl", "tab") if gesture == "SWIPE_RIGHT" else ("ctrl", "shift", "tab")
+            get_pyautogui().hotkey(*keys)
+            print(f"[GESTURE] {gesture} - {'+'.join(keys)}")
 
     except queue.Empty:
         pass
@@ -990,6 +1363,30 @@ while running :
                 voice_reply_queue.put_nowait({"text": voice_event.get("text", "Timer done."), "prompt": False})
             except queue.Full:
                 pass
+        elif voice_event.get("type") == "CHAT_REPLY":
+            holo_overlay.add_message("holo", voice_event.get("text", ""))
+        elif voice_event.get("type") == "OVERLAY_MODE":
+            mode = voice_event.get("mode")
+            if mode == "chat_expanded":
+                holo_overlay.mode = "chat_expanded"
+            elif mode == "orb_menu":
+                holo_overlay.open_orb_menu()
+            elif mode == "game_menu":
+                holo_overlay.open_game_menu()
+            elif mode == "mission":
+                holo_overlay.start_mission()
+            elif mode == "laser_game":
+                holo_overlay.start_laser_game()
+            elif mode == "flappy_game":
+                holo_overlay.open_game_menu()
+            elif mode == "tictactoe_game":
+                holo_overlay.start_tictactoe()
+            elif mode == "normal":
+                holo_overlay.stop_active_mode()
+            elif mode == "chat_maximized":
+                holo_overlay.mode = "chat_expanded"
+                if not holo_overlay.chat_maximized:
+                    holo_overlay.toggle_chat_maximized()
 
     # ===== CURSOR + PINCH + THUMBS (from latest_landmarks) =====
     # These stay in the main loop — they depend on cursor screen coords,
@@ -1052,7 +1449,7 @@ while running :
 
         # Perform continuous scroll (every 3rd frame at 30fps ≈ 10 events/sec)
         if is_scrolling and frame_count % 3 == 0:
-            pyautogui.scroll(scroll_direction * 200)
+            scroll_desktop(scroll_direction * 200)
 
         # ======= PINCH / GRAB — drag card (PRESERVED) =======
         cursor_over_card = (card_x < cursor_x < card_x + card_width and
@@ -1064,6 +1461,8 @@ while running :
         if is_grabbing:
             card_x = cursor_x - card_width // 2
             card_y = cursor_y - card_height // 2
+
+        holo_overlay.update_hand_interaction((cursor_x, cursor_y), is_pinching)
 
         # Cooldown timers decrement once per frame
         if v_gesture_cooldown > 0:
@@ -1078,6 +1477,8 @@ while running :
         is_v_gesture_active = False
         thumbs_up_frames = 0
         thumbs_down_frames = 0
+
+    holo_overlay.update_game(latest_hands)
         
     # Voice commands are routed through OrchestratorAgent via command_queue.
 
@@ -1091,7 +1492,7 @@ while running :
     # ===== STEP 6: CUSTOM UI ELEMENTS (ONLY VISIBLE PARTS) =====
     
     # Hand detected = vision thread sent us real landmarks (not None)
-    hand_detected = latest_landmarks is not None
+    hand_detected = bool(latest_hands)
     
     # ===== 1. GLOWING CURSOR (when hand detected) =====
     if hand_detected:
@@ -1101,7 +1502,7 @@ while running :
         pygame.draw.circle(screen, (255, 255, 255), (cursor_x, cursor_y), 8)       # Center dot (white)
     
     # ===== 2. GESTURE INDICATORS (top-right corner) =====
-    status_font = pygame.font.Font(None, 32)
+    status_font = ui_font(pygame, 32)
     status_y = 10
     
     if is_scrolling:
@@ -1118,8 +1519,8 @@ while running :
         status_y += 30
     
     # ===== 3. VOICE OVERLAY STATE =====
-    overlay_font = pygame.font.Font(None, 48)
-    small_overlay_font = pygame.font.Font(None, 30)
+    overlay_font = ui_font(pygame, 48)
+    small_overlay_font = ui_font(pygame, 30)
     pulse = abs((frame_count % 40) - 20) / 20
     mic_color = (120, 120, 120) if voice_ui_state == "IDLE" else (0, 200 + int(55 * pulse), 0)
     pygame.draw.circle(screen, mic_color, (80, WINDOW_HEIGHT - 80), 22, 3)
@@ -1143,7 +1544,7 @@ while running :
     # ===== 4. SCREEN VISION STATUS (Step 7) =====
     if screen_status_timer > 0:
         screen_status_timer -= 1
-        sv_font = pygame.font.Font(None, 30)
+        sv_font = ui_font(pygame, 30)
         if is_analyzing_screen:
             # Pulsing cyan while GPT-4o is thinking
             pulse = abs((frame_count % 60) - 30) / 30  # 0.0 to 1.0
@@ -1153,6 +1554,8 @@ while running :
             sv_color = (100, 255, 180)  # Green when done
         sv_text = sv_font.render(f"[Vision] {screen_status_text}", True, sv_color)
         screen.blit(sv_text, (10, WINDOW_HEIGHT - 65))
+
+    holo_renderer.draw(screen, holo_overlay, voice_ui_state, audio_level, frame_count)
     
     # ===== 5. STATUS DOT (bottom-left: green = working, red = no hand) =====
     status_dot_color = (0, 255, 0) if hand_detected else (255, 0, 0)  # Green or red
@@ -1160,12 +1563,12 @@ while running :
     
     # ===== 6. FPS COUNTER (optional, top-left, small) =====
     fps = clock.get_fps()
-    small_font = pygame.font.Font(None, 24)
+    small_font = ui_font(pygame, 24)
     fps_text = small_font.render(f"FPS: {int(fps)}", True, (150, 150, 150))  # Gray
     screen.blit(fps_text, (10, 10))
     
     # ===== 7. ESC KEY HINT (bottom-right) =====
-    hint_font = pygame.font.Font(None, 20)
+    hint_font = ui_font(pygame, 20)
     esc_hint = hint_font.render("Press ESC to exit", True, (100, 100, 100))  # Dark gray
     screen.blit(esc_hint, (WINDOW_WIDTH - 150, WINDOW_HEIGHT - 25)) 
 
@@ -1190,6 +1593,15 @@ while running :
 
 # ==============CLEAN UP==============
 voice_thread.running = False
+try:
+    orchestrator.stop()
+except Exception:
+    pass
+try:
+    memory_agent.stop_background_logging()
+    memory_agent.end_session()
+except Exception as exc:
+    print(f"[MEMORY] Cleanup skipped: {exc}")
 camera_thread.stop()
 vision_thread.stop()
 pygame.quit()
