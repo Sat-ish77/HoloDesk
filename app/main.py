@@ -5,6 +5,18 @@ import queue
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
+
+
+def _die_with_threads(exc_type, exc, tb):
+    # Ctrl+C or a crash left python.exe running invisibly: worker threads kept
+    # the process alive with the mic open. Four ghosts at once answered the user
+    # on their own and starved RAM. Print the error, then end every thread.
+    import traceback
+    traceback.print_exception(exc_type, exc, tb)
+    os._exit(1)
+
+
+sys.excepthook = _die_with_threads
 # Debugging means reading the conversation; MediaPipe/protobuf warnings and
 # per-stage logs drown it out. HOLODESK_QUIET=0 brings the full log back.
 if os.getenv("HOLODESK_QUIET", "1") == "1":
