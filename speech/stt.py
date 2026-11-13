@@ -15,7 +15,8 @@ logger = logging.getLogger(__name__)
 
 # Whisper often labels Nepali audio as one of its neighbours and then writes
 # it with that language's spelling. When that happens we ask again as Nepali.
-_NEPALI_LOOKALIKES = {"hi", "hindi", "mr", "marathi", "sa", "sanskrit", "bn", "bengali"}
+_NEPALI_LOOKALIKES = {"hi", "hindi", "mr", "marathi", "sa", "sanskrit", "bn", "bengali",
+                      "ur", "urdu"}
 
 # A short bias prompt: Whisper continues "in the style of" this text, which
 # nudges it toward Devanagari Nepali and correct spelling of names it hears a lot.

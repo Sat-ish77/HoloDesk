@@ -211,20 +211,25 @@ class FallbackBackend(LLMBackend):
     """Groq's free tier rate-limits and sometimes rejects a tool call; a paid
     key answers those at once instead of making a spoken request wait."""
 
-    def __init__(self, primary: LLMBackend, fallback: LLMBackend):
+    def __init__(self, primary: LLMBackend, fallback: LLMBackend, cooldown_sec: float = 600):
         self.primary = primary
         self.fallback = fallback
+        self.cooldown_sec = cooldown_sec
+        self._skip_primary_until = 0.0
 
     def chat(self, messages, tools=None, model=None, max_tokens=700,
              temperature=0.2) -> LLMResponse:
-        try:
-            return self.primary.chat(messages, tools=tools, model=model,
-                                     max_tokens=max_tokens, temperature=temperature)
-        except LLMError as e:
-            print(f"LLM ERROR on primary, switching to fallback: {e}")
-            # Primary model names (e.g. Groq's) mean nothing to the fallback provider.
-            return self.fallback.chat(messages, tools=tools, max_tokens=max_tokens,
-                                      temperature=temperature)
+        if time.time() >= self._skip_primary_until:
+            try:
+                return self.primary.chat(messages, tools=tools, model=model,
+                                         max_tokens=max_tokens, temperature=temperature)
+            except LLMError as e:
+                print(f"LLM ERROR on primary, using fallback for {self.cooldown_sec / 60:.0f} min: {e}")
+                # A daily-quota 429 won't clear in seconds; don't pay a failed round trip every turn.
+                self._skip_primary_until = time.time() + self.cooldown_sec
+        # Primary model names (e.g. Groq's) mean nothing to the fallback provider.
+        return self.fallback.chat(messages, tools=tools, max_tokens=max_tokens,
+                                  temperature=temperature)
 
     def list_models(self) -> list[str]:
         return self.primary.list_models()

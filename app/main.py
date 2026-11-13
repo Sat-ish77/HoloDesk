@@ -731,7 +731,10 @@ class VoiceAssistantThread(threading.Thread):
         "have a good day", "have a nice day", "good night",
         "thank you", "thanks", "see you later", "see you",
         "talk to you later", "take care",
+        "stop listening", "stop talking", "don't listen", "be quiet", "shut up",
+        "go to sleep", "chup", "चुप", "बस गर",
     ]
+    STOP_FILLER = {"stop", "hey", "hold", "on", "up", "ok", "okay", "please", "wait", "holo", "desk"}
 
     CONVERSATION_WINDOW_SEC = 30
     FOLLOWUP_LISTEN_SEC = 45.0
@@ -796,6 +799,11 @@ class VoiceAssistantThread(threading.Thread):
     def _is_exit_phrase(self, text):
         t = text.lower().strip().rstrip(".!?,")
         if t in self.EXIT_PHRASES_EXACT:
+            return True
+        # "Stop, stop. Hey, hold up, stop." must end the conversation, but
+        # "stop the timer" is a command, so only filler words may surround "stop".
+        words = "".join(c if c.isalnum() or c.isspace() else " " for c in t).split()
+        if "stop" in words and set(words) <= self.STOP_FILLER:
             return True
         return any(kw in t for kw in self.EXIT_KEYWORDS)
 

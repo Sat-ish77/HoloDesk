@@ -194,3 +194,15 @@ def test_fallback_answers_when_primary_fails():
 
     backend = FallbackBackend(FakeBackend([groq_down]), FakeBackend([LLMResponse(content="from openai")]))
     assert backend.chat([{"role": "user", "content": "hi"}]).content == "from openai"
+
+
+def test_fallback_skips_primary_after_a_failure():
+    from brain.llm import FakeBackend, FallbackBackend
+
+    def groq_down(messages, tools):
+        raise LLMError("HTTP 429: tokens per day")
+
+    # The primary has only one scripted reply, so a second call to it would fail the test.
+    backend = FallbackBackend(FakeBackend([groq_down]),
+                              FakeBackend([LLMResponse(content="a"), LLMResponse(content="b")]))
+    assert [backend.chat([]).content, backend.chat([]).content] == ["a", "b"]
