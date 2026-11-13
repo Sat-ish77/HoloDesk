@@ -836,13 +836,20 @@ class VoiceAssistantThread(threading.Thread):
         to click it? Yes, please click it."). The whole-line echo check keeps such
         lines because they hold real speech, so cut the echoed head off instead."""
         if tts_text is None:
-            tts_text, _ = read_tts_state()
+            tts_text, tts_end = read_tts_state()
+            if time.time() - tts_end > VoiceAssistantThread.ECHO_LATENCY_WINDOW_SEC:
+                return text
         norm = lambda w: "".join(c for c in w.lower() if c.isalnum())
         words = text.split()
         heard = [norm(w) for w in words]
-        said = [n for n in (norm(w) for w in (tts_text or "").split()) if n]
-        for k in range(min(len(said), len(heard)), 2, -1):
-            if heard[:k] == said[-k:]:
+        said = " " + " ".join(n for n in (norm(w) for w in (tts_text or "").split()) if n) + " "
+        # Match by content, not timing: speakers kept playing after speak()
+        # returned, so echoes began >1 s "after" HOLO finished and the onset
+        # check took them for the user ("Let me know.", "You can scroll through
+        # the results."). A 3+ word run copied verbatim from HOLO's last reply,
+        # from anywhere in it, is HOLO.
+        for k in range(len(heard), 2, -1):
+            if " " + " ".join(heard[:k]) + " " in said:
                 print(f"YOU: (dropped own echo) {' '.join(words[:k])}")
                 return " ".join(words[k:]).strip()
         return text
@@ -940,6 +947,9 @@ class VoiceAssistantThread(threading.Thread):
                         if os.path.exists(followup_wav):
                             os.unlink(followup_wav)
 
+                    # Strip here, not only at dispatch: a line that is all echo
+                    # must keep the conversation open, and dispatch's None ends it.
+                    followup_text = self._strip_echo_prefix(followup_text or "")
                     if not followup_text:
                         continue
 
