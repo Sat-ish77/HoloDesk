@@ -33,6 +33,13 @@ from .tools.registry import Tool, ToolContext, ToolError, ToolRegistry, tokenize
 
 _DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 
+# ponytail: English-only claim check; Nepali claims ("खोलियो") pass unchecked until it matters.
+_CLAIMS_ACTION = re.compile(
+    r"\b(i've|i have|i)\s+(just\s+)?(opened|closed|scrolled|clicked|liked|sent|searched|typed|"
+    r"played|paused|deleted|moved|launched|started|muted|skipped)\b"
+    r"|\b(is|has been|have been)\s+(now\s+)?(opened|closed|open|sent|liked|deleted)\b",
+    re.IGNORECASE)
+
 # Common Romanized-Nepali function words. Enough to tell "malai chrome khol
 # deu" from English without a language-ID model.
 _ROMAN_NEPALI_HINTS = {
@@ -171,6 +178,7 @@ class ReplyEngine:
         photos: list[str] = []
         seen_signatures: dict[str, str] = {}
         llm_failures = 0
+        nudged_claim = False
 
         for _turn in range(self.cfg.max_turns):
             tool_schemas = [t.schema() for t in offered.values()]
@@ -194,6 +202,15 @@ class ReplyEngine:
 
             if not response.tool_calls:
                 final = response.content.strip()
+                # Voice test: "I've scrolled down" with no tool call and nothing moved.
+                # The prompt rule alone doesn't hold, so challenge the claim once.
+                if not executed and not nudged_claim and _CLAIMS_ACTION.search(final):
+                    nudged_claim = True
+                    messages.append({"role": "assistant", "content": final})
+                    messages.append({"role": "system", "content": (
+                        "You said you did something, but you called no tool, so nothing "
+                        "happened. Call the right tool now, or tell the user you did not do it.")})
+                    continue
                 if not final:
                     final = _t(lang, "Done." if executed else "I don't have an answer for that.",
                                "भयो।" if executed else "यसको जवाफ मसँग छैन।",

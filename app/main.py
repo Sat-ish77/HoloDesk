@@ -732,16 +732,17 @@ class VoiceAssistantThread(threading.Thread):
         "thank you", "thanks", "see you later", "see you",
         "talk to you later", "take care",
         "stop listening", "stop talking", "don't listen", "be quiet", "shut up",
-        "go to sleep", "chup", "चुप", "बस गर",
+        "go to sleep", "chup", "चुप", "बस गर", "don't talk", "dont talk",
     ]
-    STOP_FILLER = {"stop", "hey", "hold", "on", "up", "ok", "okay", "please", "wait", "holo", "desk"}
 
     CONVERSATION_WINDOW_SEC = 30
     FOLLOWUP_LISTEN_SEC = 45.0
     FOLLOWUP_SILENCE_MS = 5000
 
     # Echo guard tuning — deliberately conservative so real user speech survives.
-    ECHO_LATENCY_WINDOW_SEC = 2.5   # only within this window after TTS end
+    # Measured at check time, which is after the 5 s follow-up silence wait plus
+    # ~1.5 s of STT, so 2.5 s rejected every echo before comparing the words.
+    ECHO_LATENCY_WINDOW_SEC = 12.0
     ECHO_SIMILARITY_CUTOFF = 86      # rapidfuzz token_set_ratio, 0..100
     ECHO_PARTIAL_CUTOFF = 92         # partial_ratio for short echoes
     ECHO_MAX_WORDS_FOR_PARTIAL = 12  # long transcripts are almost never echoes
@@ -782,6 +783,7 @@ class VoiceAssistantThread(threading.Thread):
             return False
 
         if token_set >= self.ECHO_SIMILARITY_CUTOFF:
+            print(f"YOU: (ignored, own echo) {t[:60]}")
             print(f"[VOICE] Echo detected (sim={token_set}, lat={latency:.2f}s) — discarding: '{t[:60]}...'")
             return True
 
@@ -791,19 +793,20 @@ class VoiceAssistantThread(threading.Thread):
             except Exception:
                 partial = 0
             if partial >= self.ECHO_PARTIAL_CUTOFF:
+                print(f"YOU: (ignored, own echo) {t[:60]}")
                 print(f"[VOICE] Echo detected (partial={partial}, lat={latency:.2f}s) — discarding: '{t[:60]}...'")
                 return True
 
         return False
 
     def _is_exit_phrase(self, text):
-        t = text.lower().strip().rstrip(".!?,")
+        t = text.lower().replace("’", "'").strip().rstrip(".!?,")
         if t in self.EXIT_PHRASES_EXACT:
             return True
-        # "Stop, stop. Hey, hold up, stop." must end the conversation, but
-        # "stop the timer" is a command, so only filler words may surround "stop".
+        # Ending on "stop" ("Y'all stop.", "Okay, don't listen. Stop.") ends the
+        # conversation; "stop the timer" ends on its object, so it stays a command.
         words = "".join(c if c.isalnum() or c.isspace() else " " for c in t).split()
-        if "stop" in words and set(words) <= self.STOP_FILLER:
+        if words and words[-1] == "stop":
             return True
         return any(kw in t for kw in self.EXIT_KEYWORDS)
 

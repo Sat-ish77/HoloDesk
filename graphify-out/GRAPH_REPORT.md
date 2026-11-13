@@ -1,31 +1,31 @@
-# Graph Report - holodesk  (2026-11-12)
+# Graph Report - holodesk-brain-v3  (2026-11-13)
 
 ## Corpus Check
-- 70 files · ~55,716 words
+- 71 files · ~56,917 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 4 file(s) not represented in the graph (top: .example 1, (none) 1, .jsonl 1)
+- Unclassified: 5 file(s) not represented in the graph (top: (none) 2, .example 1, .jsonl 1)
 
 ## Summary
-- 1060 nodes · 2464 edges · 64 communities (35 shown, 29 thin omitted)
-- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 256 edges (avg confidence: 0.9)
+- 1069 nodes · 2486 edges · 66 communities (37 shown, 29 thin omitted)
+- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 263 edges (avg confidence: 0.9)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `e7065c84`
+- Built from commit: `b80182bf`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
-- ToolContext
+- ToolError
 - make_engine
 - TaskAgent
 - test_speech.py
 - VoiceAssistantThread
 - MemoryStore
-- Monitors
+- browser.py
 - MemoryAgent
 - 🧠 HoloDesk
-- TelegramBridge
+- time
 - ReplyEngine
 - OrchestratorAgent
 - Risk
@@ -34,13 +34,13 @@
 - OpenAIClient
 - Tool
 - GestureDetector
-- playwright_controller.py
+- Policy
 - engine.py
 - GroqClient
 - threading
-- time
-- memory_agent.py
-- startup.py
+- logging
+- task_agent.py
+- on_startup
 - 12. Production Checklist — Every Step
 - Holodesk v2 full architecture.md
 - 5. Agent System — Every Agent Explained
@@ -59,99 +59,97 @@
 - test_browser_tools.py
 - build_default_registry
 - build_engine
-- FakeTelegram
-- run_evals.py
-- config.py
+- test_integration.py
+- files.py
+- HoloDesk Project State
 - HoloDesk (brain v3)
+- ToolContext
+- open_in_automation
 
 ## God Nodes (most connected - your core abstractions)
 1. `ToolContext` - 68 edges
 2. `ToolError` - 67 edges
 3. `TaskAgent` - 53 edges
-4. `make_engine()` - 43 edges
+4. `make_engine()` - 45 edges
 5. `Risk` - 38 edges
 6. `ReplyEngine` - 36 edges
-7. `MemoryStore` - 34 edges
-8. `call()` - 34 edges
+7. `call()` - 35 edges
+8. `MemoryStore` - 34 edges
 9. `build_default_registry()` - 30 edges
-10. `Tool` - 28 edges
+10. `say()` - 30 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Not verified yet` --references--> `speak()`  [INFERRED]
-  docs/BRAIN.md → app/main.py
 - `Step 7: Screen Vision (NEW)` --references--> `analyze_screen()`  [INFERRED]
   PROJECT_STATE.md → app/main.py
-- `1. Where things stand (verified 2026-11-12/13 on the user's Windows laptop)` --references--> `FallbackBackend`  [INFERRED]
-  docs/HANDOFF_PLAYWRIGHT.md → brain/llm.py
 - `Nepali` --references--> `get_datetime()`  [INFERRED]
   docs/BRAIN.md → brain/tools/knowledge.py
-- `Playwright browser tools (added 2026-11-13; cloud only, never run against a real browser)` --references--> `login_autofill()`  [INFERRED]
-  docs/HANDOFF_PLAYWRIGHT.md → browser/playwright_controller.py
+- `Not verified yet` --references--> `speak()`  [INFERRED]
+  docs/BRAIN.md → app/main.py
+- `1. Where things stand (verified 2026-11-12/13 on the user's Windows laptop)` --references--> `FallbackBackend`  [INFERRED]
+  docs/HANDOFF_PLAYWRIGHT.md → brain/llm.py
+- `2. Your task (in priority order)` --references--> `open_in_automation()`  [INFERRED]
+  docs/HANDOFF_ROUND2.md → brain/tools/browser.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (64 total, 29 thin omitted)
+## Communities (66 total, 29 thin omitted)
 
-### Community 0 - "ToolContext"
-Cohesion: 0.05
-Nodes (88): _find_tool(), browser_click_text(), browser_open_result(), job(), browser_play_pause(), job(), browser_read_page(), job() (+80 more)
+### Community 0 - "ToolError"
+Cohesion: 0.14
+Nodes (29): build(), click_ui_element(), clipboard(), close_app(), _find_window(), _focus(), focus_window(), _foreground_title() (+21 more)
 
 ### Community 1 - "make_engine"
-Cohesion: 0.06
-Nodes (72): Reply, FakeBackend, FallbackBackend, LLMBackend, LLMError, LLMResponse, make_backend(), OpenAICompatibleBackend (+64 more)
+Cohesion: 0.07
+Nodes (65): detect_language(), Reply, FakeBackend, FallbackBackend, LLMError, LLMResponse, ToolCall, call() (+57 more)
 
 ### Community 3 - "test_speech.py"
 Cohesion: 0.09
 Nodes (22): CloudSTT, _drop_prompt_echo(), _env(), _looks_like_silence(), transcribe_command(), clean_for_speech(), _env(), is_nepali() (+14 more)
 
-### Community 4 - "VoiceAssistantThread"
-Cohesion: 0.07
-Nodes (20): analyze_screen(), _run(), speak(), VoiceAssistantThread, API Keys Required, Architecture Decisions Made (Permanent Cuts), Current Status: Step 7 COMPLETE, Dependencies (requirement.txt) (+12 more)
-
 ### Community 5 - "MemoryStore"
 Cohesion: 0.11
 Nodes (15): MemoryStore, _norm(), _overlap(), redact(), redact_obj(), tokenize(), test_audit_keeps_structure_and_redacts_values(), test_facts_dedupe_and_update() (+7 more)
 
-### Community 6 - "Monitors"
-Cohesion: 0.33
-Nodes (3): Monitors, test_battery_alert_fires_once_then_rearms(), test_disk_and_sustained_ram_alerts()
+### Community 6 - "browser.py"
+Cohesion: 0.14
+Nodes (30): browser_click_text(), browser_open_result(), job(), browser_play_pause(), job(), browser_read_page(), job(), build() (+22 more)
 
 ### Community 8 - "🧠 HoloDesk"
 Cohesion: 0.08
-Nodes (22): Adding a tool, Architecture, First run, HoloDesk Brain v3, Phone setup (5 minutes), Running 24/7, What changed, Acknowledgments (+14 more)
+Nodes (23): Adding a tool, Architecture, First run, HoloDesk Brain v3, Nepali, Phone setup (5 minutes), Running 24/7, What changed (+15 more)
 
-### Community 9 - "TelegramBridge"
-Cohesion: 0.18
-Nodes (3): _done(), TelegramBridge, TelegramSender
+### Community 9 - "time"
+Cohesion: 0.11
+Nodes (8): _done(), TelegramBridge, TelegramSender, main(), _setup_logging(), Monitors, test_battery_alert_fires_once_then_rearms(), test_disk_and_sustained_ram_alerts()
+
+### Community 10 - "ReplyEngine"
+Cohesion: 0.13
+Nodes (5): _describe(), ReplyEngine, _t(), 1. Where things stand (verified 2026-11-12/13 on the user's Windows laptop), run_case()
 
 ### Community 12 - "Risk"
-Cohesion: 0.12
-Nodes (17): _answers_pending_confirmation(), classify_shell(), Decision, _first_word(), is_no(), is_yes(), _norm_reply(), PendingAction (+9 more)
+Cohesion: 0.08
+Nodes (31): _answers_pending_confirmation(), classify_shell(), Decision, _first_word(), is_no(), is_yes(), _norm_reply(), PendingAction (+23 more)
 
 ### Community 14 - "main.py"
 Cohesion: 0.09
-Nodes (4): ask_ai(), setup_transparent_window(), stop_ai_speech(), record_tts_finished()
+Nodes (7): analyze_screen(), _run(), ask_ai(), setup_transparent_window(), speak(), stop_ai_speech(), record_tts_finished()
 
-### Community 18 - "playwright_controller.py"
+### Community 18 - "Policy"
 Cohesion: 0.06
 Nodes (45): job(), job(), browser_call(), click(), click_best(), close_tab(), _debug_port(), _debug_port_open() (+37 more)
 
 ### Community 19 - "engine.py"
-Cohesion: 0.16
-Nodes (5): _describe(), detect_language(), _json(), _parse_facts(), test_language_detection()
+Cohesion: 0.18
+Nodes (5): _json(), _parse_facts(), LLMBackend, make_backend(), _parse_tool_calls()
 
 ### Community 20 - "GroqClient"
-Cohesion: 0.17
-Nodes (3): ChatAgent, ChatResult, GroqClient
+Cohesion: 0.13
+Nodes (4): ChatAgent, ChatResult, generate_briefing(), GroqClient
 
-### Community 22 - "time"
-Cohesion: 0.15
-Nodes (4): _acquire_lock(), main(), _setup_logging(), main()
-
-### Community 24 - "startup.py"
-Cohesion: 0.24
-Nodes (3): generate_briefing(), _insert_demo_data(), on_startup()
+### Community 22 - "logging"
+Cohesion: 0.11
+Nodes (4): main(), stub_registry(), _acquire_lock(), main()
 
 ### Community 25 - "12. Production Checklist — Every Step"
 Cohesion: 0.18
@@ -170,8 +168,8 @@ Cohesion: 0.29
 Nodes (7): 4.1 Why Threading Matters Here, 4.2 Thread Architecture, 4.3 Queue Architecture, 4.4 Camera Thread — Production Implementation, 4.5 Gesture Detector — The Debounce Fix, 4.6 Main Render Loop — Never Blocks, 4. Threading Model — The Foundation
 
 ### Community 30 - "Handoff: stitch Playwright browser tools into brain v3"
-Cohesion: 0.33
-Nodes (5): 1. Where things stand (verified 2026-11-12/13 on the user's Windows laptop), 2. Known problems (not your task unless listed in section 3), 4. Done means, 5. How the user will test on Windows, Handoff: stitch Playwright browser tools into brain v3
+Cohesion: 0.40
+Nodes (4): 2. Known problems (not your task unless listed in section 3), 4. Done means, 5. How the user will test on Windows, Handoff: stitch Playwright browser tools into brain v3
 
 ### Community 32 - "14. 3-Week Sprint Plan"
 Cohesion: 0.50
@@ -214,24 +212,36 @@ Cohesion: 0.06
 Nodes (22): facebook_page(), on_click(), FakeKeyboard, FakeLocator, FakePage, gmail_page(), sendable_page(), tab() (+14 more)
 
 ### Community 54 - "build_default_registry"
-Cohesion: 0.11
-Nodes (30): build(), delete_path(), find_files(), list_directory(), move_path(), _move_risk(), open_path(), read_text_file() (+22 more)
+Cohesion: 0.13
+Nodes (18): build_default_registry(), test_normal_browser_is_used_when_automation_is_off_or_fails(), test_router_finds_the_tools_in_three_languages(), test_sites_and_searches_open_in_the_automation_tab_when_enabled(), test_tools_are_registered_with_the_right_risk(), test_system_tools_work_on_this_machine(), home(), test_binary_and_missing_files_fail_cleanly() (+10 more)
 
 ### Community 55 - "build_engine"
-Cohesion: 0.24
-Nodes (7): build_engine(), _lazy(), _make_screen_agent(), _make_task_agent(), BrainConfig, load_config(), test_brain_is_off_without_a_key()
+Cohesion: 0.18
+Nodes (11): build_engine(), _lazy(), _make_screen_agent(), _make_task_agent(), BrainConfig, _env(), _env_bool(), _env_ids() (+3 more)
 
-### Community 59 - "run_evals.py"
-Cohesion: 0.36
-Nodes (3): main(), run_case(), stub_registry()
+### Community 57 - "test_integration.py"
+Cohesion: 0.15
+Nodes (10): OpenAICompatibleBackend, resolve_models(), _completion(), FakeHTTP, Resp, test_backend_parses_tool_calls_including_double_encoded_arguments(), test_backend_raises_on_client_error(), test_backend_retries_rate_limits_then_succeeds() (+2 more)
 
-### Community 61 - "config.py"
-Cohesion: 0.53
-Nodes (4): _env(), _env_bool(), _env_ids(), _env_int()
+### Community 59 - "files.py"
+Cohesion: 0.29
+Nodes (13): build(), delete_path(), find_files(), list_directory(), move_path(), _move_risk(), open_path(), read_text_file() (+5 more)
+
+### Community 61 - "HoloDesk Project State"
+Cohesion: 0.12
+Nodes (16): API Keys Required, Architecture Decisions Made (Permanent Cuts), Current Status: Step 7 COMPLETE, Dependencies (requirement.txt), File Structure (Current), For New Chat Session, Gestures, Gestures + Voice Commands (Full List) (+8 more)
 
 ### Community 62 - "HoloDesk (brain v3)"
 Cohesion: 0.50
 Nodes (3): HoloDesk (brain v3), Rules, Save tokens
+
+### Community 64 - "ToolContext"
+Cohesion: 0.28
+Nodes (12): _find_tool(), _bs(), build(), forget_memory(), get_datetime(), _need_memory(), notify_phone(), recall_memory() (+4 more)
+
+### Community 65 - "open_in_automation"
+Cohesion: 0.32
+Nodes (7): open_in_automation(), _from_task_agent(), make_app_tools(), open_app(), open_website(), _plain_url(), test_everything_is_off_until_enabled()
 
 ## Knowledge Gaps
 - **29 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
@@ -239,17 +249,17 @@ Nodes (3): HoloDesk (brain v3), Rules, Save tokens
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TaskAgent` connect `TaskAgent` to `main.py`, `OpenAIClient`, `GroqClient`, `build_engine`, `.open_web_in_browser`, `._schedule_power_action`, `task_agent.py`, `._resolve_app_name`?**
+- **Why does `TaskAgent` connect `TaskAgent` to `main.py`, `OpenAIClient`, `GroqClient`, `build_engine`, `.open_web_in_browser`, `._schedule_power_action`, `screen_agent.py`, `._resolve_app_name`?**
   _High betweenness centrality (0.108) - this node is a cross-community bridge._
 - **Are the 48 inferred relationships involving `ToolContext` (e.g. with `_find_tool()` and `ReplyEngine`) actually correct?**
   _`ToolContext` has 48 INFERRED edges - model-reasoned connections that need verification._
-- **Should `ToolContext` be split into smaller, more focused modules?**
-  _Cohesion score 0.053562653562653564 - nodes in this community are weakly interconnected._
-- **Why does `ToolError` connect `ToolContext` to `make_engine`, `ReplyEngine`, `Tool`, `engine.py`, `test_browser_tools.py`, `build_default_registry`?**
-  _High betweenness centrality (0.061) - this node is a cross-community bridge._
+- **Should `ToolError` be split into smaller, more focused modules?**
+  _Cohesion score 0.1422475106685633 - nodes in this community are weakly interconnected._
+- **Why does `ToolError` connect `ToolError` to `ToolContext`, `open_in_automation`, `make_engine`, `browser.py`, `ReplyEngine`, `Risk`, `engine.py`, `test_browser_tools.py`, `build_default_registry`, `files.py`?**
+  _High betweenness centrality (0.054) - this node is a cross-community bridge._
 - **Are the 8 inferred relationships involving `ToolError` (e.g. with `ReplyEngine` and `_move_risk()`) actually correct?**
   _`ToolError` has 8 INFERRED edges - model-reasoned connections that need verification._
 - **Should `make_engine` be split into smaller, more focused modules?**
-  _Cohesion score 0.05843913368185213 - nodes in this community are weakly interconnected._
-- **Why does `OrchestratorAgent` connect `OrchestratorAgent` to `make_engine`, `threading`, `main.py`?**
-  _High betweenness centrality (0.054) - this node is a cross-community bridge._
+  _Cohesion score 0.06812585499316005 - nodes in this community are weakly interconnected._
+- **Why does `OrchestratorAgent` connect `OrchestratorAgent` to `test_integration.py`, `threading`, `main.py`, `make_engine`?**
+  _High betweenness centrality (0.052) - this node is a cross-community bridge._

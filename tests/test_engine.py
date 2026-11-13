@@ -206,3 +206,17 @@ def test_fallback_skips_primary_after_a_failure():
     backend = FallbackBackend(FakeBackend([groq_down]),
                               FakeBackend([LLMResponse(content="a"), LLMResponse(content="b")]))
     assert [backend.chat([]).content, backend.chat([]).content] == ["a", "b"]
+
+
+def test_claimed_action_without_a_tool_is_challenged():
+    # Voice test: "I've scrolled down the page for you." with no tool call.
+    engine, _, log = make_engine([say("I've opened Notepad for you."),
+                                  call("open_app", name="notepad"), say("Notepad is open.")])
+    reply = engine.reply("open notepad")
+    assert log == [("open_app", {"name": "notepad"})]
+    assert reply.text == "Notepad is open."
+
+
+def test_plain_chat_is_not_challenged():
+    engine, _, log = make_engine([say("I'm doing well, thanks for asking!")])
+    assert engine.reply("how are you").text == "I'm doing well, thanks for asking!"
