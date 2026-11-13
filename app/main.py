@@ -21,7 +21,9 @@ if os.getenv("HOLODESK_QUIET", "1") == "1":
 
     def _quiet_print(*args, **kwargs):
         line = " ".join(str(a) for a in args)
-        if line.startswith(("YOU:", "HOLO:", "TOOL:", "EXIT:")) or "ERROR" in line.upper():
+        # SPEECH DONE / INTERRUPTED stay visible: a silent reply was otherwise
+        # impossible to tell apart from a TTS that never ran.
+        if line.startswith(("YOU:", "HOLO:", "TOOL:", "EXIT:", "SPEECH")) or "ERROR" in line.upper():
             _print(*args, **kwargs)
 
     builtins.print = _quiet_print
