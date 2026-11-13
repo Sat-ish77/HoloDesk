@@ -1326,3 +1326,6 @@ voice_thread.running = False
 camera_thread.stop()
 vision_thread.stop()
 pygame.quit()
+# A closed overlay left python.exe alive holding ~870 MB (a worker thread kept
+# the process up), and the next start died with "mkl_malloc: failed to allocate".
+os._exit(0)
