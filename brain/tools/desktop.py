@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Callable
 
 from ..policy import Risk
+from .browser import open_in_automation
 from .registry import Tool, ToolContext, ToolError
 
 # Windows whose title contains one of these are never captured or read.
@@ -214,6 +215,11 @@ def click_ui_element(args: dict, ctx: ToolContext) -> dict:
 
 
 # ---------------------------------------------------------------- apps / web
+def _plain_url(target: str) -> str:
+    return target if re.match(r"^https?://", target) else (
+        "https://" + target if "." in target else f"https://www.{target}.com")
+
+
 def make_app_tools(task_agent_provider: Callable[[], object | None]):
     def open_app(args: dict, ctx: ToolContext) -> dict:
         name = (args.get("name") or "").strip()
@@ -231,12 +237,18 @@ def make_app_tools(task_agent_provider: Callable[[], object | None]):
         if not target:
             raise ToolError("target is required")
         agent = task_agent_provider()
+        if browser in ("", "chrome"):
+            # Same tab the browser_* tools act on; None means automation is
+            # off or unavailable and the normal browser is used as before.
+            build_url = getattr(agent, "_build_url_from_site_name", None)
+            routed = open_in_automation(build_url(target) if build_url else _plain_url(target))
+            if routed is not None:
+                return routed
         if agent is not None:
             if browser:
                 return _from_task_agent(agent.open_web_in_browser(target=target, browser=browser))
             return _from_task_agent(agent.open_website(target))
-        url = target if re.match(r"^https?://", target) else (
-            "https://" + target if "." in target else f"https://www.{target}.com")
+        url = _plain_url(target)
         webbrowser.open(url)
         return {"ok": True, "message": f"Opened {url}."}
 
@@ -270,6 +282,11 @@ def search_in_browser(args: dict, ctx: ToolContext) -> dict:
     q = urllib.parse.quote_plus(query)
     url = {"youtube": f"https://www.youtube.com/results?search_query={q}",
            "maps": f"https://www.google.com/maps/search/{q}"}.get(engine, f"https://www.google.com/search?q={q}")
+    routed = open_in_automation(url)
+    if routed is not None:
+        routed["message"] = (f"Opened a {engine} search for '{query}'. Use browser_open_result "
+                             "to open one of the results.")
+        return routed
     webbrowser.open(url)
     return {"ok": True, "message": f"Opened a {engine} search for '{query}' in the browser. "
                                    "(This opens the page; it does not read the results.)"}

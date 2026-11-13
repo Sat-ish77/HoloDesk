@@ -24,13 +24,36 @@ Measured:
 
 | Check | Result |
 |---|---|
-| `python -m pytest -q` | 132 passed |
+| `python -m pytest -q` | 153 passed in the cloud (132 + 21 browser-tool tests, Playwright mocked) |
 | Live eval, all languages (before fixes) | 43/54 (80%); en 20/30, ne 14/15, ne-roman 9/9 |
 | Live eval, English only (after fixes) | 29/30 (97%), avg 5.3 s |
 | Voice test | open/close Notepad in Nepali OK, open Facebook OK, YouTube search OK, scroll OK, Bikram Sambat date OK |
 
 Groq's free tier hit its 200K tokens/day limit during the voice test; the
 OpenAI fallback answered every turn after that.
+
+### Playwright browser tools (added 2026-11-13; cloud only, never run against a real browser)
+
+- `browser/playwright_controller.py` and `browser/sites/gmail.py` are copied
+  unchanged from `codex/holo-chatbot-3d-overlay`. Not ported: the Messenger and
+  Instagram DM adapters and `form_filler.py` (no tool in the table uses them),
+  and `login_autofill` (not in the table; log in by hand once).
+- `brain/tools/browser.py` adds 7 tools (44 total): `browser_open_result`,
+  `browser_click_text`, `browser_read_page`, `browser_play_pause`,
+  `social_react`, `gmail_draft_reply`, `gmail_send`.
+- `social_react` and `gmail_send` are DANGER and use the existing confirm flow.
+  `browser_click_text` becomes DANGER when the text is send / post / buy /
+  delete and similar, so a plain click cannot bypass the confirm. The
+  `gmail_send` question quotes the draft read from the page.
+- `open_website` and `search_in_browser` (`brain/tools/desktop.py`) now open in
+  the automation Chrome when `HOLODESK_BROWSER_AUTOMATION_ENABLED=1`, so the
+  new tools act on the same tab. With the flag at 0 (default), or if Chrome or
+  Playwright is missing, they use the normal browser exactly as before.
+- Selectors for YouTube results, the Facebook / Instagram Like button and
+  Gmail's Reply button are unverified. They sit at the top of
+  `brain/tools/browser.py` and in `browser/sites/gmail.py`.
+- `evals/cases.jsonl` has 20 new cases (74 total); the live eval has not been
+  re-run with them.
 
 ## 2. Known problems (not your task unless listed in section 3)
 

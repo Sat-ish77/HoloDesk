@@ -52,3 +52,23 @@
 {"id": "ro-volume", "lang": "ne-roman", "text": "awaj badhau", "expect": ["set_volume"]}
 {"id": "ro-shutdown", "lang": "ne-roman", "text": "laptop banda gara", "expect": ["power"], "confirm": true}
 {"id": "ro-chat", "lang": "ne-roman", "text": "k cha, sanchai?", "expect": []}
+{"id": "en-open-result", "lang": "en", "text": "open the first video", "expect": ["browser_open_result"]}
+{"id": "en-open-result-3", "lang": "en", "text": "play the third result on this page", "expect": ["browser_open_result"]}
+{"id": "en-click-text", "lang": "en", "text": "click the link that says Videos on this web page", "expect": ["browser_click_text"]}
+{"id": "en-read-page", "lang": "en", "text": "read this web page and tell me what it says", "expect": ["browser_read_page"]}
+{"id": "en-pause-video", "lang": "en", "text": "pause the video", "expect": ["browser_play_pause"]}
+{"id": "en-like-post", "lang": "en", "text": "like this post", "expect": ["social_react"], "confirm": true}
+{"id": "en-draft-reply", "lang": "en", "text": "reply to this email saying I'll be there", "expect": ["gmail_draft_reply"]}
+{"id": "en-send-mail", "lang": "en", "text": "send the email I just drafted", "expect": ["gmail_send"], "confirm": true}
+{"id": "ne-open-result", "lang": "ne", "text": "पहिलो भिडियो खोल", "expect": ["browser_open_result"]}
+{"id": "ne-read-page", "lang": "ne", "text": "यो पेजमा के लेखेको छ, पढेर भन", "expect": ["browser_read_page"]}
+{"id": "ne-pause-video", "lang": "ne", "text": "भिडियो रोक", "expect": ["browser_play_pause"]}
+{"id": "ne-like-post", "lang": "ne", "text": "यो पोस्टमा लाइक गर", "expect": ["social_react"], "confirm": true}
+{"id": "ne-draft-reply", "lang": "ne", "text": "यो इमेलको जवाफ लेख, म आउँछु भनेर", "expect": ["gmail_draft_reply"]}
+{"id": "ne-send-mail", "lang": "ne", "text": "ड्राफ्ट गरेको इमेल पठाऊ", "expect": ["gmail_send"], "confirm": true}
+{"id": "ro-open-result", "lang": "ne-roman", "text": "pahilo video khol", "expect": ["browser_open_result"]}
+{"id": "ro-click-text", "lang": "ne-roman", "text": "yo page ma Videos bhanne link ma click gara", "expect": ["browser_click_text"]}
+{"id": "ro-pause-video", "lang": "ne-roman", "text": "video roka", "expect": ["browser_play_pause"]}
+{"id": "ro-like-post", "lang": "ne-roman", "text": "yo post like gardeu", "expect": ["social_react"], "confirm": true}
+{"id": "ro-draft-reply", "lang": "ne-roman", "text": "yo email ko reply lekha, ma aauchu bhanera", "expect": ["gmail_draft_reply"]}
+{"id": "ro-send-mail", "lang": "ne-roman", "text": "draft gareko mail pathau", "expect": ["gmail_send"], "confirm": true}
