@@ -1,166 +1,220 @@
-# Graph Report - .  (2026-04-14)
+# Graph Report - holodesk-brain-v3  (2026-11-12)
 
 ## Corpus Check
-- 21 files · ~22,617 words
+- 63 files · ~49,528 words
 - Verdict: corpus is large enough that graph structure adds value.
+- Unclassified: 5 file(s) not represented in the graph (top: (none) 2, .example 1, .jsonl 1)
 
 ## Summary
-- 222 nodes · 354 edges · 18 communities detected
-- Extraction: 81% EXTRACTED · 19% INFERRED · 0% AMBIGUOUS · INFERRED: 66 edges (avg confidence: 0.5)
+- 896 nodes · 2056 edges · 53 communities (28 shown, 25 thin omitted)
+- Extraction: 90% EXTRACTED · 10% INFERRED · 0% AMBIGUOUS · INFERRED: 203 edges (avg confidence: 0.89)
 - Token cost: 0 input · 0 output
 
+## Graph Freshness
+- Built from commit: `82707982`
+- Run `git rev-parse HEAD` and compare to check if the graph is stale.
+- Run `graphify update .` after code changes (no API cost).
+
 ## Community Hubs (Navigation)
-- [[_COMMUNITY_Community 0|Community 0]]
-- [[_COMMUNITY_Community 1|Community 1]]
-- [[_COMMUNITY_Community 2|Community 2]]
-- [[_COMMUNITY_Community 3|Community 3]]
-- [[_COMMUNITY_Community 4|Community 4]]
-- [[_COMMUNITY_Community 5|Community 5]]
-- [[_COMMUNITY_Community 6|Community 6]]
-- [[_COMMUNITY_Community 7|Community 7]]
-- [[_COMMUNITY_Community 8|Community 8]]
-- [[_COMMUNITY_Community 9|Community 9]]
-- [[_COMMUNITY_Community 10|Community 10]]
-- [[_COMMUNITY_Community 11|Community 11]]
-- [[_COMMUNITY_Community 12|Community 12]]
-- [[_COMMUNITY_Community 13|Community 13]]
-- [[_COMMUNITY_Community 14|Community 14]]
-- [[_COMMUNITY_Community 15|Community 15]]
-- [[_COMMUNITY_Community 16|Community 16]]
-- [[_COMMUNITY_Community 17|Community 17]]
+- ToolContext
+- make_engine
+- TaskAgent
+- test_speech.py
+- VoiceAssistantThread
+- MemoryStore
+- test_remote.py
+- MemoryAgent
+- 🧠 HoloDesk
+- time
+- ReplyEngine
+- OrchestratorAgent
+- Risk
+- Database
+- main.py
+- OpenAIClient
+- Tool
+- GestureDetector
+- Policy
+- engine.py
+- GroqClient
+- threading
+- logging
+- task_agent.py
+- startup.py
+- 12. Production Checklist — Every Step
+- Holodesk v2 full architecture.md
+- 5. Agent System — Every Agent Explained
+- 4. Threading Model — The Foundation
+- Handoff: stitch Playwright browser tools into brain v3
+- CameraThread
+- 14. 3-Week Sprint Plan
+- 15. Division of Work
+- 7. API Strategy — Which AI for What
+- 8. UI Architecture
+- 9. Security & Privacy — Technical Guarantees
+- 11. Background Processing — What's Real
+- 1. What We Are Building
+- 3. Full System Architecture
+- 6. Data Architecture — Memory & Privacy
 
 ## God Nodes (most connected - your core abstractions)
-1. `TaskAgent` - 33 edges
-2. `MemoryAgent` - 25 edges
-3. `VoiceAssistantThread` - 20 edges
-4. `OrchestratorAgent` - 17 edges
-5. `ChatAgent` - 16 edges
-6. `VisionThread` - 14 edges
-7. `GroqClient` - 12 edges
-8. `CameraThread` - 12 edges
-9. `OpenAIClient` - 11 edges
-10. `Database` - 11 edges
+1. `ToolError` - 59 edges
+2. `ToolContext` - 59 edges
+3. `TaskAgent` - 53 edges
+4. `make_engine()` - 40 edges
+5. `ReplyEngine` - 36 edges
+6. `MemoryStore` - 34 edges
+7. `Risk` - 32 edges
+8. `call()` - 31 edges
+9. `Reply` - 27 edges
+10. `Tool` - 26 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `VisionThread — reads camera frames, runs MediaPipe, detects gestures.  Outputs` --uses--> `GestureDetector`  [INFERRED]
-  core\vision_thread.py → vision\gesture_detector.py
-- `Replace stale landmark data with fresh (maxsize=1 queue).` --uses--> `GestureDetector`  [INFERRED]
-  core\vision_thread.py → vision\gesture_detector.py
-- `ChatResult` --uses--> `GroqClient`  [INFERRED]
-  agents\chat_agent.py → connectors\groq_client.py
-- `VoiceAssistantThread` --uses--> `ChatAgent`  [INFERRED]
-  app\main.py → agents\chat_agent.py
-- `Makes the Pygame window transparent and always-on-top.          What this does` --uses--> `ChatAgent`  [INFERRED]
-  app\main.py → agents\chat_agent.py
+- `Nepali` --references--> `get_datetime()`  [INFERRED]
+  docs/BRAIN.md → brain/tools/knowledge.py
+- `Not verified yet` --references--> `speak()`  [INFERRED]
+  docs/BRAIN.md → app/main.py
+- `Step 7: Screen Vision (NEW)` --references--> `analyze_screen()`  [INFERRED]
+  PROJECT_STATE.md → app/main.py
+- `1. Where things stand (verified 2026-11-12/13 on the user's Windows laptop)` --references--> `FallbackBackend`  [INFERRED]
+  docs/HANDOFF_PLAYWRIGHT.md → brain/llm.py
+- `Not verified yet` --references--> `search_in_browser()`  [INFERRED]
+  docs/BRAIN.md → brain/tools/desktop.py
 
-## Communities
+## Import Cycles
+- None detected.
 
-### Community 0 - "Community 0"
-Cohesion: 0.08
-Nodes (19): CameraThread, CameraThread — captures webcam frames on a dedicated daemon thread.  The main, analyze_screen(), ask_ai(), Ask the AI a question and get a response, Stop the AI from speaking immediately, Sequential state machine — the production pattern used by every working     voi, Detect if transcribed text is actually the AI's own speech (echo). (+11 more)
+## Communities (53 total, 25 thin omitted)
 
-### Community 1 - "Community 1"
+### Community 0 - "ToolContext"
+Cohesion: 0.05
+Nodes (85): _find_tool(), build(), click_ui_element(), clipboard(), close_app(), _find_window(), _focus(), focus_window() (+77 more)
+
+### Community 1 - "make_engine"
 Cohesion: 0.07
-Nodes (20): _get_active_window(), _is_blocked(), MemoryAgent, MemoryAgent — Passive session logging and habit detection.  What this does:, Create a new session row and return its id.         Call this once when HoloDes, Close the current session. Call this on HoloDesk exit., Start the 60-second background logger thread.         Safe to call multiple tim, Signal the logger thread to stop gracefully. (+12 more)
+Nodes (58): BrainConfig, Reply, FakeBackend, FallbackBackend, LLMBackend, LLMError, LLMResponse, make_backend() (+50 more)
 
-### Community 2 - "Community 2"
-Cohesion: 0.12
-Nodes (11): _contains_blocked(), _extract_after(), _extract_email_recipient(), _extract_search_engine(), _extract_search_query(), _extract_subject(), _extract_text_payload(), _looks_like_cancel() (+3 more)
+### Community 3 - "test_speech.py"
+Cohesion: 0.09
+Nodes (22): CloudSTT, _drop_prompt_echo(), _env(), _looks_like_silence(), transcribe_command(), clean_for_speech(), _env(), is_nepali() (+14 more)
 
-### Community 3 - "Community 3"
+### Community 4 - "VoiceAssistantThread"
+Cohesion: 0.06
+Nodes (21): analyze_screen(), _run(), speak(), VoiceAssistantThread, read_tts_state(), API Keys Required, Architecture Decisions Made (Permanent Cuts), Current Status: Step 7 COMPLETE (+13 more)
+
+### Community 5 - "MemoryStore"
 Cohesion: 0.11
-Nodes (12): ChatAgent, ChatResult, General conversation agent.     - Keeps short rolling history (MAX_HISTORY turn, Returns: {success: bool, response: str}, GroqClient, GroqClient — wrapper around the Groq Python SDK.  Used by morning_briefing.py, Initialize the Groq client on first use. Raises clearly if key is missing., Send a prompt to Groq and return the response text.          Args: (+4 more)
+Nodes (15): MemoryStore, _norm(), _overlap(), redact(), redact_obj(), tokenize(), test_audit_keeps_structure_and_redacts_values(), test_facts_dedupe_and_update() (+7 more)
 
-### Community 4 - "Community 4"
-Cohesion: 0.14
-Nodes (10): OpenAIClient, OpenAI client for GPT-4o Vision.  Only used for screen analysis — triggered ex, Lazy-load the OpenAI client. Raises clear error if key is missing., Send a base64-encoded image to GPT-4o Vision and return the response., _error(), ScreenAgent — Takes a screenshot and asks GPT-4o Vision to explain it.  Trigge, Take a full screenshot and resize to TARGET_WIDTH., Convert a PIL Image to a base64 PNG string. (+2 more)
+### Community 6 - "test_remote.py"
+Cohesion: 0.13
+Nodes (19): Monitors, drain(), FakeResponse, FakeSTT, FakeTelegram, make_bridge(), test_battery_alert_fires_once_then_rearms(), test_dangerous_action_from_phone_waits_for_yes() (+11 more)
 
-### Community 5 - "Community 5"
-Cohesion: 0.14
-Nodes (10): conn(), Database, Thread-safe SQLite database wrapper for HoloDesk.  Key design decisions: - Ea, Return the first matching row as a dict, or None., Close the current thread's connection (call at thread exit)., Run schema.sql once to create all tables and indexes if missing., Insert a row and return the new row id., Update rows matching the WHERE clause. (+2 more)
+### Community 8 - "🧠 HoloDesk"
+Cohesion: 0.08
+Nodes (23): Adding a tool, Architecture, First run, HoloDesk Brain v3, Nepali, Phone setup (5 minutes), Running 24/7, What changed (+15 more)
 
-### Community 6 - "Community 6"
+### Community 9 - "time"
+Cohesion: 0.06
+Nodes (19): build_engine(), _lazy(), _make_screen_agent(), _make_task_agent(), _env(), _env_bool(), _env_ids(), _env_int() (+11 more)
+
+### Community 10 - "ReplyEngine"
+Cohesion: 0.15
+Nodes (4): _describe(), ReplyEngine, _t(), 1. Where things stand (verified 2026-11-12/13 on the user's Windows laptop)
+
+### Community 12 - "Risk"
+Cohesion: 0.20
+Nodes (12): _answers_pending_confirmation(), classify_shell(), Decision, _first_word(), is_no(), is_yes(), _norm_reply(), Risk (+4 more)
+
+### Community 14 - "main.py"
+Cohesion: 0.10
+Nodes (3): ask_ai(), setup_transparent_window(), stop_ai_speech()
+
+### Community 18 - "Policy"
+Cohesion: 0.23
+Nodes (5): PendingAction, Policy, test_audit_never_raises(), test_decisions(), test_pending_expires()
+
+### Community 19 - "engine.py"
+Cohesion: 0.16
+Nodes (5): ChatResult, detect_language(), _json(), _parse_facts(), test_language_detection()
+
+### Community 24 - "startup.py"
+Cohesion: 0.24
+Nodes (3): generate_briefing(), _insert_demo_data(), on_startup()
+
+### Community 25 - "12. Production Checklist — Every Step"
 Cohesion: 0.18
-Nodes (11): _extract_after_any(), _extract_number(), _extract_urlish(), _format_habits(), _looks_like_site_name_or_url(), _looks_like_web_intent(), _looks_parallel(), _merge_results() (+3 more)
+Nodes (11): 12. Production Checklist — Every Step, Phase 0: Foundation, Phase 1: Data Layer, Phase 2: Face ID, Phase 3: Screen Vision, Phase 4: Calendar, Phase 5: Morning Briefing, Phase 6: Chatbot Panel (+3 more)
 
-### Community 7 - "Community 7"
-Cohesion: 0.27
-Nodes (5): _finger_up(), GestureDetector, GestureDetector — debounced V_GESTURE and OPEN_PALM detection.  ONLY these two, Analyze one frame of hand landmarks.         Returns "V_GESTURE", "OPEN_PALM",, Classify the current hand pose into a gesture name or None.         Uses tip-vs
+### Community 26 - "Holodesk v2 full architecture.md"
+Cohesion: 0.22
+Nodes (8): 10. Improvement Tracking — How HoloDesk Gets Better, 13. Folder Structure, 16. Tech Stack Reference, 2. Why This Is Different, Ambient Multi-Agent Desktop Co-pilot, HoloDesk v2 — Full Production Architecture, TABLE OF CONTENTS, The One-Line Pitch
 
-### Community 8 - "Community 8"
-Cohesion: 0.4
-Nodes (5): _insert_demo_data(), on_startup(), Startup module — runs once before the Pygame overlay initialises.  Responsibil, Called once before pygame.init().      Generates a morning briefing and stores, Insert fake app_events and a completed session if the DB looks empty.     Guard
+### Community 28 - "5. Agent System — Every Agent Explained"
+Cohesion: 0.25
+Nodes (8): 5.1 OrchestratorAgent — The Brain, 5.2 ScreenAgent — Eyes on Your Desktop, 5.3 MemoryAgent — The Learning System, 5.4 CalendarAgent — Schedule Awareness, 5.5 VoiceAgent — Speech In and Out, 5.6 TaskAgent — Does Things For You, 5.7 ChatAgent — Conversation Handler, 5. Agent System — Every Agent Explained
 
-### Community 9 - "Community 9"
+### Community 29 - "4. Threading Model — The Foundation"
+Cohesion: 0.29
+Nodes (7): 4.1 Why Threading Matters Here, 4.2 Thread Architecture, 4.3 Queue Architecture, 4.4 Camera Thread — Production Implementation, 4.5 Gesture Detector — The Debounce Fix, 4.6 Main Render Loop — Never Blocks, 4. Threading Model — The Foundation
+
+### Community 30 - "Handoff: stitch Playwright browser tools into brain v3"
+Cohesion: 0.33
+Nodes (5): 2. Known problems (not your task unless listed in section 3), 3. The task: Playwright browser tools, 4. Done means, 5. How the user will test on Windows, Handoff: stitch Playwright browser tools into brain v3
+
+### Community 32 - "14. 3-Week Sprint Plan"
+Cohesion: 0.50
+Nodes (4): 14. 3-Week Sprint Plan, Week 1 — Solid Foundation (Days 1-7), Week 2 — Power Features (Days 8-14), Week 3 — Polish + Wow Factor (Days 15-21)
+
+### Community 33 - "15. Division of Work"
+Cohesion: 0.50
+Nodes (4): 15. Division of Work, Friend — Systems + UI, Sat — AI Brain + Agent Logic, Sync Points (Both must attend)
+
+### Community 34 - "7. API Strategy — Which AI for What"
+Cohesion: 0.50
+Nodes (4): 7.1 Routing Decision Matrix, 7.2 LLM Router With Automatic Fallback, 7.3 Groq Client, 7. API Strategy — Which AI for What
+
+### Community 35 - "8. UI Architecture"
+Cohesion: 0.50
+Nodes (4): 8.1 Overlay Layer Stack, 8.2 Chatbot Panel Layout, 8.3 3D Stress Object — Pure Math, No Game Engine, 8. UI Architecture
+
+### Community 36 - "9. Security & Privacy — Technical Guarantees"
+Cohesion: 0.50
+Nodes (4): 9.1 What Leaves the Device, 9.2 Privacy Dashboard, 9.3 Encrypted SQLite (Production), 9. Security & Privacy — Technical Guarantees
+
+### Community 37 - "11. Background Processing — What's Real"
 Cohesion: 0.67
-Nodes (1): HoloDesk Memory Logger — Run this NOW to start collecting habit data.  This is
+Nodes (3): 11.1 Honest Constraints, 11.2 The Solution: Analysis on Wake, 11. Background Processing — What's Real
 
-### Community 10 - "Community 10"
-Cohesion: 1.0
-Nodes (1): Shared queues — the only communication channel between threads.  Rules:   - T
+### Community 38 - "1. What We Are Building"
+Cohesion: 0.67
+Nodes (3): 1. What We Are Building, The core experience:, What makes this genuinely novel:
 
-### Community 11 - "Community 11"
-Cohesion: 1.0
-Nodes (0): 
+### Community 39 - "3. Full System Architecture"
+Cohesion: 0.67
+Nodes (3): 3.1 Bird's Eye View, 3.2 Data Flow Principles, 3. Full System Architecture
 
-### Community 12 - "Community 12"
-Cohesion: 1.0
-Nodes (0): 
-
-### Community 13 - "Community 13"
-Cohesion: 1.0
-Nodes (0): 
-
-### Community 14 - "Community 14"
-Cohesion: 1.0
-Nodes (1): Return this thread's dedicated SQLite connection, creating if needed.
-
-### Community 15 - "Community 15"
-Cohesion: 1.0
-Nodes (0): 
-
-### Community 16 - "Community 16"
-Cohesion: 1.0
-Nodes (1): Return True if the fingertip is above its base joint.         In MediaPipe's no
-
-### Community 17 - "Community 17"
-Cohesion: 1.0
-Nodes (0): 
+### Community 40 - "6. Data Architecture — Memory & Privacy"
+Cohesion: 0.67
+Nodes (3): 6.1 SQLite Schema, 6.2 Thread-Safe Database Wrapper, 6. Data Architecture — Memory & Privacy
 
 ## Knowledge Gaps
-- **45 isolated node(s):** `HoloDesk Memory Logger — Run this NOW to start collecting habit data.  This is`, `MemoryAgent — Passive session logging and habit detection.  What this does:`, `Return (app_name, window_title) for the currently focused window.     Returns (`, `Passive logger + habit detector.     One instance is shared across the applicat`, `Create a new session row and return its id.         Call this once when HoloDes` (+40 more)
-  These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 10`** (2 nodes): `queues.py`, `Shared queues — the only communication channel between threads.  Rules:   - T`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 11`** (1 nodes): `__init__.py`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 12`** (1 nodes): `__init__.py`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 13`** (1 nodes): `__init__.py`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 14`** (1 nodes): `Return this thread's dedicated SQLite connection, creating if needed.`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 15`** (1 nodes): `__init__.py`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 16`** (1 nodes): `Return True if the fingertip is above its base joint.         In MediaPipe's no`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 17`** (1 nodes): `__init__.py`
-  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **25 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TaskAgent` connect `Community 2` to `Community 0`, `Community 3`, `Community 4`?**
-  _High betweenness centrality (0.344) - this node is a cross-community bridge._
-- **Why does `MemoryAgent` connect `Community 1` to `Community 0`?**
-  _High betweenness centrality (0.234) - this node is a cross-community bridge._
-- **Why does `VoiceAssistantThread` connect `Community 0` to `Community 1`, `Community 2`, `Community 3`, `Community 6`?**
-  _High betweenness centrality (0.140) - this node is a cross-community bridge._
-- **Are the 10 inferred relationships involving `TaskAgent` (e.g. with `GroqClient` and `OpenAIClient`) actually correct?**
-  _`TaskAgent` has 10 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 8 inferred relationships involving `MemoryAgent` (e.g. with `VoiceAssistantThread` and `Makes the Pygame window transparent and always-on-top.          What this does`) actually correct?**
-  _`MemoryAgent` has 8 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 6 inferred relationships involving `VoiceAssistantThread` (e.g. with `CameraThread` and `VisionThread`) actually correct?**
-  _`VoiceAssistantThread` has 6 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 8 inferred relationships involving `OrchestratorAgent` (e.g. with `VoiceAssistantThread` and `Makes the Pygame window transparent and always-on-top.          What this does`) actually correct?**
-  _`OrchestratorAgent` has 8 INFERRED edges - model-reasoned connections that need verification._
+- **Why does `TaskAgent` connect `TaskAgent` to `time`, `main.py`, `OpenAIClient`, `GroqClient`, `task_agent.py`?**
+  _High betweenness centrality (0.117) - this node is a cross-community bridge._
+- **Are the 6 inferred relationships involving `ToolError` (e.g. with `ReplyEngine` and `_move_risk()`) actually correct?**
+  _`ToolError` has 6 INFERRED edges - model-reasoned connections that need verification._
+- **Should `ToolContext` be split into smaller, more focused modules?**
+  _Cohesion score 0.054993678887484194 - nodes in this community are weakly interconnected._
+- **Why does `MemoryAgent` connect `MemoryAgent` to `main.py`, `task_agent.py`?**
+  _High betweenness centrality (0.059) - this node is a cross-community bridge._
+- **Are the 41 inferred relationships involving `ToolContext` (e.g. with `_find_tool()` and `ReplyEngine`) actually correct?**
+  _`ToolContext` has 41 INFERRED edges - model-reasoned connections that need verification._
+- **Should `make_engine` be split into smaller, more focused modules?**
+  _Cohesion score 0.06511746680286006 - nodes in this community are weakly interconnected._
+- **Why does `ReplyEngine` connect `ReplyEngine` to `ToolContext`, `make_engine`, `MemoryStore`, `time`, `Risk`, `Tool`, `Policy`, `engine.py`?**
+  _High betweenness centrality (0.058) - this node is a cross-community bridge._
