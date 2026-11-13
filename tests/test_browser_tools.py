@@ -54,10 +54,19 @@ class FakeLocator:
     def fill(self, text, timeout=None):
         self._item()["text"] = text
 
+    def input_value(self):
+        return self._item().get("text", "")
+
+    def get_attribute(self, name):
+        return self._item().get(name)
+
 
 class FakeKeyboard:
     def __init__(self, page):
         self.page = page
+
+    def type(self, text):
+        self.page.typed.append(text)
 
     def press(self, key):
         self.page.keys.append(key)
@@ -65,12 +74,24 @@ class FakeKeyboard:
             self.page.paused = not self.page.paused
 
 
+class FakeContext:
+    def __init__(self, first):
+        self.pages = [first]
+
+    def new_page(self):
+        page = FakePage("about:blank")
+        page.context = self
+        self.pages.append(page)
+        return page
+
+
 class FakePage:
     def __init__(self, url=YOUTUBE, elements=None):
         if isinstance(url, dict):                       # FakePage({...}) = a YouTube page
             url, elements = YOUTUBE, url
         self.url, self.elements = url, dict(elements or {})
-        self.clicks, self.keys = [], []
+        self.clicks, self.keys, self.typed, self.history = [], [], [], []
+        self.context, self.closed, self.visible, self.focus_is_password = FakeContext(self), False, True, False
         self.paused, self.k_works, self.body = None, True, "Hello page"
         self.keyboard = FakeKeyboard(self)
         self.on_click = lambda key, item: None
@@ -93,7 +114,30 @@ class FakePage:
     def get_by_placeholder(self, text):
         return self.locator(("placeholder", text))
 
+    def goto(self, url, **_):
+        self.history.append(self.url)
+        self.url = url
+
+    def go_back(self, **_):
+        if self.history:
+            self.url = self.history.pop()
+
+    def close(self):
+        self.closed = True
+        self.context.pages.remove(self)
+
+    def is_closed(self):
+        return self.closed
+
+    def bring_to_front(self):
+        for other in self.context.pages:
+            other.visible = other is self
+
     def evaluate(self, js, *args):
+        if "visibilityState" in js:
+            return "visible" if self.visible else "hidden"
+        if "activeElement" in js:
+            return self.focus_is_password
         if "innerHeight" in js:
             return 800
         if "v.play()" in js:
@@ -125,6 +169,7 @@ def tab(monkeypatch):
         result.setdefault("title", page.title())
         return result
     monkeypatch.setattr(pw, "with_page", with_page)
+    monkeypatch.setattr(pw.controller, "_page", None)      # close_tab / new_tab move it
     return holder
 
 
@@ -356,13 +401,193 @@ def test_sites_and_searches_open_in_the_automation_tab_when_enabled(monkeypatch)
     assert opened == ["https://www.youtube.com/results?search_query=Kapil+Sharma", "https://www.facebook.com"]
 
 
-def test_normal_browser_is_used_when_automation_is_off_or_fails(monkeypatch):
+def test_normal_browser_is_used_only_when_automation_is_off(monkeypatch):
     opened = []
     monkeypatch.setattr("webbrowser.open", opened.append)
     monkeypatch.delenv("HOLODESK_BROWSER_AUTOMATION_ENABLED", raising=False)
-    r = build_default_registry()
-    r.get("search_in_browser").handler({"query": "x"}, CTX)
+    build_default_registry().get("search_in_browser").handler({"query": "x"}, CTX)
+    assert opened == ["https://www.google.com/search?q=x"]
+
+
+def test_a_failed_open_is_an_error_and_never_a_second_chrome(monkeypatch):
+    # Round-2 voice test: the silent fallback put the page in the user's normal
+    # Chrome, where browser_open_result and browser_click_text could not see it.
     monkeypatch.setenv("HOLODESK_BROWSER_AUTOMATION_ENABLED", "1")
-    monkeypatch.setattr(pw, "open_in_automation_browser", lambda url: {"success": False, "response": "Chrome not found"})
-    r.get("open_website").handler({"target": "github.com"}, CTX)
-    assert opened == ["https://www.google.com/search?q=x", "https://github.com"]
+    monkeypatch.setattr("webbrowser.open", lambda url: pytest.fail("fell back to the normal browser"))
+    monkeypatch.setattr(pw, "open_in_automation_browser", lambda url: {"success": False, "response": "Chrome not found on this PC."})
+    r = build_default_registry()
+    for tool, args in (("open_website", {"target": "github.com"}), ("search_in_browser", {"query": "x"})):
+        out = r.get(tool).handler(args, CTX)
+        assert out["ok"] is False and "Chrome not found" in out["error"] and "normal browser" in out["error"]
+
+    def crash(url):
+        raise RuntimeError("driver died")
+    monkeypatch.setattr(pw, "open_in_automation_browser", crash)
+    assert "driver died" in r.get("open_website").handler({"target": "github.com"}, CTX)["error"]
+
+
+# ---------------------------------------------------------------- controller
+class FakeBrowser:
+    def __init__(self, page=None, dead=False):
+        self.page, self.dead, self.closed = page, dead, False
+
+    def is_connected(self):
+        return True                      # a killed Chrome still reports connected for a while
+
+    @property
+    def contexts(self):
+        if self.dead:
+            raise RuntimeError("Target page, context or browser has been closed")
+        return [self.page.context]
+
+    def close(self):
+        self.closed = True
+
+
+def connected_controller(monkeypatch, browsers):
+    launches = []
+    monkeypatch.setenv("HOLODESK_BROWSER_AUTOMATION_ENABLED", "1")
+    monkeypatch.setattr(pw, "_debug_port_open", lambda port: True)
+    monkeypatch.setattr(pw, "_launch_automation_chrome", lambda port: launches.append(port) or {"success": True, "error": None})
+
+    class Chromium:
+        def connect_over_cdp(self, url):
+            return browsers.pop(0)
+
+    class Driver:
+        chromium = Chromium()
+
+        def stop(self):
+            pass
+
+    class Api:
+        def sync_playwright(self):
+            return type("Starter", (), {"start": lambda self: Driver()})()
+    monkeypatch.setattr(pw, "playwright_api", Api())
+    return pw.PlaywrightController(), launches
+
+
+def test_controller_rebuilds_a_dead_connection_instead_of_failing(monkeypatch):
+    page = FakePage()
+    dead = FakeBrowser(dead=True)
+    controller, _ = connected_controller(monkeypatch, [dead, FakeBrowser(page)])
+    got = controller.ensure_page()
+    assert got["success"] and got["page"] is page and dead.closed
+
+
+def test_controller_reports_an_error_when_chrome_cannot_come_back(monkeypatch):
+    controller, _ = connected_controller(monkeypatch, [FakeBrowser(dead=True), FakeBrowser(dead=True)])
+    got = controller.ensure_page()
+    assert got["success"] is False and "Couldn't connect" in got["error"]
+
+
+def test_controller_follows_the_tab_the_user_is_looking_at(monkeypatch):
+    first = FakePage("https://www.google.com/search?q=mcp")
+    controller, _ = connected_controller(monkeypatch, [FakeBrowser(first)])
+    assert controller.ensure_page()["page"] is first
+    second = first.context.new_page()            # a link opened a new tab, or the user switched
+    second.bring_to_front()
+    assert controller.ensure_page()["page"] is second
+    first.visible = second.visible = False       # window minimised: stay on the working tab
+    assert controller.ensure_page()["page"] is second
+    second.close()
+    assert controller.ensure_page()["page"] is first
+
+
+def test_chrome_is_launched_with_notification_prompts_off(monkeypatch):
+    seen = []
+    monkeypatch.setattr(pw, "_find_chrome_executable", lambda: "chrome.exe")
+    monkeypatch.setattr(pw.subprocess, "Popen", lambda cmd: seen.extend(cmd))
+    monkeypatch.setattr(pw, "_debug_port_open", lambda port: True)
+    assert pw._launch_automation_chrome(9222)["success"] and "--disable-notifications" in seen
+
+
+# ---------------------------------------------------------------- round-2 tools
+def test_back_goes_back_and_says_when_it_cannot(tab):
+    page = tab["page"]
+    page.goto("https://www.youtube.com/watch?v=1")
+    out = bt.browser_back({}, CTX)
+    assert out["ok"] and out["url"] == YOUTUBE
+    assert "no earlier page" in bt.browser_back({}, CTX)["error"]
+
+
+def test_new_tab_opens_in_the_same_window_and_close_tab_returns_to_the_old_one(tab):
+    first = tab["page"]
+    out = bt.browser_new_tab({"target": "mail.google.com"}, CTX)
+    assert out["ok"] and "mail.google.com" in out["url"] and len(first.context.pages) == 2
+    gmail = first.context.pages[1]
+    assert gmail.visible and not first.visible and pw.controller._page is gmail
+
+    tab["page"] = gmail
+    out = bt.browser_close_tab({}, CTX)
+    assert out["ok"] and out["url"] == YOUTUBE and first.context.pages == [first]
+    assert first.visible and pw.controller._page is first
+
+
+def test_type_fills_a_named_field_reads_it_back_and_can_press_enter(tab):
+    tab["page"] = gmail_page({("label", "Search mail"): [{"text": ""}]})
+    out = bt.browser_type({"field": "Search mail", "text": "invoices", "press_enter": True}, CTX)
+    assert out["ok"] and out["value"] == "invoices" and tab["page"].keys == ["Enter"]
+    missing = bt.browser_type({"field": "Nope", "text": "x"}, CTX)
+    assert missing["ok"] is False and "No field named" in missing["error"]
+    bt.browser_type({"text": "hello"}, CTX)                                # focused field
+    assert tab["page"].typed == ["hello"]
+    with pytest.raises(ToolError):
+        bt.browser_type({"text": ""}, CTX)
+
+
+def test_type_never_touches_password_fields(tab):
+    tab["page"] = FakePage({("label", "Password"): [{"text": "", "type": "password"}]})
+    out = bt.browser_type({"field": "Password", "text": "hunter2"}, CTX)
+    assert out["ok"] is False and "never type passwords" in out["error"]
+    tab["page"].focus_is_password = True
+    out = bt.browser_type({"text": "hunter2"}, CTX)
+    assert out["ok"] is False and tab["page"].typed == []
+
+
+def test_enter_asks_first_unless_it_is_a_search_box():
+    r = build_default_registry()
+    risk = r.get("browser_type").risk_for
+    assert risk({"text": "x", "field": "Search mail", "press_enter": True}) == Risk.ACT
+    assert risk({"text": "x", "field": "Write a comment"}) == Risk.ACT                 # typed, not submitted
+    assert risk({"text": "x", "field": "Write a comment", "press_enter": True}) == Risk.DANGER
+    assert risk({"text": "x", "press_enter": True}) == Risk.DANGER
+    key = r.get("browser_press_key").risk_for
+    assert key({"key": "enter"}) == Risk.DANGER and key({"key": "ctrl+enter"}) == Risk.DANGER
+    assert key({"key": "Escape"}) == Risk.ACT and key({"key": "page down"}) == Risk.ACT
+
+
+def test_press_key_accepts_spoken_names_and_rejects_unknown_ones(tab):
+    for spoken, sent in [("escape", "Escape"), ("ctrl+L", "Control+l"), ("down", "ArrowDown"),
+                         ("f5", "F5"), ("Space", "Space"), ("arrowleft", "ArrowLeft")]:
+        assert bt.browser_press_key({"key": spoken}, CTX)["ok"]
+        assert tab["page"].keys[-1] == sent
+    with pytest.raises(ToolError):
+        bt.browser_press_key({"key": "banana"}, CTX)
+
+
+def test_click_like_is_confirmed_and_uses_the_like_button_not_text(tab):
+    # Round-2 voice test: the model called browser_click_text 'Like', which found
+    # no text to click because Facebook's Like button is an aria-label.
+    assert bt._click_risk({"text": "Like"}) == Risk.DANGER
+    tab["page"] = facebook_page({LIKE: [{"y": 300, "text": "post"}]})
+    out = bt.browser_click_text({"text": "Like"}, CTX)
+    assert out["ok"] and out["liked"] and tab["page"].clicks == ["post"]
+    tab["page"] = FakePage({("role", "button", "Like"): [{"text": "Like"}]})     # not Facebook: plain click
+    assert bt.browser_click_text({"text": "Like"}, CTX)["ok"] and tab["page"].clicks == ["Like"]
+
+
+def test_skip_ad_is_a_plain_click(tab):
+    assert bt._click_risk({"text": "Skip"}) == Risk.ACT
+    tab["page"] = FakePage({("role", "button", "Skip"): [{"text": "Skip Ad"}]})
+    assert bt.browser_click_text({"text": "Skip"}, CTX)["ok"]
+
+
+def test_router_finds_the_round_2_tools_in_three_languages():
+    r = build_default_registry()
+    pick = lambda q: {t.name for t in r.select(q, 8)}
+    assert "browser_back" in pick("go back") and "browser_back" in pick("पछाडि जाऊ") and "browser_back" in pick("pachadi jau")
+    assert "browser_close_tab" in pick("close this tab") and "browser_close_tab" in pick("yo tab banda gara")
+    assert "browser_new_tab" in pick("open gmail in a new tab") and "browser_new_tab" in pick("नयाँ ट्याब खोल")
+    assert "browser_type" in pick("search for invoices in gmail")
+    assert "browser_press_key" in pick("press the escape key")

@@ -642,6 +642,7 @@ class VoiceAssistantThread(threading.Thread):
                     voiced_chunks += 1
             if started and silence_count >= silence_chunks_needed:
                 break
+        self._speech_started_at = started_at   # read by the echo guard
         if not frames:
             return None
         # False-start guard: require enough real speech before we transcribe.
@@ -743,6 +744,7 @@ class VoiceAssistantThread(threading.Thread):
     # Measured at check time, which is after the 5 s follow-up silence wait plus
     # ~1.5 s of STT, so 2.5 s rejected every echo before comparing the words.
     ECHO_LATENCY_WINDOW_SEC = 12.0
+    ECHO_ONSET_GRACE_SEC = 1.0       # speech starting later than this after TTS end is the user
     ECHO_SIMILARITY_CUTOFF = 86      # rapidfuzz token_set_ratio, 0..100
     ECHO_PARTIAL_CUTOFF = 92         # partial_ratio for short echoes
     ECHO_MAX_WORDS_FOR_PARTIAL = 12  # long transcripts are almost never echoes
@@ -770,6 +772,13 @@ class VoiceAssistantThread(threading.Thread):
 
         latency = time.time() - tts_end_ts
         if latency > self.ECHO_LATENCY_WINDOW_SEC:
+            return False
+        # An echo starts while HOLO is still audible. Speech that began after
+        # it finished is the user, even when it repeats HOLO's words: with the
+        # 12 s window alone, "open the first one" after "the first one or the
+        # second one?" scored 100 and was dropped.
+        started_at = getattr(self, "_speech_started_at", None)
+        if started_at is not None and started_at - tts_end_ts > self.ECHO_ONSET_GRACE_SEC:
             return False
 
         if not _RAPIDFUZZ_AVAILABLE:
@@ -806,7 +815,8 @@ class VoiceAssistantThread(threading.Thread):
         # Ending on "stop" ("Y'all stop.", "Okay, don't listen. Stop.") ends the
         # conversation; "stop the timer" ends on its object, so it stays a command.
         words = "".join(c if c.isalnum() or c.isspace() else " " for c in t).split()
-        if words and words[-1] == "stop":
+        # "don't stop" / "never stop" asks for the opposite.
+        if words and words[-1] == "stop" and words[-2:-1] not in (["t"], ["dont"], ["not"], ["never"]):
             return True
         return any(kw in t for kw in self.EXIT_KEYWORDS)
 

@@ -462,7 +462,8 @@ def build(task_agent_provider=lambda: None, screen_agent_provider=lambda: None) 
              handler=open_app, risk=Risk.ACT,
              keywords=("open", "launch", "start", "खोल", "khol", "kholdeu", "chalau")),
         Tool(name="close_app",
-             description="Close an application politely (it may ask to save). Use kill_process if it is frozen.",
+             description=("Close a whole application politely (it may ask to save). Use kill_process if it "
+                          "is frozen. To close one browser tab use browser_close_tab, not this."),
              parameters={"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]},
              handler=close_app, risk=Risk.ACT,
              keywords=("close", "quit", "exit", "बन्द", "banda")),

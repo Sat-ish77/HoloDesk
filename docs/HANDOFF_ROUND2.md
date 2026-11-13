@@ -106,4 +106,72 @@ commit message or section 5 below.
 
 ## 5. Your notes for the next round
 
-(Fill in: answers to the review questions in section 3, anything unverified.)
+Written by Fable in the cloud, 2026-11-13. 170 tests pass (155 + 15), all
+with Playwright mocked. Nothing here was run against a real browser, Windows,
+a microphone or a live model. `app/main.py` cannot be imported in the cloud,
+so its two edits are only compile-checked.
+
+### What changed
+
+- **Two Chromes.** `open_in_automation()` returns None only when the flag is
+  off. Any failure with the flag on is an error the user hears ("...I did not
+  open it in your normal browser"). `ensure_page()` rebuilds a dead connection
+  once (reset, relaunch if the port is closed, reattach) before failing.
+- **Active tab.** `ensure_page()` now uses the tab whose
+  `document.visibilityState` is "visible". It checks the current tab first and
+  probes other tabs only if that one is hidden or closed. If no tab reports
+  visible it keeps the current one (round-1 behaviour).
+- **New tools (49 total):** `browser_back`, `browser_close_tab`,
+  `browser_new_tab`, `browser_type`, `browser_press_key`. Chrome launches with
+  `--disable-notifications` and `--hide-crash-restore-bubble`; both apply only
+  after the automation Chrome is restarted.
+- **Enter is guarded.** `browser_type` with `press_enter` is ACT only when the
+  field name looks like a search box, otherwise DANGER. `browser_press_key`
+  is DANGER for Enter. Reason: Enter in a comment or chat box posts.
+- **Like.** `browser_click_text` with "Like" is now DANGER, and on Facebook or
+  Instagram it runs the same code as `social_react`. Descriptions say to use
+  `social_react` for likes and `browser_click_text 'Skip'` for ads, and
+  `close_app` points to `browser_close_tab`.
+- **STT.** More app names in the bias prompt, plus `HOLODESK_STT_NAMES` in
+  `.env` for people's names, so they stay out of the repo.
+
+### Review of fixes A, B, C
+
+**A (echo window): one real bug, fixed.** With a 12 s window measured at
+check time, a normal reply that reuses HOLO's words is dropped:
+`token_set_ratio("open the first one", "...the first one or the second one?")`
+is 100. Yes, speech onset is the better signal, and `record_with_vad` already
+had it in `started_at`. The guard now also returns False when speech started
+more than `ECHO_ONSET_GRACE_SEC` (1.0 s) after TTS ended. The 12 s window is
+kept as the outer bound. To check live: echoes are still caught, and repeating
+HOLO's own words right after it finishes is heard. If echoes come back, the
+TTS-end timestamp is being recorded before the audio finishes; raise the grace.
+
+**B (claim check): one wording fix, one suggestion.** The challenge said
+"nothing happened", which is false when the model is reporting an action a
+confirmed tool ran in an earlier turn ("did you send it?" -> "I've sent it").
+The message now allows that case. Suggestion for a structural check that is
+not tied to English: `_route()` already gets the fast model's tool picks. If
+it picked an action tool (risk ACT or DANGER) and the chat model then answers
+with no tool call, challenge once. That covers "खोलियो" too. Not done here
+because it changes behaviour for every request and needs the live eval.
+Also still open: a second false claim after the challenge is passed through.
+
+**C ("...stop"): one real bug, fixed; one case left.** "No, don't stop",
+"do not stop" and "never stop" ended the conversation; they no longer do.
+Left as is: "make the video stop" and "when does it stop" still end the
+conversation. Now that `browser_play_pause` exists that could matter; a fix
+would be to exit only when the sentence has no noun before "stop", which
+needs real transcripts to tune.
+
+### Unverified
+
+- `visibilityState` over CDP: Windows may report a Chrome window covered by
+  the full-screen overlay as hidden. Then tab following does nothing and the
+  tools stay on the last tab HoloDesk used.
+- Selectors: Google `#search a:has(h3)`, YouTube skip button by the text
+  "Skip", Gmail search field by the label "Search mail", Facebook and
+  Instagram Like.
+- `browser_new_tab` opening in the same window, and `go_back` on YouTube.
+- Whether the model now picks `social_react` and `browser_close_tab`; the live
+  eval has 18 new cases (92 total) and has not been run.

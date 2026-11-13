@@ -100,6 +100,9 @@ def _launch_automation_chrome(port: int) -> dict[str, Any]:
                 f"--user-data-dir={_profile_dir()}",
                 "--no-first-run",
                 "--no-default-browser-check",
+                # Permission and "restore pages?" prompts can't be answered by voice.
+                "--disable-notifications",
+                "--hide-crash-restore-bubble",
             ]
         )
     except Exception as exc:
@@ -110,6 +113,32 @@ def _launch_automation_chrome(port: int) -> dict[str, Any]:
             return {"success": True, "error": None}
         time.sleep(0.5)
     return {"success": False, "error": "Chrome launched but its debugging port never opened."}
+
+
+def _is_visible_tab(page) -> bool:
+    try:
+        return page.evaluate("document.visibilityState") == "visible"
+    except Exception:
+        return False
+
+
+def _visible_page(pages, current):
+    """The tab the user is looking at, so tools act on what is on screen.
+
+    The user can switch tabs by hand, and links can open a new tab; staying on
+    the tab HoloDesk opened first would then read and click a hidden page.
+    Other tabs are only probed when the current one is hidden or gone.
+    """
+    alive = [p for p in pages if not p.is_closed()]
+    if current in alive and _is_visible_tab(current):
+        return current
+    for page in alive:
+        if page is not current and _is_visible_tab(page):
+            return page
+    # Nothing reports visible (window minimised or covered): keep the working tab.
+    if current in alive:
+        return current
+    return alive[-1] if alive else None
 
 
 class PlaywrightController:
@@ -140,20 +169,32 @@ class PlaywrightController:
                 return {"success": False, "page": None, "error": launch["error"]}
 
         try:
-            if self._playwright is None:
-                self._playwright = playwright_api.sync_playwright().start()
-            if self._browser is None or not self._browser.is_connected():
-                self._browser = self._playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
-
-            context = self._browser.contexts[0] if self._browser.contexts else self._browser.new_context()
-            if self._page is None or self._page.is_closed() or self._page.context is not context:
-                self._page = context.pages[0] if context.pages else context.new_page()
-            page = self._page
+            try:
+                page = self._attach(port)
+            except Exception:
+                # Chrome was closed or crashed and the old connection still looks
+                # alive ("close chrome" by voice did this). Rebuild it once.
+                self.reset()
+                if not _debug_port_open(port):
+                    launch = _launch_automation_chrome(port)
+                    if not launch["success"]:
+                        return {"success": False, "page": None, "error": launch["error"]}
+                page = self._attach(port)
             if url:
                 page.goto(url, wait_until="domcontentloaded", timeout=30000)
             return {"success": True, "page": page, "error": None}
         except Exception as exc:
             return {"success": False, "page": None, "error": f"Couldn't connect to the automation browser: {exc}"}
+
+    def _attach(self, port: int):
+        if self._playwright is None:
+            self._playwright = playwright_api.sync_playwright().start()
+        if self._browser is None or not self._browser.is_connected():
+            self._browser = self._playwright.chromium.connect_over_cdp(f"http://127.0.0.1:{port}")
+        context = self._browser.contexts[0] if self._browser.contexts else self._browser.new_context()
+        current = self._page if self._page is not None and self._page.context is context else None
+        self._page = _visible_page(context.pages, current) or context.new_page()
+        return self._page
 
     def reset(self) -> None:
         """Drop the connection so the next call rebuilds it.

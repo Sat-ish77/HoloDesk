@@ -77,3 +77,10 @@ def test_noise_is_not_turned_into_words():
     assert stt(silent)["text"] == "" and stt(silent)["silence"]
     assert stt(mumble)["text"] == ""
     assert stt(real)["text"] == "धन्यवाद"
+
+
+def test_personal_names_from_env_reach_the_bias_prompt(monkeypatch):
+    monkeypatch.setenv("HOLODESK_STT_NAMES", "Kapil Sharma")
+    http = FakeHTTP([Resp({"text": "search Kapil Sharma", "language": "english"})])
+    CloudSTT(api_key=KEY, session=http).transcribe(b"wav")
+    assert "Gmail" in http.requests[0]["prompt"] and "Kapil Sharma" in http.requests[0]["prompt"]

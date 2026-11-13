@@ -21,7 +21,15 @@ _NEPALI_LOOKALIKES = {"hi", "hindi", "mr", "marathi", "sa", "sanskrit", "bn", "b
 # A short bias prompt: Whisper continues "in the style of" this text, which
 # nudges it toward Devanagari Nepali and correct spelling of names it hears a lot.
 DEFAULT_PROMPT = ("HoloDesk. नेपाली र English मिसिएको कुराकानी। "
-                  "Chrome, YouTube, VS Code, WhatsApp, Downloads, screenshot.")
+                  "Chrome, YouTube, Gmail, Google, Facebook, Instagram, Google Drive, VS Code, "
+                  "WhatsApp, Notepad, Downloads, screenshot, tab.")
+
+
+def _prompt() -> str:
+    # HOLODESK_STT_NAMES: people and channels you say often ("Kapil Sharma"), kept
+    # in .env so private names stay out of the repo. Whisper spells what it has seen.
+    names = _env("HOLODESK_STT_NAMES")
+    return _env("HOLODESK_STT_PROMPT", DEFAULT_PROMPT) + (f" {names}." if names else "")
 
 
 def _env(name: str, default: str = "") -> str:
@@ -56,7 +64,7 @@ class CloudSTT:
 
     def _post(self, audio: bytes, filename: str, language: str | None) -> dict:
         data = {"model": self.model, "response_format": "verbose_json", "temperature": "0",
-                "prompt": _env("HOLODESK_STT_PROMPT", DEFAULT_PROMPT)}
+                "prompt": _prompt()}
         if language and language != "auto":
             data["language"] = language
         resp = self._http().post(
@@ -117,7 +125,7 @@ def _drop_prompt_echo(text: str) -> str:
     stripped = text.strip(" .।")
     if not stripped:
         return ""
-    prompt = _env("HOLODESK_STT_PROMPT", DEFAULT_PROMPT)
+    prompt = _prompt()
     if prompt.strip(" .।") in stripped or (len(stripped) > 25 and stripped in prompt):
         return ""
     return text

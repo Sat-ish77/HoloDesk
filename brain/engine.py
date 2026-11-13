@@ -208,8 +208,10 @@ class ReplyEngine:
                     nudged_claim = True
                     messages.append({"role": "assistant", "content": final})
                     messages.append({"role": "system", "content": (
-                        "You said you did something, but you called no tool, so nothing "
-                        "happened. Call the right tool now, or tell the user you did not do it.")})
+                        "You said you did something, but you called no tool in this turn. If "
+                        "you are reporting an action already done earlier in this conversation, "
+                        "repeat your answer. Otherwise nothing happened: call the right tool "
+                        "now, or tell the user you did not do it.")})
                     continue
                 if not final:
                     final = _t(lang, "Done." if executed else "I don't have an answer for that.",

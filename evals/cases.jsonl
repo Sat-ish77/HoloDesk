@@ -72,3 +72,21 @@
 {"id": "ro-like-post", "lang": "ne-roman", "text": "yo post like gardeu", "expect": ["social_react"], "confirm": true}
 {"id": "ro-draft-reply", "lang": "ne-roman", "text": "yo email ko reply lekha, ma aauchu bhanera", "expect": ["gmail_draft_reply"]}
 {"id": "ro-send-mail", "lang": "ne-roman", "text": "draft gareko mail pathau", "expect": ["gmail_send"], "confirm": true}
+{"id": "en-back", "lang": "en", "text": "go back to the previous page", "expect": ["browser_back"]}
+{"id": "en-close-tab", "lang": "en", "text": "close this tab", "expect": ["browser_close_tab"]}
+{"id": "en-new-tab", "lang": "en", "text": "open Gmail in a new tab in the same Chrome", "expect": ["browser_new_tab"]}
+{"id": "en-type-search", "lang": "en", "text": "search for invoices in the Gmail search box", "expect": ["browser_type"]}
+{"id": "en-press-key", "lang": "en", "text": "press the escape key on this page", "expect": ["browser_press_key"]}
+{"id": "en-skip-ad", "lang": "en", "text": "skip the ad", "expect": ["browser_click_text"]}
+{"id": "en-like-please", "lang": "en", "text": "can we please like this post?", "expect": ["social_react", "browser_click_text"], "confirm": true}
+{"id": "en-result-by-text", "lang": "en", "text": "open the result that says model context protocol", "expect": ["browser_click_text"]}
+{"id": "ne-back", "lang": "ne", "text": "पछाडि जाऊ", "expect": ["browser_back"]}
+{"id": "ne-close-tab", "lang": "ne", "text": "यो ट्याब बन्द गर", "expect": ["browser_close_tab"]}
+{"id": "ne-new-tab", "lang": "ne", "text": "नयाँ ट्याबमा जिमेल खोल", "expect": ["browser_new_tab"]}
+{"id": "ne-type-search", "lang": "ne", "text": "जिमेलको सर्च बक्समा invoice खोज", "expect": ["browser_type"]}
+{"id": "ne-press-key", "lang": "ne", "text": "यो पेजमा escape key थिच", "expect": ["browser_press_key"]}
+{"id": "ro-back", "lang": "ne-roman", "text": "pachadi jau", "expect": ["browser_back"]}
+{"id": "ro-close-tab", "lang": "ne-roman", "text": "yo tab banda gara", "expect": ["browser_close_tab"]}
+{"id": "ro-new-tab", "lang": "ne-roman", "text": "naya tab ma gmail khol", "expect": ["browser_new_tab"]}
+{"id": "ro-type-search", "lang": "ne-roman", "text": "gmail ko search box ma invoice khoja", "expect": ["browser_type"]}
+{"id": "ro-press-key", "lang": "ne-roman", "text": "yo page ma escape key thicha", "expect": ["browser_press_key"]}
