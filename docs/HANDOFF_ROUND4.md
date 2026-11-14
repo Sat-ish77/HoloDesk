@@ -1,7 +1,9 @@
 # Handoff round 4: one obedient agent that sees, acts and checks
 
-Read this first. Branch `brain-v3-test`. Token rules: `CLAUDE.md`. Earlier rounds:
-`docs/HANDOFF_ROUND3.md` (north star in 1a/1b), `docs/DESIGN_UI_CONTROL.md` (your design).
+Read `docs/HISTORY.md` first, all of it: every problem, root cause, fix, measurement and what
+is still unverified, with live transcripts. Then this file. Branch `brain-v3-test`. Token rules:
+`CLAUDE.md`. Earlier rounds: `docs/HANDOFF_ROUND3.md` (north star in 1a/1b),
+`docs/DESIGN_UI_CONTROL.md` (your design).
 
 ## 1. What the user wants (their words, condensed)
 

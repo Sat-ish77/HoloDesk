@@ -1,6 +1,6 @@
 # HoloDesk (brain v3)
 
-Current task and full context: `docs/HANDOFF_ROUND4.md`. Read it first.
+Full history (read first): `docs/HISTORY.md`. Current task: `docs/HANDOFF_ROUND4.md`.
 Done: round 1 `docs/HANDOFF_PLAYWRIGHT.md`, round 2 `docs/HANDOFF_ROUND2.md`, round 3 `docs/HANDOFF_ROUND3.md`.
 
 ## Save tokens
