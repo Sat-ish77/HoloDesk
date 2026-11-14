@@ -27,8 +27,7 @@ from datetime import datetime
 
 from .config import BrainConfig, load_config
 from .llm import LLMBackend, LLMError, LLMResponse, OpenAICompatibleBackend, make_backend, resolve_models
-from .email_flow import (EmailFlow, _basename, is_cancel, needs_writer, recipient, search_words,
-                         wants_email, you_choose)
+from .email_flow import EmailFlow, basename, describe_file, search_words, wants_email
 from .memory import MemoryStore
 from .policy import Decision, Policy, Risk, is_no, is_yes
 from .tools.registry import Tool, ToolContext, ToolError, ToolRegistry, tokenize
@@ -173,63 +172,117 @@ class ReplyEngine:
             flow = self._email_flows.get(source)
             if flow is not None and flow.expired():
                 flow = self._email_flows.pop(source, None) and None
-            if flow is not None and is_cancel(text):
-                self._email_flows.pop(source, None)
-                if len(text.split()) <= 3:
-                    return self._finish(text, source, Reply(
-                        language=lang, text="Okay, I dropped that email. Nothing was sent."))
-                # "Close the Gmail right now" leaves the email AND is a command.
-            elif flow is not None or wants_email(text):
-                return self._finish(text, source, self._email_step(text, source, lang))
+            if flow is not None or wants_email(text):
+                result = self._email_turn(text, source, lang)
+                if result is not None:          # None: not about the email, run it as a command
+                    return self._finish(text, source, result)
             result = self._agent_loop(text, source, lang)
             return self._finish(text, source, result)
 
+    # ------------------------------------------------------------------
+    # Email: a strong model runs the conversation; code does the Gmail work
+    # and checks what Gmail shows. Live tests showed a fixed question script
+    # fighting the user, so the model decides what was meant.
+    # ------------------------------------------------------------------
+    _EMAIL_RULES = (
+        "You are the user's email assistant, by voice. The user is the boss: do what they say and never "
+        "ask again for something they already told you. Speech-to-text is noisy: read names sensibly, "
+        "join spelled letters (S-A-T-I-S-H -> Satish), turn spoken addresses into real ones ('at the rate' "
+        "or 'at' -> @, 'dot' -> .). {signer}"
+        "Reply with only a JSON object with keys to, mode ('new' or 'reply'), subject, body, attachment "
+        "(the file name the user wants attached, '' for none), action, say. Keep each field from the "
+        "current draft unless the user changed it; null means still unknown. Write a clear, polished body "
+        "from what the user describes; keep their exact wording when they dictate it; drop spoken lead-ins "
+        "such as 'the subject is'. Never invent names or facts. "
+        "action is 'draft' once to, mode and body are known (and subject for a new email; no attachment "
+        "unless the user mentions one), and also after any change to a drafted email; 'send' when the user "
+        "tells you to send it; 'cancel' when they want to stop this email; 'leave' when they ask for "
+        "something that is not about this email; otherwise 'ask', with say = one short question about the "
+        "single most important missing thing. say is spoken aloud: keep it short."
+    )
+
     def email_flow_waiting(self, source: str) -> bool:
         """The voice loop lets one-word answers ("new", "Greetings") through
-        only while a guided email is waiting for one."""
+        only while an email is being written."""
         flow = self._email_flows.get(source)
         return flow is not None and not flow.expired()
 
-    # ------------------------------------------------------------------
-    # Guided email (no model involved; see brain/email_flow.py)
-    # ------------------------------------------------------------------
-    def _email_step(self, text: str, source: str, lang: str) -> Reply:
-        flow = self._email_flows.get(source)
-        if flow is None:
-            flow = self._email_flows[source] = EmailFlow(text)
-        elif flow.drafted:
-            return self._revise_email(text, flow, source, lang)
-        else:
-            reask = flow.take(text)
-            if reask:
-                return Reply(language=lang, text=reask)
-        ctx = ToolContext(source=source, cfg=self.cfg, memory=self.memory,
-                          notify=self.notify, send_photo=self.send_photo, engine=self)
-        if flow.attachment and not flow.attachment_path and not flow.choices:
+    def _email_turn(self, text: str, source: str, lang: str) -> Reply | None:
+        """One thing the user said while writing an email. None = not about the
+        email after all: the caller runs the normal agent loop."""
+        flow = self._email_flows.get(source) or EmailFlow()
+        self._email_flows[source] = flow
+        if flow.choices and not flow.attachment_path:              # answering "which file?"
+            if flow.pick(text) is None:
+                return Reply(language=lang, text="Which one? Say first, second, or part of the file name.")
+            return self._draft_now(flow, source, lang, new_recipient=not flow.drafted)
+        decision = self._email_brain(flow, text)
+        if decision is None:
+            return Reply(ok=False, language=lang, text="Sorry, I didn't get that. Say it again, or say cancel.")
+        action = decision.get("action")
+        if action == "leave":
+            self._email_flows.pop(source, None)
+            return None
+        if action == "cancel":
+            self._email_flows.pop(source, None)
+            return Reply(language=lang, text="Okay, I dropped that email. Nothing was sent.")
+        old_to = flow.to
+        for field in ("to", "mode", "subject", "body"):
+            if decision.get(field):
+                setattr(flow, field, str(decision[field]).strip())
+        wanted = decision.get("attachment")
+        if wanted is not None and wanted != flow.attachment:
+            flow.attachment, flow.attachment_path, flow.choices, flow.attached = wanted, None, [], None
+        if action == "send":
+            return self._send_email(source, lang)
+        if action == "draft":
+            return self._draft_now(flow, source, lang, new_recipient=not flow.drafted or flow.to != old_to)
+        return Reply(language=lang, text=decision.get("say") or "What should the email say?")
+
+    def _email_brain(self, flow: EmailFlow, text: str) -> dict | None:
+        name = self.cfg.user_name
+        signer = (f"The user's name is {name}; sign as {name} or not at all. " if name
+                  else "Don't add a signature with a name. ")
+        state = {"to": flow.to, "mode": flow.mode, "subject": flow.subject, "body": flow.body,
+                 "attachment": flow.attachment, "drafted_in_gmail": flow.drafted}
+        try:
+            out = self._email_writer().chat(
+                [{"role": "system", "content": self._EMAIL_RULES.format(signer=signer)},
+                 {"role": "user", "content": f"Current draft: {json.dumps(state)}\nThe user just said: {text}"}],
+                max_tokens=3000).content
+            return json.loads(out[out.index("{"): out.rindex("}") + 1])
+        except (LLMError, ValueError):
+            return None
+
+    def _email_ctx(self, source: str) -> ToolContext:
+        return ToolContext(source=source, cfg=self.cfg, memory=self.memory,
+                           notify=self.notify, send_photo=self.send_photo, engine=self)
+
+    def _draft_now(self, flow: EmailFlow, source: str, lang: str, new_recipient: bool) -> Reply:
+        ctx = self._email_ctx(source)
+        if flow.attachment and not flow.attachment_path:
             found = self._find_files_for(flow.attachment, ctx)
             if not found:
-                asked, flow.attachment = flow.attachment, None
+                asked, flow.attachment = flow.attachment, ""
                 return Reply(language=lang, text=f"I couldn't find a file like '{asked}'. "
-                                                 "Say another name, or no.")
-            if len(found) == 1:
-                flow.attachment_path = found[0]
-            else:
+                                                 "Say another name, or say no attachment.")
+            if len(found) > 1:
                 flow.choices = found
-        question = flow.question()
-        if question:
-            return Reply(language=lang, text=question)
+                listed = "; ".join(f"{i}, {describe_file(p)}" for i, p in enumerate(found, 1))
+                return Reply(language=lang, text=f"I found {len(found)} files: {listed}. Which one?")
+            flow.attachment_path = found[0]
+        return self._put_in_gmail(flow, ctx, source, lang, new_recipient=new_recipient)
 
-        self._email_flows.pop(source, None)
-        written = self._write_email(flow)
-        if written is not None:
-            flow.subject, flow.body = written
-        elif needs_writer(flow.body) or (flow.mode == "new" and you_choose(flow.subject)):
-            flow.body = None                          # it had to be written: ask for the words instead
-            self._email_flows[source] = flow
-            return Reply(ok=False, language=lang, text="I couldn't write it just now. "
-                         "Tell me exactly what the email should say, or say cancel.")
-        # else the writer is down and the user dictated it: use their words as said
-        return self._put_in_gmail(flow, ctx, source, lang)
+    def _send_email(self, source: str, lang: str) -> Reply:
+        """'Just press send' is the user's order; gmail_send itself refuses
+        when no draft with text is open, and confirms with Gmail's own notice."""
+        self.policy.pop_pending(source)
+        calls: list[dict] = []
+        ok, result = self._run_tool("gmail_send", {}, self._email_ctx(source), calls)
+        if ok:
+            self._email_flows.pop(source, None)
+        return Reply(ok=ok, language=lang, tool_calls=calls,
+                     text=result.get("message") or result.get("error") or ("Sent." if ok else "Sending failed."))
 
     def _put_in_gmail(self, flow: EmailFlow, ctx: ToolContext, source: str, lang: str,
                       new_recipient: bool = True) -> Reply:
@@ -249,8 +302,7 @@ class ReplyEngine:
                 ok, result = self._run_tool("gmail_open_latest", {"query": flow.to}, ctx, calls)
             if ok:
                 ok, result = self._run_tool("gmail_draft_reply", {"body": flow.body}, ctx, calls)
-        if not ok:
-            self._email_flows.pop(source, None)
+        if not ok:      # the email stays open: the user can change it or say "try again"
             why = result.get("message") or result.get("error") or "Gmail didn't respond"
             return Reply(ok=False, language=lang, tool_calls=calls,
                          text=f"I couldn't finish the draft: {why} Nothing was sent.")
@@ -259,11 +311,10 @@ class ReplyEngine:
             if not flow.attached:
                 ok, got = self._run_tool("gmail_attach", {"path": flow.attachment_path}, ctx, calls)
                 if not ok:
-                    self._email_flows.pop(source, None)
                     why = got.get("message") or got.get("error") or "Gmail didn't respond"
                     return Reply(ok=False, language=lang, tool_calls=calls,
                                  text=f"The draft is written, but attaching failed: {why} Nothing was sent.")
-                flow.attached = got.get("attached") or _basename(flow.attachment_path)
+                flow.attached = got.get("attached") or basename(flow.attachment_path)
             attached = f", with {flow.attached} attached"
 
         flow.drafted = True
@@ -278,32 +329,6 @@ class ReplyEngine:
                      text=f"It's ready. {what}{attached}, saying: {body}. Shall I hit send? "
                           "Say yes, cancel, or tell me what to change.")
 
-    def _revise_email(self, text: str, flow: EmailFlow, source: str, lang: str) -> Reply:
-        """'change the recipient to Smarika', 'make the body shorter': the writer
-        applies exactly that change, Gmail is updated, and it is read back again."""
-        writer = self._email_writer()
-        rules = ("The user is changing an email draft by voice. Apply exactly the change they asked for "
-                 "and keep everything else the same. Reply exactly as: first line 'To: <recipient>' "
-                 "(a person's name or an email address, as the user said it), second line "
-                 "'Subject: <subject>', a blank line, then the body. Plain text, no signature.")
-        ask = (f"Current recipient: {flow.to}\nCurrent subject: {flow.subject or ''}\n"
-               f"Current body: {flow.body}\nThe user's change: {text}")
-        try:
-            out = writer.chat([{"role": "system", "content": rules},
-                               {"role": "user", "content": ask}], max_tokens=2000).content.strip()
-        except LLMError:
-            return Reply(ok=False, language=lang, text="I couldn't make that change just now. "
-                         "Say it again, or say cancel.")
-        head, _, body = out.partition("\n\n")
-        lines = dict(l.split(":", 1) for l in head.splitlines() if ":" in l)
-        new_to = recipient(lines.get("To", "").strip()) or flow.to
-        ctx = ToolContext(source=source, cfg=self.cfg, memory=self.memory,
-                          notify=self.notify, send_photo=self.send_photo, engine=self)
-        changed_to = new_to != flow.to
-        flow.to, flow.subject = new_to, (lines.get("Subject", "").strip() or flow.subject)
-        flow.body = body.strip() or flow.body
-        return self._put_in_gmail(flow, ctx, source, lang, new_recipient=changed_to)
-
     def _find_files_for(self, spoken: str, ctx: ToolContext) -> list[str]:
         """'my resume pdf' -> files whose names hold the most of 'resume', 'pdf'."""
         words = search_words(spoken)
@@ -311,7 +336,7 @@ class ReplyEngine:
             return []
         ok, res = self._run_tool("find_files", {"query": max(words, key=len), "limit": 50}, ctx, [])
         paths = (res.get("matches") or []) if ok else []
-        score = {p: sum(w in _basename(p).lower() for w in words) for p in paths}
+        score = {p: sum(w in basename(p).lower() for w in words) for p in paths}
         best = max(score.values(), default=0)
         return [p for p in paths if score[p] == best][:5] if best else []
 
@@ -323,36 +348,6 @@ class ReplyEngine:
                 "https://api.openai.com/v1", key, self.cfg.writer_model, timeout_sec=60, attempts=1)
                 if key else self.backend)
         return writer
-
-    def _write_email(self, flow: EmailFlow) -> tuple[str | None, str] | None:
-        """A strong model writes what the user only described. It is read back
-        in full before the send, so the user hears every word first."""
-        writer = self._email_writer()
-        # Every email goes through the writer: the live test sent the subject
-        # "The subject will be introduction" because spoken lead-ins were kept.
-        new = flow.mode == "new"
-        rules = ["You turn what the user said by voice into the email they want. Plain text, short and "
-                 "natural, in the user's language. No placeholders like [Name], no signature.",
-                 "Drop spoken lead-ins such as 'the subject will be' or 'the email should say'.",
-                 "If the user dictated exact wording, keep it word for word; if they described what to "
-                 "say, write it. If they left the subject to you, write a fitting one."]
-        rules.append("Reply exactly as: first line 'Subject: <subject>', a blank line, then the body."
-                     if new else "Reply with only the body.")
-        ask = f"Recipient: {flow.to}\n"
-        if new:
-            ask += f"Subject, as said: {flow.subject}\n"
-        ask += f"Body, as said: {flow.body}"
-        try:
-            text = writer.chat([{"role": "system", "content": " ".join(rules)},
-                                {"role": "user", "content": ask}], max_tokens=2000).content.strip()
-        except LLMError:
-            return None
-        subject = flow.subject
-        if new:
-            first, _, rest = text.partition("\n")
-            if first.lower().startswith("subject"):
-                subject, text = first.split(":", 1)[1].strip(), rest.strip()
-        return (subject, text) if text else None
 
     def _run_tool(self, name: str, args: dict, ctx: ToolContext, calls: list) -> tuple[bool, dict]:
         tool = self.registry.get(name)

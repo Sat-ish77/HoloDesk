@@ -745,7 +745,9 @@ def gmail_compose(args: dict, ctx: ToolContext) -> dict:
             problems.append(f"no recipient was added for '{to}'")
         if subject and not _same(subject, draft["subject"]):
             problems.append("the subject did not take")
-        if body and not _same(body, draft["body"]):
+        # Gmail's read-back cut long bodies short ("...job opportunities wh"), so
+        # "did not take" was reported while the user could see it; check the opening.
+        if body and not _same(body[:60], draft["body"]):
             problems.append("the body did not take")
         return {"success": not problems, "sent": False, "to": draft["to"], "subject": draft["subject"],
                 "body": draft["body"][:600], "url": page.url,

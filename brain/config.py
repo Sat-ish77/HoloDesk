@@ -77,6 +77,8 @@ class BrainConfig:
     # Writes email bodies the user only describes ("tell her I'll be late"),
     # always on OpenAI (OPENAI_API_KEY) whatever the main model is.
     writer_model: str = field(default_factory=lambda: _env("HOLODESK_WRITER_MODEL", "gpt-5.5"))
+    # Who emails are signed as; the writer signed one "Smarika Koirala" without it.
+    user_name: str = field(default_factory=lambda: _env("HOLODESK_USER_NAME"))
 
     # --- Agent loop ---
     max_turns: int = field(default_factory=lambda: _env_int("HOLODESK_MAX_TURNS", 12))
