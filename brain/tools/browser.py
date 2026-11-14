@@ -779,6 +779,21 @@ def gmail_open_latest(args: dict, ctx: ToolContext) -> dict:
     return _run(job)
 
 
+def gmail_discard_draft(args: dict, ctx: ToolContext) -> dict:
+    def job(page):
+        from browser.sites import gmail
+        if not gmail.compose_open(page):
+            return {"success": True, "response": "No draft was open."}
+        try:
+            page.locator('[aria-label^="Discard draft"]').first.click(timeout=5000)   # UNVERIFIED label
+        except Exception as e:
+            return {"success": False, "response": f"I couldn't discard the draft ({type(e).__name__})."}
+        page.wait_for_timeout(800)
+        gone = not gmail.compose_open(page)
+        return {"success": gone, "response": "Draft discarded." if gone else "The draft is still open."}
+    return _run(job)
+
+
 def gmail_attach(args: dict, ctx: ToolContext) -> dict:
     """Attach a local file to the open draft. The browser is handed the file
     directly, so the Windows file dialog never opens."""
@@ -1015,6 +1030,11 @@ def build() -> list[Tool]:
              handler=gmail_open_latest, risk=Risk.ACT,
              keywords=("open email", "find email", "latest email", "thread", "inbox", "इमेल खोल",
                        "email khola")),
+        Tool(name="gmail_discard_draft",
+             description="Discard the new-email draft open in Gmail (nothing is sent).",
+             parameters={"type": "object", "properties": {}},
+             handler=gmail_discard_draft, risk=Risk.ACT,
+             keywords=("discard", "delete draft", "close email", "ड्राफ्ट हटाऊ")),
         Tool(name="gmail_attach",
              description=("Attach a local file (full path, find it with find_files first) to the email "
                           "drafted in Gmail. Not sent; gmail_send sends."),

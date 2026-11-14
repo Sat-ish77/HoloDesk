@@ -35,6 +35,7 @@ def _gmail_tools(calls):
         tool("gmail_open_latest", {"ok": True, "thread": "Smarika Koirala - Lunch?"}),
         tool("gmail_draft_reply", {"ok": True, "draft": "Sounds good, see you then."}),
         tool("gmail_attach", {"ok": True, "attached": "Satish_Resume.pdf"}),
+        tool("gmail_discard_draft", {"ok": True}),
         tool("find_files", {"ok": True, "matches": ["C:/Users/Sat/Desktop/Satish_Resume.pdf",
                                                    "C:/Users/Sat/Documents/Resume_old.docx",
                                                    "C:/Users/Sat/Documents/notes.txt"]}),
@@ -162,10 +163,41 @@ def test_garbled_recipient_is_asked_again_and_spoken_address_is_parsed():
 def test_close_leaves_the_email_and_runs_as_a_command():
     # Live test: "Close the Gmail right now" got "new email or reply?" again and again.
     # (the test registry has open_app, not close_app: any registered tool proves the command ran)
-    engine, _, log = make_engine([call("open_app", name="notepad"), say("Done.")], extra_tools=_gmail_tools([]))
+    # no Gmail tools: more tools switch on the router, which would eat the scripted reply
+    engine, _, log = make_engine([call("open_app", name="notepad"), say("Done.")])
     engine.reply("write an email to Smarika")
     engine.reply("Close the Gmail right now.")
     assert not engine.email_flow_waiting("voice") and log == [("open_app", {"name": "notepad"})]
+
+
+def _drafted(calls, *writer_outputs):
+    from brain.llm import FakeBackend
+    engine, _, _ = make_engine([], extra_tools=_gmail_tools(calls))
+    engine._writer = FakeBackend([LLMResponse(content=c) for c in writer_outputs])
+    for said in ["write an email to Satish Wagle", "new", "Introduction", "say I am looking for a job", "no"]:
+        engine.reply(said)
+    return engine
+
+
+def test_changing_the_recipient_redrafts_and_asks_again():
+    # Live test: the user asked mid-way to send it to a different person and nothing could change it.
+    calls = []
+    engine = _drafted(calls, "Subject: Introduction\n\nI am looking for a job.",
+                      "To: Smarika Koirala\nSubject: Introduction\n\nI am looking for a job.")
+    again = engine.reply("change the recipient to Smarika Koirala")
+    assert [c[0] for c in calls] == ["gmail_compose", "gmail_discard_draft", "gmail_compose"]
+    assert calls[-1][1]["to"] == "Smarika Koirala" and again.needs_confirmation
+    engine.reply("yes, send it")
+    assert calls[-1] == ("gmail_send", {}) and not engine.email_flow_waiting("voice")
+
+
+def test_changing_only_the_body_keeps_the_recipient():
+    calls = []
+    engine = _drafted(calls, "Subject: Introduction\n\nI am looking for a job.",
+                      "To: Satish Wagle\nSubject: Introduction\n\nI am looking for a software job.")
+    engine.reply("make it say a software job")
+    assert [c[0] for c in calls] == ["gmail_compose", "gmail_compose"]       # no discard
+    assert calls[-1][1] == {"to": "", "subject": "Introduction", "body": "I am looking for a software job."}
 
 
 def test_unclear_new_or_reply_is_asked_only_once():

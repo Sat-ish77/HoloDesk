@@ -70,6 +70,8 @@ class EmailFlow:
         self.attachment = None          # what the user called the file; "" = no attachment
         self.attachment_path = None
         self.choices: list[str] = []    # several files matched: the user picks one
+        self.drafted = False            # in Gmail and read back: now only yes / cancel / changes
+        self.attached = None            # file name Gmail showed as attached
         self.started = time.time()
         self._mode_asked_again = False
         m = _TO_NAME.search(request or "")
