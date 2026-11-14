@@ -27,6 +27,7 @@ from datetime import datetime
 
 from .config import BrainConfig, load_config
 from .llm import LLMBackend, LLMError, LLMResponse, make_backend, resolve_models
+from .email_flow import EmailFlow, is_cancel, wants_email
 from .memory import MemoryStore
 from .policy import Decision, Policy, Risk, is_no, is_yes
 from .tools.registry import Tool, ToolContext, ToolError, ToolRegistry, tokenize
@@ -129,6 +130,7 @@ class ReplyEngine:
         self._last_learn = 0.0
         self._models_resolved = False
         self._approved_retry = None     # (source, call signature) of a confirmed action that failed
+        self._email_flows: dict[str, EmailFlow] = {}    # source -> guided email in progress
 
     def _ensure_models(self) -> None:
         """Pick models on first use, not at startup: the overlay must launch
@@ -165,8 +167,75 @@ class ReplyEngine:
                     "I'm halted, so I won't run any actions. Say resume to turn me back on.",
                     "म रोकिएको छु, कुनै काम गर्दिनँ। फेरि सुरु गर्न resume भन्नुहोस्।",
                     "Ma rokiyeko chu. Feri suru garna resume bhannus."))
+            flow = self._email_flows.get(source)
+            if flow is not None and flow.expired():
+                flow = self._email_flows.pop(source, None) and None
+            if flow is not None or wants_email(text):
+                return self._finish(text, source, self._email_step(text, source, lang))
             result = self._agent_loop(text, source, lang)
             return self._finish(text, source, result)
+
+    def email_flow_waiting(self, source: str) -> bool:
+        """The voice loop lets one-word answers ("new", "Greetings") through
+        only while a guided email is waiting for one."""
+        flow = self._email_flows.get(source)
+        return flow is not None and not flow.expired()
+
+    # ------------------------------------------------------------------
+    # Guided email (no model involved; see brain/email_flow.py)
+    # ------------------------------------------------------------------
+    def _email_step(self, text: str, source: str, lang: str) -> Reply:
+        flow = self._email_flows.get(source)
+        if flow is None:
+            flow = self._email_flows[source] = EmailFlow(text)
+        elif is_cancel(text):
+            self._email_flows.pop(source, None)
+            return Reply(language=lang, text="Okay, I dropped that email. Nothing was sent.")
+        else:
+            reask = flow.take(text)
+            if reask:
+                return Reply(language=lang, text=reask)
+        question = flow.question()
+        if question:
+            return Reply(language=lang, text=question)
+
+        self._email_flows.pop(source, None)
+        ctx = ToolContext(source=source, cfg=self.cfg, memory=self.memory,
+                          notify=self.notify, send_photo=self.send_photo, engine=self)
+        calls: list[dict] = []
+        if flow.mode == "new":
+            ok, result = self._run_tool("gmail_compose", {"to": flow.to, "subject": flow.subject,
+                                                          "body": flow.body}, ctx, calls)
+        else:
+            ok, result = self._run_tool("gmail_open_latest", {"query": flow.to}, ctx, calls)
+            if ok:
+                ok, result = self._run_tool("gmail_draft_reply", {"body": flow.body}, ctx, calls)
+        if not ok:
+            why = result.get("message") or result.get("error") or "Gmail didn't respond"
+            return Reply(ok=False, language=lang, tool_calls=calls,
+                         text=f"I couldn't finish the draft: {why} Nothing was sent.")
+
+        # Read back what Gmail shows, then park the send behind the normal
+        # confirmation so the next "yes" runs gmail_send and nothing else does.
+        to = ", ".join(result.get("to") or []) or flow.to
+        what = (f"To {to}, subject {result.get('subject') or flow.subject}" if flow.mode == "new"
+                else f"A reply in your latest thread with {flow.to}")
+        body = result.get("body") or result.get("draft") or flow.body
+        send = self.registry.get("gmail_send")
+        self.policy.set_pending("gmail_send", {}, send.summary_for({}) if send else "send the email", source)
+        return Reply(needs_confirmation=True, language=lang, tool_calls=calls,
+                     text=f"It's ready. {what}, saying: {body}. Shall I hit send? Say yes, or cancel.")
+
+    def _run_tool(self, name: str, args: dict, ctx: ToolContext, calls: list) -> tuple[bool, dict]:
+        tool = self.registry.get(name)
+        if tool is None:
+            calls.append({"name": name, "arguments": args, "ok": False})
+            return False, {"error": f"the {name} tool isn't available."}
+        result = self._execute(tool, args, ctx)
+        result = result if isinstance(result, dict) else {"result": result}
+        ok = result.get("ok") is not False
+        calls.append({"name": name, "arguments": args, "ok": ok})
+        return ok, result
 
     def halt(self, who: str = "user") -> None:
         self.policy.halt(who)

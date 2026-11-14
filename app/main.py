@@ -411,6 +411,9 @@ def _answers_pending_confirmation(text):
     try:
         from brain.policy import is_yes, is_no
         brain = getattr(orchestrator, "brain", None)
+        # A guided email asking "What's the subject?" must hear "Greetings".
+        if brain is not None and brain.email_flow_waiting("voice"):
+            return True
         if brain is not None and brain.policy.get_pending("voice") is not None:
             return is_yes(text) or is_no(text)
     except Exception:

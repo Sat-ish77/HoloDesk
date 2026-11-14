@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 import time
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 from ..policy import Risk
 from . import pagemap
@@ -753,6 +753,31 @@ def gmail_compose(args: dict, ctx: ToolContext) -> dict:
     return _run(job)
 
 
+def gmail_open_latest(args: dict, ctx: ToolContext) -> dict:
+    """Open the newest thread matching a name or address, so a reply goes into
+    the right conversation instead of whatever email happened to be open."""
+    query = " ".join((args.get("query") or "").split())
+    if not query:
+        raise ToolError("query is required")
+
+    def job(page):
+        from browser.sites import gmail
+        if not _on_gmail(page):
+            page = _open_tab(page, gmail.GMAIL_URL)
+        # Search through the URL, so it doesn't depend on the search box's label.
+        page.goto(gmail.GMAIL_URL.split("#")[0] + "#search/" + quote(query), wait_until="domcontentloaded")
+        page.wait_for_timeout(2500)
+        rows = page.locator("tr.zA:visible")    # UNVERIFIED: Gmail's thread-list rows
+        if not rows.count():
+            return {"success": False, "url": page.url, "response": f"I found no emails for {query}."}
+        thread = " ".join((rows.first.inner_text(timeout=4000) or "").split())[:140]
+        rows.first.click(timeout=8000)
+        page.wait_for_timeout(1500)
+        return {"success": True, "thread": thread, "url": page.url,
+                "response": f"Opened the latest email for {query}."}
+    return _run(job)
+
+
 def gmail_draft_reply(args: dict, ctx: ToolContext) -> dict:
     body = (args.get("body") or "").strip()
     if not body:
@@ -956,6 +981,15 @@ def build() -> list[Tool]:
              handler=gmail_compose, risk=Risk.ACT,
              keywords=("email", "mail", "gmail", "compose", "write an email", "new email", "draft", "send an email",
                        "इमेल लेख", "नयाँ इमेल", "email lekha", "mail lekha", "naya email")),
+        Tool(name="gmail_open_latest",
+             description=("Search Gmail for a person's name or address and open the newest matching "
+                          "thread, ready for gmail_draft_reply."),
+             parameters={"type": "object", "properties": {
+                 "query": {"type": "string", "description": "Name or email address to search for."}},
+                 "required": ["query"]},
+             handler=gmail_open_latest, risk=Risk.ACT,
+             keywords=("open email", "find email", "latest email", "thread", "inbox", "इमेल खोल",
+                       "email khola")),
         Tool(name="gmail_draft_reply",
              description=("Write a reply to the email that is OPEN in Gmail. For a new email use "
                           "gmail_compose. It is drafted only, NOT sent; call gmail_send to send it."),
