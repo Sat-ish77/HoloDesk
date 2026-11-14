@@ -27,7 +27,8 @@ from datetime import datetime
 
 from .config import BrainConfig, load_config
 from .llm import LLMBackend, LLMError, LLMResponse, OpenAICompatibleBackend, make_backend, resolve_models
-from .email_flow import EmailFlow, is_cancel, needs_writer, wants_email, you_choose
+from .email_flow import (EmailFlow, _basename, is_cancel, needs_writer, search_words, wants_email,
+                         you_choose)
 from .memory import MemoryStore
 from .policy import Decision, Policy, Risk, is_no, is_yes
 from .tools.registry import Tool, ToolContext, ToolError, ToolRegistry, tokenize
@@ -195,6 +196,18 @@ class ReplyEngine:
             reask = flow.take(text)
             if reask:
                 return Reply(language=lang, text=reask)
+        ctx = ToolContext(source=source, cfg=self.cfg, memory=self.memory,
+                          notify=self.notify, send_photo=self.send_photo, engine=self)
+        if flow.attachment and not flow.attachment_path and not flow.choices:
+            found = self._find_files_for(flow.attachment, ctx)
+            if not found:
+                asked, flow.attachment = flow.attachment, None
+                return Reply(language=lang, text=f"I couldn't find a file like '{asked}'. "
+                                                 "Say another name, or no.")
+            if len(found) == 1:
+                flow.attachment_path = found[0]
+            else:
+                flow.choices = found
         question = flow.question()
         if question:
             return Reply(language=lang, text=question)
@@ -208,8 +221,6 @@ class ReplyEngine:
                 return Reply(ok=False, language=lang, text="I couldn't write it just now. "
                              "Tell me exactly what the email should say, or say cancel.")
             flow.subject, flow.body = written
-        ctx = ToolContext(source=source, cfg=self.cfg, memory=self.memory,
-                          notify=self.notify, send_photo=self.send_photo, engine=self)
         calls: list[dict] = []
         if flow.mode == "new":
             ok, result = self._run_tool("gmail_compose", {"to": flow.to, "subject": flow.subject,
@@ -222,6 +233,14 @@ class ReplyEngine:
             why = result.get("message") or result.get("error") or "Gmail didn't respond"
             return Reply(ok=False, language=lang, tool_calls=calls,
                          text=f"I couldn't finish the draft: {why} Nothing was sent.")
+        attached = ""
+        if flow.attachment_path:
+            ok, got = self._run_tool("gmail_attach", {"path": flow.attachment_path}, ctx, calls)
+            if not ok:
+                why = got.get("message") or got.get("error") or "Gmail didn't respond"
+                return Reply(ok=False, language=lang, tool_calls=calls,
+                             text=f"The draft is written, but attaching failed: {why} Nothing was sent.")
+            attached = f", with {got.get('attached') or _basename(flow.attachment_path)} attached"
 
         # Read back what Gmail shows, then park the send behind the normal
         # confirmation so the next "yes" runs gmail_send and nothing else does.
@@ -232,7 +251,18 @@ class ReplyEngine:
         send = self.registry.get("gmail_send")
         self.policy.set_pending("gmail_send", {}, send.summary_for({}) if send else "send the email", source)
         return Reply(needs_confirmation=True, language=lang, tool_calls=calls,
-                     text=f"It's ready. {what}, saying: {body}. Shall I hit send? Say yes, or cancel.")
+                     text=f"It's ready. {what}{attached}, saying: {body}. Shall I hit send? Say yes, or cancel.")
+
+    def _find_files_for(self, spoken: str, ctx: ToolContext) -> list[str]:
+        """'my resume pdf' -> files whose names hold the most of 'resume', 'pdf'."""
+        words = search_words(spoken)
+        if not words:
+            return []
+        ok, res = self._run_tool("find_files", {"query": max(words, key=len), "limit": 50}, ctx, [])
+        paths = (res.get("matches") or []) if ok else []
+        score = {p: sum(w in _basename(p).lower() for w in words) for p in paths}
+        best = max(score.values(), default=0)
+        return [p for p in paths if score[p] == best][:5] if best else []
 
     def _write_email(self, flow: EmailFlow) -> tuple[str | None, str] | None:
         """A strong model writes what the user only described. It is read back

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import re
 import time
+from pathlib import Path
 from urllib.parse import quote, urlparse
 
 from ..policy import Risk
@@ -778,6 +779,30 @@ def gmail_open_latest(args: dict, ctx: ToolContext) -> dict:
     return _run(job)
 
 
+def gmail_attach(args: dict, ctx: ToolContext) -> dict:
+    """Attach a local file to the open draft. The browser is handed the file
+    directly, so the Windows file dialog never opens."""
+    path = Path(str(args.get("path") or "")).expanduser()
+    if not path.is_file():
+        raise ToolError(f"there is no file at {path}")
+
+    def job(page):
+        if not _on_gmail(page):
+            return {"success": False, "response": "Gmail isn't the open tab."}
+        try:
+            with page.expect_file_chooser(timeout=8000) as chooser:
+                page.get_by_label("Attach files").first.click(timeout=8000)   # UNVERIFIED label
+            chooser.value.set_files(str(path))
+        except Exception as e:
+            return {"success": False, "response": f"I couldn't use Gmail's attach button ({type(e).__name__})."}
+        try:    # Gmail shows the file name once the upload is done
+            page.get_by_text(path.name, exact=False).first.wait_for(state="visible", timeout=30000)
+        except Exception:
+            return {"success": False, "response": f"I picked {path.name}, but Gmail didn't show it as attached."}
+        return {"success": True, "attached": path.name, "response": f"Attached {path.name}."}
+    return _run(job)
+
+
 def gmail_draft_reply(args: dict, ctx: ToolContext) -> dict:
     body = (args.get("body") or "").strip()
     if not body:
@@ -990,6 +1015,14 @@ def build() -> list[Tool]:
              handler=gmail_open_latest, risk=Risk.ACT,
              keywords=("open email", "find email", "latest email", "thread", "inbox", "इमेल खोल",
                        "email khola")),
+        Tool(name="gmail_attach",
+             description=("Attach a local file (full path, find it with find_files first) to the email "
+                          "drafted in Gmail. Not sent; gmail_send sends."),
+             parameters={"type": "object", "properties": {
+                 "path": {"type": "string", "description": "Full path of the file to attach."}},
+                 "required": ["path"]},
+             handler=gmail_attach, risk=Risk.ACT,
+             keywords=("attach", "attachment", "file", "upload", "जोड", "attach gara")),
         Tool(name="gmail_draft_reply",
              description=("Write a reply to the email that is OPEN in Gmail. For a new email use "
                           "gmail_compose. It is drafted only, NOT sent; call gmail_send to send it."),
