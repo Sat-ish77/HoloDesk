@@ -1,11 +1,8 @@
 """
 Desktop tools: apps, windows, keyboard, mouse, UI elements, screen.
 
-Order of preference when controlling an app (most reliable first):
-  1. a dedicated tool (open_app, open_website, window_action ...)
-  2. click_ui_element   finds a button by NAME through Windows UI Automation
-  3. press_keys / type_text
-  4. look_at_screen + mouse_click   vision, slowest and least reliable
+Seeing and clicking inside a window lives in ui.py (look / click / type).
+This module opens and arranges things and holds the keyboard.
 
 Every Windows-only import is inside a function so this module imports
 anywhere (tests run on Linux).
@@ -149,71 +146,6 @@ def window_action(args: dict, ctx: ToolContext) -> dict:
     return {"ok": True, "message": f"{action.capitalize()}d {title[:80]}."}
 
 
-# ---------------------------------------------------------------- UI Automation
-def _uia_window(title: str):
-    try:
-        from pywinauto import Desktop
-    except ImportError:
-        raise ToolError("UI element control needs pywinauto (pip install pywinauto)")
-    if not title:
-        title = _foreground_title()
-    if not title:
-        raise ToolError("no window title given and no active window found")
-    win = Desktop(backend="uia").window(title_re="(?i).*" + re.escape(title) + ".*", found_index=0)
-    try:
-        win.wait("exists", timeout=3)
-    except Exception:
-        raise ToolError(f"no window matches '{title}'")
-    return win
-
-
-_INTERACTIVE = {"Button", "MenuItem", "Hyperlink", "Edit", "CheckBox", "RadioButton",
-                "ComboBox", "ListItem", "TabItem", "TreeItem", "SplitButton"}
-
-
-def list_ui_elements(args: dict, ctx: ToolContext) -> dict:
-    if _private_window_open():
-        raise ToolError("a private window (banking or passwords) is in front; I won't read it")
-    win = _uia_window(args.get("window_title") or "")
-    limit = max(5, min(int(args.get("limit") or 60), 150))
-    needle = (args.get("filter") or "").lower()
-    items = []
-    for el in win.descendants():
-        info = el.element_info
-        name, ctype = (info.name or "").strip(), info.control_type or ""
-        if not name or ctype not in _INTERACTIVE:
-            continue
-        if needle and needle not in name.lower():
-            continue
-        items.append(f"{ctype}: {name[:60]}")
-        if len(items) >= limit:
-            break
-    return {"ok": True, "elements": items}
-
-
-def click_ui_element(args: dict, ctx: ToolContext) -> dict:
-    name = (args.get("name") or "").strip()
-    if not name:
-        raise ToolError("name is required")
-    win = _uia_window(args.get("window_title") or "")
-    want_type = (args.get("control_type") or "").lower()
-    candidates = []
-    for el in win.descendants():
-        info = el.element_info
-        el_name, ctype = (info.name or "").strip(), info.control_type or ""
-        if not el_name or (want_type and ctype.lower() != want_type):
-            continue
-        if el_name.lower() == name.lower():
-            candidates.insert(0, (el, el_name, ctype))
-        elif name.lower() in el_name.lower() and ctype in _INTERACTIVE:
-            candidates.append((el, el_name, ctype))
-    if not candidates:
-        raise ToolError(f"no element named '{name}' in that window; call list_ui_elements to see names")
-    el, el_name, ctype = candidates[0]
-    el.click_input()
-    return {"ok": True, "message": f"Clicked {ctype} '{el_name[:60]}'."}
-
-
 # ---------------------------------------------------------------- apps / web
 def _plain_url(target: str) -> str:
     return target if re.match(r"^https?://", target) else (
@@ -329,20 +261,6 @@ def press_keys(args: dict, ctx: ToolContext) -> dict:
     for _ in range(repeat):
         pag.hotkey(*keys) if len(keys) > 1 else pag.press(keys[0])
     return {"ok": True, "message": f"Pressed {'+'.join(keys)}."}
-
-
-def mouse_click(args: dict, ctx: ToolContext) -> dict:
-    pag = _pyautogui()
-    try:
-        x, y = int(args["x"]), int(args["y"])
-    except (KeyError, TypeError, ValueError):
-        raise ToolError("x and y pixel coordinates are required")
-    width, height = pag.size()
-    if not (0 <= x < width and 0 <= y < height):
-        raise ToolError(f"({x},{y}) is off the {width}x{height} screen")
-    button = args.get("button") if args.get("button") in ("left", "right", "middle") else "left"
-    pag.click(x=x, y=y, button=button, clicks=2 if args.get("double") else 1)
-    return {"ok": True, "message": f"Clicked at ({x},{y})."}
 
 
 def scroll(args: dict, ctx: ToolContext) -> dict:
@@ -489,51 +407,23 @@ def build(task_agent_provider=lambda: None, screen_agent_provider=lambda: None) 
         Tool(name="focus_window", description="Bring a window to the front.",
              parameters={"type": "object", "properties": {"title": title_param}, "required": ["title"]},
              handler=focus_window, risk=Risk.ACT, keywords=("switch to", "bring up", "focus", "go to")),
-        Tool(name="window_action", description="Minimize, maximize, restore or close a window.",
+        Tool(name="window_action", shelf=True, description="Minimize, maximize, restore or close a window.",
              parameters={"type": "object", "properties": {
                  "action": {"type": "string", "enum": ["minimize", "maximize", "restore", "close"]},
                  "title": title_param}, "required": ["action"]},
              handler=window_action, risk=Risk.ACT,
              keywords=("minimize", "maximize", "restore", "full screen", "window")),
-        Tool(name="list_ui_elements",
-             description=("List the clickable elements (buttons, menus, fields) of a window by name. "
-                          "Call before click_ui_element when you don't know the exact name."),
-             parameters={"type": "object", "properties": {
-                 "window_title": title_param, "filter": {"type": "string"}, "limit": {"type": "integer"}}},
-             handler=list_ui_elements, keywords=("button", "buttons", "menu", "click", "elements")),
-        Tool(name="click_ui_element",
-             description=("Click a button, menu item, link or field in a window by its visible name. "
-                          "More reliable than clicking coordinates."),
-             parameters={"type": "object", "properties": {
-                 "name": {"type": "string", "description": "Visible name of the element."},
-                 "window_title": title_param,
-                 "control_type": {"type": "string", "description": "Optional, e.g. Button, MenuItem, Edit."}},
-                 "required": ["name"]},
-             handler=click_ui_element, risk=Risk.ACT, keywords=("click", "press", "button", "tap", "थिच", "click gara")),
-        Tool(name="type_text",
-             description="Type text into whatever is focused. Works for Nepali text too.",
-             parameters={"type": "object", "properties": {
-                 "text": {"type": "string"}, "press_enter": {"type": "boolean"}}, "required": ["text"]},
-             handler=type_text, risk=Risk.ACT, keywords=("type", "write", "enter text", "टाइप", "lekha")),
         Tool(name="press_keys",
              description="Press a key or shortcut, like 'enter', 'ctrl+s', 'alt+tab', 'win+d'.",
              parameters={"type": "object", "properties": {
                  "keys": {"type": "string"}, "repeat": {"type": "integer"}}, "required": ["keys"]},
              handler=press_keys, risk=Risk.ACT,
              keywords=("press", "shortcut", "hotkey", "key", "save", "copy", "paste", "undo", "tab")),
-        Tool(name="mouse_click",
-             description=("Click at screen pixel coordinates. Last resort: use only after "
-                          "look_at_screen told you where something is."),
-             parameters={"type": "object", "properties": {
-                 "x": {"type": "integer"}, "y": {"type": "integer"},
-                 "button": {"type": "string", "enum": ["left", "right", "middle"]},
-                 "double": {"type": "boolean"}}, "required": ["x", "y"]},
-             handler=mouse_click, risk=Risk.ACT, keywords=("click", "mouse", "double click", "right click")),
         Tool(name="scroll", description="Scroll the active window up or down.",
              parameters={"type": "object", "properties": {
                  "direction": {"type": "string", "enum": ["up", "down"]}, "amount": {"type": "integer"}}},
              handler=scroll, risk=Risk.ACT, keywords=("scroll", "page down", "page up")),
-        Tool(name="clipboard", description="Read the clipboard, or put text on it.",
+        Tool(name="clipboard", shelf=True, description="Read the clipboard, or put text on it.",
              parameters={"type": "object", "properties": {
                  "action": {"type": "string", "enum": ["read", "write"]}, "text": {"type": "string"}},
                  "required": ["action"]},

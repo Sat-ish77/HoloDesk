@@ -24,9 +24,9 @@ CASES = [
     ("how are you today", set()),
     ("open notepad", {"open_app"}),
     ("search model context protocol on google", {"search_in_browser", "open_website", "browser_new_tab"}),
-    ("open the first result", {"browser_open_result", "browser_click_ref", "browser_click_text"}),
+    ("open the first result", {"click", "browser_open_result"}),
     ("go back", {"browser_back"}),
-    ("what page is this", {"browser_read_page", "browser_snapshot"}),
+    ("what page is this", {"look", "browser_read_page"}),
 ]
 
 

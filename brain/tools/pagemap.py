@@ -142,7 +142,13 @@ SNAPSHOT_JS = "(opts) => {" + _HELPERS + r"""
   // "This post" = the post that covers, or is nearest to, the middle of the screen.
   const posts = groups.filter(g => g.kind === 'post');
   if (posts.length) posts.reduce((a, b) => (b.dist < a.dist ? b : a)).on_screen = true;
-  return { title: document.title, url: location.href, groups, elements, total };
+  // Toasts and status lines ("Message sent") are how pages confirm an action.
+  const notices = [];
+  document.querySelectorAll('[role=alert],[role=status],[aria-live=polite],[aria-live=assertive]').forEach(n => {
+    const r = n.getBoundingClientRect(), t = clean(n.innerText).slice(0, 140);
+    if (t && r.width > 0 && r.bottom > 0 && r.top < vh && notices.length < 5 && !notices.includes(t)) notices.push(t);
+  });
+  return { title: document.title, url: location.href, groups, elements, total, notices };
 }"""
 
 DESCRIBE_JS = "(el) => {" + _HELPERS + " return describe(el); }"
@@ -197,7 +203,7 @@ def render(snap: dict, max_chars: int = 4000) -> str:
     """Compact text map: groups as headers, one line per element."""
     groups = {g["id"]: g for g in snap["groups"]}
     order = sorted(groups.values(), key=lambda g: (g["kind"] != "dialog", not g.get("on_screen"), g["id"]))
-    lines: list[str] = []
+    lines: list[str] = [f"[notice] {text}" for text in snap.get("notices", [])]
     for group in order + [None]:
         gid = group["id"] if group else 0
         members = [el for el in snap["elements"] if el["group"] == gid]

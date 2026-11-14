@@ -4,7 +4,7 @@
 <div role="button" tabindex="0" id="compose">Compose</div>
 <input aria-label="Search mail" type="text">
 <main><a href="#m1">Welcome to your inbox</a></main>
-<div id="toast"></div>
+<div id="toast" role="status"></div>
 <script>
 const CONTACTS = [['Smarika Koirala', 'smarika@example.com'], ['Asha Rai', 'asha@example.com']];
 document.getElementById('compose').addEventListener('click', () => {
@@ -22,12 +22,13 @@ document.getElementById('compose').addEventListener('click', () => {
       const o = document.createElement('div'); o.setAttribute('role', 'option'); o.textContent = c[0] + ' ' + c[1]; o.dataset.email = c[1]; o.dataset.name = c[0];
       options.appendChild(o); });
   });
-  to.addEventListener('keydown', e => { if (e.key !== 'Enter') return;
-    const pick = options.querySelector('[role=option]');
+  const choose = pick => {
     const email = pick ? pick.dataset.email : (to.value.includes('@') ? to.value.trim() : null);
     if (!email) return;
     const chip = document.createElement('span'); chip.setAttribute('email', email); chip.textContent = pick ? pick.dataset.name : email;
-    d.querySelector('#chips').appendChild(chip); to.value = ''; options.innerHTML = ''; });
+    d.querySelector('#chips').appendChild(chip); to.value = ''; options.innerHTML = ''; };
+  to.addEventListener('keydown', e => { if (e.key === 'Enter') choose(options.querySelector('[role=option]')); });
+  options.addEventListener('click', e => { const o = e.target.closest('[role=option]'); if (o) choose(o); });
   d.querySelector('#send').addEventListener('click', () => { d.remove(); document.getElementById('toast').textContent = 'Message sent'; });
 });
 </script></body></html>

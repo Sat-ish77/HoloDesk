@@ -26,7 +26,8 @@ _SYSTEM = (
     "before you say something worked. Never type passwords or payment details. Before anything "
     "that can't be undone or that other people will see (send, post, comment, submit, delete, "
     "buy, pay, close unsaved work), stop and reply with one line starting 'NEEDS OK:' that says "
-    "exactly what you are about to do. When finished, reply in one or two plain sentences that "
+    "exactly what you are about to do, unless the task says the user already approved that exact "
+    "step. When finished, reply in one or two plain sentences that "
     "say what you verified on screen; if you could not do it, say where you got stuck."
 )
 
@@ -162,12 +163,14 @@ def computer_task(args: dict, ctx: ToolContext, client=None, pyautogui=None) -> 
         import pyautogui
         pyautogui.FAILSAFE = True     # slam the mouse into a corner to abort
     screen = _Screen(pyautogui)
+    if args.get("approved"):    # set by the engine after the user said yes to a NEEDS OK step
+        goal += f"\nThe user approved this step: {args['approved']} Take a screenshot and carry on from where the screen is now."
     messages = [{"role": "user", "content": goal}]
     actions = 0
     for _ in range(MAX_TURNS):
         engine = getattr(ctx, "engine", None)
-        if engine is not None and engine.policy.halted:
-            return {"ok": False, "error": "Stopped: HoloDesk is halted.", "actions": actions}
+        if engine is not None and (engine.policy.halted or engine.stop_requested()):
+            return {"ok": False, "error": "Stopped by the user.", "actions": actions}
         response = client.beta.messages.create(
             model=MODEL, max_tokens=16000, system=_SYSTEM,
             tools=[{"type": "computer_toolset_20260801"}],
@@ -184,9 +187,9 @@ def computer_task(args: dict, ctx: ToolContext, client=None, pyautogui=None) -> 
         if not uses:
             text = " ".join(b.get("text", "") for b in content if b.get("type") == "text").strip()
             if text.startswith("NEEDS OK:"):
-                return {"ok": True, "paused": True, "actions": actions,
-                        "message": "Paused before: " + text[9:].strip()
-                                   + " Ask the user; if they agree, run computer_task again saying they approved it."}
+                # The engine turns this into the one policy confirmation and, on
+                # yes, calls this tool again with approved=<this text>.
+                return {"ok": True, "needs_ok": text[9:].strip(), "actions": actions}
             return {"ok": True, "message": text or "Done.", "actions": actions}
         results, failed = [], False
         for b in uses:                 # a batch runs in order and stops at the first failure
@@ -211,7 +214,7 @@ def build() -> list[Tool]:
              description=("See the screen and use the real mouse and keyboard to do a task in ANY app or "
                           "window, e.g. a Windows file picker, a desktop app, or a page the browser tools "
                           "can't handle. Slower than the other tools: use it when they don't fit or failed. "
-                          "Describe the whole goal in one sentence. It pauses before anything irreversible."),
+                          "Describe the whole goal in one sentence. Anything irreversible is held for the user's OK."),
              parameters={"type": "object", "properties": {
                  "goal": {"type": "string", "description": "What to get done, in one or two sentences."}},
                  "required": ["goal"]},

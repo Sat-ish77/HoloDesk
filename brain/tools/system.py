@@ -243,7 +243,6 @@ def build() -> list[Tool]:
             summarize=lambda a: f"run this command: {(a.get('command') or '')[:300]}",
             keywords=("command", "terminal", "shell", "cmd", "script", "install", "wifi",
                       "network", "ip", "service", "setting", "settings", "चलाऊ", "command chalau"),
-            always=True,
         ),
         Tool(
             name="system_status",
@@ -253,10 +252,9 @@ def build() -> list[Tool]:
             handler=system_status,
             keywords=("status", "battery", "cpu", "ram", "memory", "disk", "storage", "slow",
                       "health", "charge", "ब्याट्री", "अवस्था", "के भइरहेको", "laptop kasto cha"),
-            always=True,
         ),
         Tool(
-            name="list_processes",
+            name="list_processes", shelf=True,
             description="List running programs with memory use, optionally filtered by name.",
             parameters={"type": "object", "properties": {
                 "filter": {"type": "string"}, "limit": {"type": "integer"}}},
@@ -264,7 +262,7 @@ def build() -> list[Tool]:
             keywords=("running", "processes", "programs", "apps open", "task manager"),
         ),
         Tool(
-            name="kill_process",
+            name="kill_process", shelf=True,
             description=("Force-kill a process by name or pid. Unsaved work in it is lost. For a "
                          "normal close use close_app instead."),
             parameters={"type": "object", "properties": {
@@ -275,7 +273,7 @@ def build() -> list[Tool]:
             keywords=("kill", "force quit", "end task", "frozen", "hung", "not responding"),
         ),
         Tool(
-            name="watch_process",
+            name="watch_process", shelf=True,
             description=("Message the user's phone when a running program exits. Use for 'tell "
                          "me when the download / build / training finishes'."),
             parameters={"type": "object", "properties": {

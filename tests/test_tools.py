@@ -43,27 +43,6 @@ def test_risk_tiers_of_the_dangerous_tools():
     assert r.get("system_status").risk_for({}) == Risk.SAFE
 
 
-def test_router_respects_limit_and_keeps_always_on_tools():
-    r = build_default_registry()
-    chosen = {t.name for t in r.select("delete the report file from downloads", 10)}
-    assert len(chosen) == 10
-    assert {"run_powershell", "system_status", "get_datetime"} <= chosen
-    assert "delete_path" in chosen
-
-
-def test_router_matches_nepali_and_romanized_keywords():
-    r = build_default_registry()
-    assert "open_app" in {t.name for t in r.select("क्रोम खोल", 8)}
-    assert "get_datetime" in {t.name for t in r.select("aaja kati gate ho", 8)}
-    assert "system_status" in {t.name for t in r.select("ब्याट्री कति छ", 8)}
-
-
-def test_router_honours_llm_picks():
-    r = build_default_registry()
-    chosen = {t.name for t in r.select("zzz", 6, preferred=["watch_process", "not_a_tool"])}
-    assert "watch_process" in chosen and "not_a_tool" not in chosen
-
-
 def test_tokenizer_keeps_devanagari_words_whole():
     assert tokenize("मेरो ल्यापटप, कस्तो छ?") == ["मेरो", "ल्यापटप", "कस्तो", "छ"]
 
@@ -139,3 +118,16 @@ def test_phone_tools_explain_when_bridge_is_missing():
     sent = []
     assert r.get("notify_phone").handler({"message": "hi"}, ToolContext(notify=sent.append))["ok"]
     assert sent == ["hi"]
+
+
+def test_the_menu_is_fixed_and_rare_tools_sit_on_the_shelf():
+    r = build_default_registry()
+    menu = {t.name for t in r.menu()}
+    assert {"look", "click", "type", "open_app", "gmail_compose", "gmail_send", "find_files", "run_powershell"} <= menu
+    assert not {"kill_process", "list_processes", "clipboard", "browser_open_result"} & menu
+    assert len(menu) <= 42 and len(r) > len(menu)
+    # find_tool reaches the shelf by keyword, in Nepali too.
+    assert r.rank("frozen app force quit")[0][1].name == "kill_process"
+    for gone in ("social_react", "social_comment", "ask_chatbot", "browser_snapshot", "browser_click_ref",
+                 "browser_click_text", "click_ui_element", "mouse_click", "type_text"):
+        assert r.get(gone) is None, gone

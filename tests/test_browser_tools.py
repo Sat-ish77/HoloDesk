@@ -187,20 +187,8 @@ def test_tools_are_registered_with_the_right_risk():
     assert r.get("browser_open_result").risk_for({}) == Risk.ACT
     assert r.get("browser_play_pause").risk_for({}) == Risk.ACT
     assert r.get("gmail_draft_reply").risk_for({"body": "hi"}) == Risk.ACT
-    assert r.get("social_react").risk_for({}) == Risk.DANGER
+    assert r.get("click").risk_for({"ref": "e1"}) == Risk.ACT            # unknown ref: the handler refuses it
     assert r.get("gmail_send").risk_for({}) == Risk.DANGER
-
-
-def test_router_finds_the_tools_in_three_languages():
-    r = build_default_registry()
-    pick = lambda q: {t.name for t in r.select(q, 8)}
-    assert "browser_open_result" in pick("open the first video")
-    assert "browser_open_result" in pick("पहिलो भिडियो खोल")
-    assert "browser_open_result" in pick("pahilo video khol")
-    assert "social_react" in pick("like this post")
-    assert "social_react" in pick("yo post like gara")
-    assert "gmail_send" in pick("इमेल पठाऊ")
-    assert "gmail_draft_reply" in pick("reply to this email saying I'll be there")
 
 
 def test_brain_starts_without_playwright_and_reports_it(monkeypatch):
@@ -242,12 +230,6 @@ def test_open_result_falls_back_to_generic_results_on_other_sites(tab):
 
 
 # ---------------------------------------------------------------- click / read
-def test_click_text_clicks_and_reports(tab):
-    tab["page"] = FakePage({("role", "link", "Videos"): [{"text": "Videos"}]})
-    out = bt.browser_click_text({"text": "Videos"}, CTX)
-    assert out["ok"] and tab["page"].clicks == ["Videos"] and "Clicked" in out["message"]
-    missing = bt.browser_click_text({"text": "Nope"}, CTX)
-    assert missing["ok"] is False and "Nothing clickable" in missing["error"]
 
 
 def test_clicks_that_send_post_or_buy_need_confirmation():
@@ -468,64 +450,6 @@ def test_new_tab_opens_in_the_same_window_and_close_tab_returns_to_the_old_one(t
     out = bt.browser_close_tab({}, CTX)
     assert out["ok"] and out["url"] == YOUTUBE and first.context.pages == [first]
     assert first.visible and pw.controller._page is first
-
-
-def test_type_fills_a_named_field_reads_it_back_and_can_press_enter(tab):
-    tab["page"] = gmail_page({("label", "Search mail"): [{"text": ""}]})
-    out = bt.browser_type({"field": "Search mail", "text": "invoices", "press_enter": True}, CTX)
-    assert out["ok"] and out["value"] == "invoices" and tab["page"].keys == ["Enter"]
-    missing = bt.browser_type({"field": "Nope", "text": "x"}, CTX)
-    assert missing["ok"] is False and "No field named" in missing["error"]
-    bt.browser_type({"text": "hello"}, CTX)                                # focused field
-    assert tab["page"].typed == ["hello"]
-    with pytest.raises(ToolError):
-        bt.browser_type({"text": ""}, CTX)
-
-
-def test_type_never_touches_password_fields(tab):
-    tab["page"] = FakePage({("label", "Password"): [{"text": "", "type": "password"}]})
-    out = bt.browser_type({"field": "Password", "text": "hunter2"}, CTX)
-    assert out["ok"] is False and "never type passwords" in out["error"]
-    tab["page"].focus_is_password = True
-    out = bt.browser_type({"text": "hunter2"}, CTX)
-    assert out["ok"] is False and tab["page"].typed == []
-
-
-def test_enter_asks_first_unless_it_is_a_search_box():
-    r = build_default_registry()
-    risk = r.get("browser_type").risk_for
-    assert risk({"text": "x", "field": "Search mail", "press_enter": True}) == Risk.ACT
-    assert risk({"text": "x", "field": "Write a comment"}) == Risk.ACT                 # typed, not submitted
-    assert risk({"text": "x", "field": "Write a comment", "press_enter": True}) == Risk.DANGER
-    assert risk({"text": "x", "press_enter": True}) == Risk.DANGER
-    key = r.get("browser_press_key").risk_for
-    assert key({"key": "enter"}) == Risk.DANGER and key({"key": "ctrl+enter"}) == Risk.DANGER
-    assert key({"key": "Escape"}) == Risk.ACT and key({"key": "page down"}) == Risk.ACT
-
-
-def test_press_key_accepts_spoken_names_and_rejects_unknown_ones(tab):
-    for spoken, sent in [("escape", "Escape"), ("ctrl+L", "Control+l"), ("down", "ArrowDown"),
-                         ("f5", "F5"), ("Space", "Space"), ("arrowleft", "ArrowLeft")]:
-        assert bt.browser_press_key({"key": spoken}, CTX)["ok"]
-        assert tab["page"].keys[-1] == sent
-    with pytest.raises(ToolError):
-        bt.browser_press_key({"key": "banana"}, CTX)
-
-
-def test_skip_ad_is_a_plain_click(tab):
-    assert bt._click_risk({"text": "Skip"}) == Risk.ACT
-    tab["page"] = FakePage({("role", "button", "Skip"): [{"text": "Skip Ad"}]})
-    assert bt.browser_click_text({"text": "Skip"}, CTX)["ok"]
-
-
-def test_router_finds_the_round_2_tools_in_three_languages():
-    r = build_default_registry()
-    pick = lambda q: {t.name for t in r.select(q, 8)}
-    assert "browser_back" in pick("go back") and "browser_back" in pick("पछाडि जाऊ") and "browser_back" in pick("pachadi jau")
-    assert "browser_close_tab" in pick("close this tab") and "browser_close_tab" in pick("yo tab banda gara")
-    assert "browser_new_tab" in pick("open gmail in a new tab") and "browser_new_tab" in pick("नयाँ ट्याब खोल")
-    assert "browser_type" in pick("search for invoices in gmail")
-    assert "browser_press_key" in pick("press the escape key")
 
 
 def test_controller_keeps_its_tab_unless_chrome_is_sure_the_user_moved(monkeypatch):

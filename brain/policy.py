@@ -206,6 +206,11 @@ def is_yes(text: str) -> bool:
             and not _QUESTION.search(t) and all(w in _CONFIRM_WORDS for w in words))
 
 
+def is_plain_no(text: str) -> bool:
+    """Only a no ("cancel", "no thanks"), with nothing else to act on."""
+    return _norm_reply(text) in _NO
+
+
 def is_no(text: str) -> bool:
     t = _norm_reply(text)
     if t in _NO:

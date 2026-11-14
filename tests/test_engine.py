@@ -14,19 +14,46 @@ def test_tool_call_then_answer():
     reply = engine.reply("open chrome")
     assert log == [("open_app", {"name": "chrome"})]
     assert reply.text == "Chrome is open."
-    assert reply.tool_calls == [{"name": "open_app", "arguments": {"name": "chrome"}, "ok": True}]
+    assert reply.tool_calls == [{"name": "open_app", "arguments": {"name": "chrome"}, "ok": True, "risk": "act"}]
     # The tool result was fed back to the model on the second turn.
     assert backend.calls[1]["messages"][-1]["role"] == "tool"
 
 
-def test_danger_waits_for_yes_and_runs_only_after():
-    engine, _, log = make_engine([call("delete_path", path="~/old.txt")])
-    reply = engine.reply("delete old.txt")
+def test_danger_waits_for_yes_then_the_same_task_carries_on():
+    # Before, "yes" ran the step and answered from a template: the model never
+    # saw the result, so nothing was checked and a multi-step task stopped there.
+    engine, backend, log = make_engine([call("delete_path", path="~/old.txt"),
+                                        call("open_app", name="explorer"), say("Deleted it and opened Explorer.")])
+    reply = engine.reply("delete old.txt and then open explorer")
     assert reply.needs_confirmation and "delete ~/old.txt" in reply.text
     assert log == []                       # nothing ran yet
     done = engine.reply("yes")
-    assert log == [("delete_path", {"path": "~/old.txt"})]
-    assert done.ok and done.text.startswith("Done")
+    assert log == [("delete_path", {"path": "~/old.txt"}), ("open_app", {"name": "explorer"})]
+    assert done.ok and done.text == "Deleted it and opened Explorer."
+    seen = backend.calls[1]["messages"]    # the model got the result of the confirmed step
+    assert seen[-1]["role"] == "tool" and "delete_path done" in seen[-1]["content"]
+    assert seen[1]["content"].startswith("delete old.txt")          # same conversation, not a new one
+
+
+def test_words_other_than_yes_steer_the_held_task():
+    engine, backend, log = make_engine([call("delete_path", path="~/old.txt"),
+                                        call("delete_path", path="~/older.txt")])
+    engine.reply("delete old.txt")
+    asked = engine.reply("not that one, the older one")
+    assert log == [] and asked.needs_confirmation and "older.txt" in asked.text
+    sent = backend.calls[1]["messages"]
+    assert "NOT RUN" in sent[-2]["content"] and sent[-1] == {"role": "user", "content": "not that one, the older one"}
+
+
+def test_steps_after_a_held_one_in_the_same_turn_are_answered_not_run():
+    from brain.llm import LLMResponse, ToolCall
+    both = LLMResponse(tool_calls=[ToolCall("a", "delete_path", {"path": "~/x"}), ToolCall("b", "open_app", {"name": "n"})])
+    engine, backend, log = make_engine([both, say("Deleted.")])
+    engine.reply("delete x and open n")
+    engine.reply("yes")
+    assert log == [("delete_path", {"path": "~/x"})]
+    tools = [m for m in backend.calls[1]["messages"] if m["role"] == "tool"]
+    assert [m["tool_call_id"] for m in tools] == ["a", "b"] and "NOT RUN" in tools[1]["content"]
 
 
 def test_danger_cancel_runs_nothing():
@@ -39,7 +66,7 @@ def test_danger_cancel_runs_nothing():
 
 
 def test_confirmation_in_nepali():
-    engine, _, log = make_engine([call("delete_path", path="~/old.txt")])
+    engine, _, log = make_engine([call("delete_path", path="~/old.txt"), say("मेटाएँ।")])
     asked = engine.reply("पुरानो फाइल मेटाऊ")
     assert asked.needs_confirmation and "अनुमति" in asked.text
     engine.reply("हुन्छ")
@@ -53,7 +80,7 @@ def test_confirmation_is_per_source():
     assert log == []                        # the phone's request was not confirmed by voice
 
 
-def test_new_request_drops_pending_confirmation():
+def test_a_new_request_instead_of_yes_does_not_run_the_held_step():
     engine, _, log = make_engine([call("delete_path", path="~/a.txt"),
                                   call("open_app", name="notepad"), say("Opened.")])
     engine.reply("delete a.txt")
@@ -157,13 +184,14 @@ def test_memory_reaches_the_system_prompt():
     assert "Always answer briefly." in system and "Asha" in system
 
 
-def test_find_tool_expands_the_catalogue_mid_conversation():
-    engine, backend, log = make_engine([call("find_tool", query="screenshot"), say("ok")])
-    engine.cfg.max_tools_per_request = 2          # force routing to hide most tools
+def test_shelved_tools_are_off_the_menu_until_find_tool_brings_them_in():
+    from brain.tools.registry import Tool
+    rare = Tool("list_processes", "List running processes.", lambda a, c: {"ok": True}, shelf=True)
+    engine, backend, log = make_engine([call("find_tool", query="running processes"), say("ok")], extra_tools=[rare])
     engine.reply("hmm")
     first = {t["function"]["name"] for t in backend.calls[0]["tools"]}
     second = {t["function"]["name"] for t in backend.calls[1]["tools"]}
-    assert "take_screenshot" not in first and "take_screenshot" in second
+    assert "open_app" in first and "list_processes" not in first and "list_processes" in second
 
 
 def test_learns_facts_from_json_reply():
@@ -238,15 +266,15 @@ def test_a_promise_with_no_tool_call_is_challenged_even_after_other_tools():
     assert engine.reply("play something").text.startswith("Let me know")        # a question back is fine
 
 
-def test_only_the_newest_result_of_a_latest_only_tool_stays_in_context():
+def test_only_the_newest_view_of_the_screen_stays_in_context():
     from brain.tools.registry import Tool
-    maps = iter(["MAP-ONE", "MAP-TWO"])
-    page_map = Tool("page_map", "Map of the page.", lambda a, c: {"ok": True, "map": next(maps)}, latest_only=True)
-    engine, backend, _ = make_engine([call("page_map"), call("page_map", again=True), say("done")],
-                                     extra_tools=[page_map])
-    engine.reply("look at the page twice")
+    views = iter(["VIEW-ONE", "VIEW-TWO"])
+    act = Tool("click", "Click.", lambda a, c: {"ok": True, "message": f"clicked {a['ref']}", "view": next(views)})
+    engine, backend, _ = make_engine([call("click", ref="e1"), call("click", ref="e2"), say("done")], extra_tools=[act])
+    engine.reply("click twice")
     sent = " ".join(str(m.get("content")) for m in backend.calls[2]["messages"])
-    assert "MAP-TWO" in sent and "MAP-ONE" not in sent and "older result removed" in sent
+    assert "VIEW-TWO" in sent and "VIEW-ONE" not in sent and "older view removed" in sent
+    assert "clicked e1" in sent                     # the result itself stays; only the old map goes
 
 
 def test_a_confirmed_action_that_failed_can_be_retried_once_without_asking_again():
@@ -256,10 +284,11 @@ def test_a_confirmed_action_that_failed_can_be_retried_once_without_asking_again
     results = iter([{"ok": False, "error": "did not show as liked"}, {"ok": True}, {"ok": True}])
     like = Tool("like_post", "Like the post.", lambda a, c: next(results), risk=Risk.DANGER,
                 summarize=lambda a: "like the post")
-    engine, _, _ = make_engine([call("like_post"), call("like_post"), say("Liked now."), call("like_post")],
-                               extra_tools=[like])
+    engine, _, _ = make_engine([call("like_post"), say("It did not take."), call("like_post"), say("Liked now."),
+                                call("like_post")], extra_tools=[like])
     assert engine.reply("like this post").needs_confirmation
-    assert not engine.reply("yes").ok                                   # confirmed, ran, failed
+    failed = engine.reply("yes")                                        # confirmed, ran, failed
+    assert failed.text == "It did not take." and failed.tool_calls[-1]["ok"] is False
     retried = engine.reply("it didn't work, try again")
     assert not retried.needs_confirmation and retried.text == "Liked now."
     assert engine.reply("like it again").needs_confirmation             # a success is not a standing approval
@@ -285,3 +314,130 @@ def test_gone_back_without_a_tool_is_challenged():
     # Smoke test: "I've gone back to the Google search results" with no tool call.
     from brain.engine import _CLAIMS_ACTION
     assert _CLAIMS_ACTION.search("I've gone back to the Google search results.")
+
+
+# ---------------------------------------------------------------- steering
+def test_stop_said_mid_task_ends_it_between_steps():
+    engine, _, log = make_engine([])
+
+    def first(messages, tools):
+        engine.steer("okay stop")                   # the user speaks while step 1 runs
+        return call("open_app", name="one")
+    engine.backend.script = [first, call("open_app", name="two"), say("never said")]
+    reply = engine.reply("open one, then two")
+    assert log == [("open_app", {"name": "one"})]
+    assert reply.text.startswith("Stopped") and len(engine.backend.script) == 2
+
+
+def test_new_words_mid_task_override_the_plan():
+    engine, backend, log = make_engine([])
+
+    def first(messages, tools):
+        engine.steer("no, open paint instead")
+        return call("open_app", name="notepad")
+    engine.backend.script = [first, call("open_app", name="paint"), say("Paint is open.")]
+    assert engine.reply("open notepad").text == "Paint is open."
+    said = backend.calls[1]["messages"][-1]
+    assert said["role"] == "user" and "no, open paint instead" in said["content"] and "newest instruction" in said["content"]
+
+
+def test_halt_mid_task_stops_the_loop_and_stale_steering_is_dropped():
+    engine, _, log = make_engine([])
+
+    def first(messages, tools):
+        engine.halt()
+        return call("system_status")
+    engine.backend.script = [first, call("open_app", name="x")]
+    assert engine.reply("status then open x").text.startswith("Stopped") and log == []     # halted: nothing runs
+    engine.resume()
+    engine.steer("stop")                            # said after the task ended: must not kill the next one
+    engine.backend.script = [say("Hello.")]
+    assert engine.reply("hello there").text == "Hello."
+
+
+def test_stop_words():
+    from brain.engine import _is_stop
+    for text in ["stop", "Stop.", "okay stop", "please stop it", "cancel", "रोक", "ruk"]:
+        assert _is_stop(text), text
+    for text in ["don't stop", "open the bus stop page", "stop sign pictures", "continue"]:
+        assert not _is_stop(text), text
+
+
+# ---------------------------------------------------------------- the check
+def checked_engine(script, screen, act_result=None):
+    """An engine whose registry has look + an acting tool, with the check on."""
+    from brain.tools.registry import Tool
+    tools = [Tool("look", "See the screen.", lambda a, c: {"ok": True, "view": screen["text"]}),
+             Tool("save", "Save.", lambda a, c: dict(act_result or {"ok": True, "message": "pressed save"}),
+                  risk=__import__("brain.policy", fromlist=["Risk"]).Risk.ACT)]
+    engine, backend, log = make_engine(script, extra_tools=tools)
+    engine.cfg.verify = True
+    return engine, backend
+
+
+def verdict(**fields):
+    import json
+    return say(json.dumps({"claims_done": True, "confirmed": True, "evidence": "", "missing": "", **fields}))
+
+
+def test_done_is_confirmed_by_a_quote_found_on_the_screen():
+    screen = {"text": 'window "notes.txt - Notepad"\n  u1 Document "Text editor"'}
+    engine, backend = checked_engine([call("save"), say("Saved as notes.txt."), verdict(evidence="notes.txt - Notepad")], screen)
+    reply = engine.reply("save this as notes.txt")
+    assert reply.verified is True and reply.evidence == "notes.txt - Notepad" and reply.text == "Saved as notes.txt."
+    asked = backend.calls[2]
+    assert asked["model"] == engine.cfg.fast_model and "SCREEN NOW" in asked["messages"][1]["content"]
+
+
+def test_a_quote_that_is_not_on_the_screen_does_not_count():
+    screen = {"text": 'window "Untitled - Notepad"'}
+    engine, _ = checked_engine([call("save"), say("Saved as notes.txt."), verdict(evidence="notes.txt - Notepad"),
+                                say("It is still untitled; the save did not happen."),
+                                verdict(claims_done=False)], screen)
+    reply = engine.reply("save this as notes.txt")
+    assert reply.text == "It is still untitled; the save did not happen." and reply.verified is None
+
+
+def test_an_unconfirmed_answer_gets_one_more_round_then_says_so():
+    screen = {"text": 'window "Untitled - Notepad"'}
+    engine, backend = checked_engine([call("save"), say("Saved."), verdict(confirmed=False, missing="the file name in the title"),
+                                      say("Saved."), verdict(confirmed=False, missing="still untitled")], screen)
+    reply = engine.reply("save this")
+    assert reply.verified is False and reply.text == "Saved. I could not confirm this on the screen."
+    nudge = backend.calls[3]["messages"][-1]["content"]
+    assert "the file name in the title" in nudge and "do not repeat an action" in nudge
+    assert not engine.backend.script                 # two checks at most, never a third round
+
+
+def test_no_check_for_chat_for_read_only_tasks_or_when_the_checker_fails():
+    from brain.llm import LLMError
+    screen = {"text": "x"}
+    engine, backend = checked_engine([say("Kathmandu.")], screen)
+    assert engine.reply("capital of nepal?").verified is None and len(backend.calls) == 1
+    engine, backend = checked_engine([call("look"), say("It shows x.")], screen)
+    assert engine.reply("what is on screen").verified is None and len(backend.calls) == 2
+
+    def down(messages, tools):
+        raise LLMError("offline")
+    engine, _ = checked_engine([call("save"), say("Saved."), down], screen)
+    reply = engine.reply("save")
+    assert reply.text == "Saved." and reply.verified is None        # the check never blocks a reply
+
+
+# ---------------------------------------------------------------- tools that ask mid-way
+def test_a_tool_that_needs_an_ok_is_held_by_the_same_policy_and_resumed():
+    from brain.tools.registry import Tool
+    seen = []
+
+    def eye_and_mouse(args, ctx):
+        seen.append(dict(args))
+        if not args.get("approved"):
+            return {"ok": True, "needs_ok": "click Send in the mail window"}
+        return {"ok": True, "message": "Sent."}
+    engine, backend, _ = make_engine([call("computer_task", goal="send the mail"), say("It is sent.")],
+                                     extra_tools=[Tool("computer_task", "Eye and mouse.", eye_and_mouse)])
+    asked = engine.reply("send the mail with the mouse")
+    assert asked.needs_confirmation and "click Send in the mail window" in asked.text
+    assert engine.policy.get_pending("voice").tool == "computer_task"
+    assert engine.reply("yes").text == "It is sent."
+    assert seen == [{"goal": "send the mail"}, {"goal": "send the mail", "approved": "click Send in the mail window"}]

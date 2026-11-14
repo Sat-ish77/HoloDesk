@@ -85,4 +85,35 @@ make it one command for the user.
 
 ## 5. Your notes
 
-(Fill in: design summary, what you deleted, what's unverified, live-eval expectations.)
+Fable, cloud, 2026-11-14. Stopped early at the user's request; Opus finishes.
+Design and deletions: `docs/DESIGN_AGENT_LOOP.md`.
+
+**Built:** `brain/tools/ui.py` (`look`, `click`, `type`, `wait_for_page`; web refs `e*`, app-window
+refs `u*`; every act returns the fresh view). Engine: fixed menu (40 tools, 10 on the shelf via
+`find_tool`), a yes resumes the held task, other words steer it, `engine.steer()` / "stop" between
+steps, screen check with a quoted proof (`Reply.verified`, `HOLODESK_VERIFY`). Open palm stops a
+running task. `scripts/live_tasks.py` + `tests/test_live_tasks.py`.
+
+**Deleted:** email flow (`_email_turn` family, `brain/email_flow.py`, its tests), the LLM router,
+`social_react`, `social_comment`, `ask_chatbot`, `browser_snapshot/click_ref/type_ref/click_text/type/press_key`
+as tools, `list_ui_elements`, `click_ui_element`, `mouse_click`, `type_text` as a tool. Gmail skills kept.
+
+**TODO for Opus (not done):**
+1. Two tests fail (214 pass). Both are stale expectations from my last two changes, not code bugs:
+   - `test_engine.py::test_stop_said_mid_task_ends_it_between_steps`: "stop" now also lands between
+     the model's choice and the call, so `log == []`, not one open_app.
+   - `test_ui_loop.py::test_window_risk_is_judged_on_the_element_name`: Enter in a "File name:" field
+     is now ACT (`_SEARCH_FIELD` gained `file ?name|folder`); assert DANGER on another Edit instead.
+2. `graphify update .` was not run. `evals/live_tasks.md` was not written (the script's docstring has the usage).
+3. `docs/HISTORY.md` has no round-4 entry yet.
+
+**Not run anywhere:** the app-window channel (`u*` refs, pywinauto) on Windows; the new voice-loop
+edits in `app/main.py` (compile-checked only; `HOLODESK_LISTEN_WHILE_WORKING` is off by default);
+any real model; Gmail; the live eval. Web channel and the loop are tested in real headless Chromium
+with a scripted model.
+
+**Commands:** `python -m pytest -q` · `python scripts\smoke_test.py` ·
+`python scripts\live_tasks.py --email <own address>` (or `--only 1,5,10` for the no-login tasks).
+Voice checks: "like this post" (one question, then it says what the button reads) · "send an email
+to ..." then change something at the question instead of yes · a long task, then open palm ·
+"what's on this window" in Notepad · "save it as notes.txt" in a Save dialog.

@@ -168,3 +168,16 @@ def test_disk_and_sustained_ram_alerts():
     assert m.check_once({"ram_percent": 97}) == []
     assert "Memory" in m.check_once({"ram_percent": 97})[0]              # third strike
     assert m.check_once({}) == []                                         # missing sensors are fine
+
+
+def test_a_message_sent_while_a_task_runs_steers_it_instead_of_queueing():
+    bridge, http, log, engine = make_bridge([])
+    engine._lock.acquire()                           # a task is running
+    try:
+        bridge.handle_update(update("stop"))
+        assert bridge._jobs.empty() and engine._steer.get_nowait() == "stop"
+        assert http.messages() == ["Passed to the task that is running."]
+        bridge.handle_update(update("/status"))      # commands still queue
+        assert not bridge._jobs.empty()
+    finally:
+        engine._lock.release()

@@ -39,7 +39,7 @@ def make_engine(script, extra_tools=(), memory=True):
         *extra_tools,
     ])
     cfg = BrainConfig()
-    cfg.llm_router = False
+    cfg.verify = False      # the screen check costs one scripted model reply; tests that want it switch it on
     cfg.max_turns = 5
     backend = FakeBackend(script)
     store = MemoryStore(":memory:") if memory else None

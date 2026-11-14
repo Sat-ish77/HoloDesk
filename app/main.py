@@ -411,9 +411,6 @@ def _answers_pending_confirmation(text):
     try:
         from brain.policy import is_yes, is_no
         brain = getattr(orchestrator, "brain", None)
-        # A guided email asking "What's the subject?" must hear "Greetings".
-        if brain is not None and brain.email_flow_waiting("voice"):
-            return True
         if brain is not None and brain.policy.get_pending("voice") is not None:
             return is_yes(text) or is_no(text)
     except Exception:
@@ -890,10 +887,17 @@ class VoiceAssistantThread(threading.Thread):
         # (Gmail compose) outlived the 60 s wait, its late answer was handed to
         # the next question, and every reply after that was one request behind.
         deadline = time.time() + 120
+        # Experimental, off by default: keep listening while HOLO works (it is
+        # silent then, so the mic is free) and pass what is heard to the running
+        # task: "stop", "no, the other one". Not yet tried on the real mic.
+        listen = os.getenv("HOLODESK_LISTEN_WHILE_WORKING", "0") == "1"
         while True:
             try:
-                reply = voice_reply_queue.get(timeout=max(0.1, deadline - time.time()))
+                reply = voice_reply_queue.get(timeout=1.0 if listen else max(0.1, deadline - time.time()))
             except queue.Empty:
+                if listen and time.time() < deadline:
+                    self._hear_while_working(req_id)
+                    continue
                 print("HOLO: (still working on that; I'll skip its answer if it comes late)")
                 return None
             if isinstance(reply, dict) and reply.get("id") not in (None, req_id):
@@ -912,6 +916,20 @@ class VoiceAssistantThread(threading.Thread):
         time.sleep(1.5)
         print("[VOICE] Speech done — mic safe")
         return reply
+
+    def _hear_while_working(self, started):
+        brain = getattr(orchestrator, "brain", None)
+        if brain is None or not brain.busy or time.time() - started < 4:
+            return
+        try:
+            with mic as source:
+                wav_path = self.record_with_vad(source, max_seconds=4.0, silence_ms=800)
+            text = self.transcribe_command(wav_path) if wav_path else ""
+            if text and len(text.split()) <= 12:
+                print(f"YOU (while it works): {text}")
+                brain.steer(text)
+        except Exception as e:
+            print(f"[VOICE] listening while working failed: {e}")
 
     def run(self):
         if not voice_available or mic is None:
@@ -1138,6 +1156,11 @@ while running :
             if is_ai_speaking:
                 stop_ai_speech()
                 print("[GESTURE] OPEN_PALM — speech stopped")
+            # Also stops a task that is still running: the loop ends between steps.
+            _brain = getattr(orchestrator, "brain", None)
+            if _brain is not None and _brain.busy:
+                _brain.steer("stop")
+                print("[GESTURE] OPEN_PALM — asked the running task to stop")
             open_palm_cooldown = 15   # 0.5s at 30fps
 
     except queue.Empty:

@@ -179,6 +179,12 @@ class TelegramBridge(TelegramSender):
             self.engine.resume(f"telegram:{user_id}")
             return self.send_message(chat_id, "✅ Resumed.")
 
+        if text and not command and self.engine.busy:
+            # A task is running: these words are for it ("stop", "no, the other one"),
+            # read between its steps. Queued, they would run as a new task afterwards.
+            self.engine.steer(text)
+            return self.send_message(chat_id, "Passed to the task that is running.")
+
         voice = msg.get("voice") or msg.get("audio")
         if not text and not voice:
             return self.send_message(chat_id, "I can read text and voice notes. Send one of those.")

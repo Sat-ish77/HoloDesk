@@ -12,7 +12,7 @@
 {"id": "en-mute", "lang": "en", "text": "mute the sound", "expect": ["set_volume"]}
 {"id": "en-minimize", "lang": "en", "text": "minimize this window", "expect": ["window_action"]}
 {"id": "en-focus", "lang": "en", "text": "switch to the chrome window", "expect": ["focus_window"]}
-{"id": "en-type", "lang": "en", "text": "type hello world", "expect": ["type_text"]}
+{"id": "en-type", "lang": "en", "text": "type hello world", "expect": ["type", "look"]}
 {"id": "en-keys", "lang": "en", "text": "press control s", "expect": ["press_keys"]}
 {"id": "en-screen", "lang": "en", "text": "what's on my screen right now?", "expect": ["look_at_screen", "take_screenshot"]}
 {"id": "en-remember", "lang": "en", "text": "remember that I prefer short answers", "expect": ["remember"]}
@@ -54,58 +54,58 @@
 {"id": "ro-chat", "lang": "ne-roman", "text": "k cha, sanchai?", "expect": []}
 {"id": "en-open-result", "lang": "en", "text": "open the first video", "expect": ["browser_open_result"]}
 {"id": "en-open-result-3", "lang": "en", "text": "play the third result on this page", "expect": ["browser_open_result"]}
-{"id": "en-click-text", "lang": "en", "text": "click the link that says Videos on this web page", "expect": ["browser_click_text"]}
+{"id": "en-click-text", "lang": "en", "text": "click the link that says Videos on this web page", "expect": ["look", "click"]}
 {"id": "en-read-page", "lang": "en", "text": "read this web page and tell me what it says", "expect": ["browser_read_page"]}
 {"id": "en-pause-video", "lang": "en", "text": "pause the video", "expect": ["browser_play_pause"]}
-{"id": "en-like-post", "lang": "en", "text": "like this post", "expect": ["social_react"], "confirm": true}
+{"id": "en-like-post", "lang": "en", "text": "like this post", "expect": ["look"]}
 {"id": "en-draft-reply", "lang": "en", "text": "reply to this email saying I'll be there", "expect": ["gmail_draft_reply"]}
 {"id": "en-send-mail", "lang": "en", "text": "send the email I just drafted", "expect": ["gmail_send"], "confirm": true}
 {"id": "ne-open-result", "lang": "ne", "text": "पहिलो भिडियो खोल", "expect": ["browser_open_result"]}
 {"id": "ne-read-page", "lang": "ne", "text": "यो पेजमा के लेखेको छ, पढेर भन", "expect": ["browser_read_page"]}
 {"id": "ne-pause-video", "lang": "ne", "text": "भिडियो रोक", "expect": ["browser_play_pause"]}
-{"id": "ne-like-post", "lang": "ne", "text": "यो पोस्टमा लाइक गर", "expect": ["social_react"], "confirm": true}
+{"id": "ne-like-post", "lang": "ne", "text": "यो पोस्टमा लाइक गर", "expect": ["look"]}
 {"id": "ne-draft-reply", "lang": "ne", "text": "यो इमेलको जवाफ लेख, म आउँछु भनेर", "expect": ["gmail_draft_reply"]}
 {"id": "ne-send-mail", "lang": "ne", "text": "ड्राफ्ट गरेको इमेल पठाऊ", "expect": ["gmail_send"], "confirm": true}
 {"id": "ro-open-result", "lang": "ne-roman", "text": "pahilo video khol", "expect": ["browser_open_result"]}
-{"id": "ro-click-text", "lang": "ne-roman", "text": "yo page ma Videos bhanne link ma click gara", "expect": ["browser_click_text"]}
+{"id": "ro-click-text", "lang": "ne-roman", "text": "yo page ma Videos bhanne link ma click gara", "expect": ["look", "click"]}
 {"id": "ro-pause-video", "lang": "ne-roman", "text": "video roka", "expect": ["browser_play_pause"]}
-{"id": "ro-like-post", "lang": "ne-roman", "text": "yo post like gardeu", "expect": ["social_react"], "confirm": true}
+{"id": "ro-like-post", "lang": "ne-roman", "text": "yo post like gardeu", "expect": ["look"]}
 {"id": "ro-draft-reply", "lang": "ne-roman", "text": "yo email ko reply lekha, ma aauchu bhanera", "expect": ["gmail_draft_reply"]}
 {"id": "ro-send-mail", "lang": "ne-roman", "text": "draft gareko mail pathau", "expect": ["gmail_send"], "confirm": true}
 {"id": "en-back", "lang": "en", "text": "go back to the previous page", "expect": ["browser_back"]}
 {"id": "en-close-tab", "lang": "en", "text": "close this tab", "expect": ["browser_close_tab"]}
 {"id": "en-new-tab", "lang": "en", "text": "open Gmail in a new tab in the same Chrome", "expect": ["browser_new_tab"]}
-{"id": "en-type-search", "lang": "en", "text": "search for invoices in the Gmail search box", "expect": ["browser_type"]}
-{"id": "en-press-key", "lang": "en", "text": "press the escape key on this page", "expect": ["browser_press_key"]}
-{"id": "en-skip-ad", "lang": "en", "text": "skip the ad", "expect": ["browser_click_text"]}
-{"id": "en-like-please", "lang": "en", "text": "can we please like this post?", "expect": ["social_react", "browser_click_text"], "confirm": true}
-{"id": "en-result-by-text", "lang": "en", "text": "open the result that says model context protocol", "expect": ["browser_click_text"]}
+{"id": "en-type-search", "lang": "en", "text": "search for invoices in the Gmail search box", "expect": ["look", "type"]}
+{"id": "en-press-key", "lang": "en", "text": "press the escape key on this page", "expect": ["press_keys"]}
+{"id": "en-skip-ad", "lang": "en", "text": "skip the ad", "expect": ["look", "click"]}
+{"id": "en-like-please", "lang": "en", "text": "can we please like this post?", "expect": ["look", "click"]}
+{"id": "en-result-by-text", "lang": "en", "text": "open the result that says model context protocol", "expect": ["look", "click"]}
 {"id": "ne-back", "lang": "ne", "text": "पछाडि जाऊ", "expect": ["browser_back"]}
 {"id": "ne-close-tab", "lang": "ne", "text": "यो ट्याब बन्द गर", "expect": ["browser_close_tab"]}
 {"id": "ne-new-tab", "lang": "ne", "text": "नयाँ ट्याबमा जिमेल खोल", "expect": ["browser_new_tab"]}
-{"id": "ne-type-search", "lang": "ne", "text": "जिमेलको सर्च बक्समा invoice खोज", "expect": ["browser_type"]}
-{"id": "ne-press-key", "lang": "ne", "text": "यो पेजमा escape key थिच", "expect": ["browser_press_key"]}
+{"id": "ne-type-search", "lang": "ne", "text": "जिमेलको सर्च बक्समा invoice खोज", "expect": ["look", "type"]}
+{"id": "ne-press-key", "lang": "ne", "text": "यो पेजमा escape key थिच", "expect": ["press_keys"]}
 {"id": "ro-back", "lang": "ne-roman", "text": "pachadi jau", "expect": ["browser_back"]}
 {"id": "ro-close-tab", "lang": "ne-roman", "text": "yo tab banda gara", "expect": ["browser_close_tab"]}
 {"id": "ro-new-tab", "lang": "ne-roman", "text": "naya tab ma gmail khol", "expect": ["browser_new_tab"]}
-{"id": "ro-type-search", "lang": "ne-roman", "text": "gmail ko search box ma invoice khoja", "expect": ["browser_type"]}
-{"id": "ro-press-key", "lang": "ne-roman", "text": "yo page ma escape key thicha", "expect": ["browser_press_key"]}
-{"id": "en-what-page", "lang": "en", "text": "what page am I on right now, can you see it?", "expect": ["browser_snapshot", "browser_read_page"]}
-{"id": "en-snapshot-click", "lang": "en", "text": "on this web page, click the Settings tab", "expect": ["browser_snapshot", "browser_click_text"]}
-{"id": "en-dropdown", "lang": "en", "text": "on this web page pick United States in the country dropdown", "expect": ["browser_snapshot"]}
-{"id": "en-comment", "lang": "en", "text": "comment congrats on this post", "expect": ["social_comment"], "confirm": true}
-{"id": "en-like-picture", "lang": "en", "text": "I want to like this picture", "expect": ["social_react"], "confirm": true}
+{"id": "ro-type-search", "lang": "ne-roman", "text": "gmail ko search box ma invoice khoja", "expect": ["look", "type"]}
+{"id": "ro-press-key", "lang": "ne-roman", "text": "yo page ma escape key thicha", "expect": ["press_keys"]}
+{"id": "en-what-page", "lang": "en", "text": "what page am I on right now, can you see it?", "expect": ["look", "browser_read_page"]}
+{"id": "en-snapshot-click", "lang": "en", "text": "on this web page, click the Settings tab", "expect": ["look", "click"]}
+{"id": "en-dropdown", "lang": "en", "text": "on this web page pick United States in the country dropdown", "expect": ["look"]}
+{"id": "en-comment", "lang": "en", "text": "comment congrats on this post", "expect": ["look"]}
+{"id": "en-like-picture", "lang": "en", "text": "I want to like this picture", "expect": ["look"]}
 {"id": "en-compose", "lang": "en", "text": "write an email to Asha Rai, subject Hello, saying good morning", "expect": ["gmail_compose"]}
-{"id": "en-ask-claude", "lang": "en", "text": "ask Claude what MCP is in one line", "expect": ["ask_chatbot"]}
+{"id": "en-ask-claude", "lang": "en", "text": "ask Claude what MCP is in one line", "expect": ["open_website", "browser_new_tab", "look"]}
 {"id": "en-find-move", "lang": "en", "text": "find my resume and move it to the Documents folder", "expect": ["find_files"]}
 {"id": "en-open-file", "lang": "en", "text": "open the file budget.xlsx from my Desktop", "expect": ["open_path", "find_files"]}
-{"id": "ne-what-page", "lang": "ne", "text": "अहिले कुन पेज खुलेको छ, देख्छौ?", "expect": ["browser_snapshot", "browser_read_page"]}
-{"id": "ne-comment", "lang": "ne", "text": "यो पोस्टमा बधाई छ भनेर कमेन्ट गर", "expect": ["social_comment"], "confirm": true}
+{"id": "ne-what-page", "lang": "ne", "text": "अहिले कुन पेज खुलेको छ, देख्छौ?", "expect": ["look", "browser_read_page"]}
+{"id": "ne-comment", "lang": "ne", "text": "यो पोस्टमा बधाई छ भनेर कमेन्ट गर", "expect": ["look"]}
 {"id": "ne-compose", "lang": "ne", "text": "आशा राईलाई इमेल लेख, विषय नमस्ते, शुभ प्रभात भनेर", "expect": ["gmail_compose"]}
-{"id": "ne-ask-claude", "lang": "ne", "text": "Claude लाई सोध, MCP भनेको के हो", "expect": ["ask_chatbot"]}
+{"id": "ne-ask-claude", "lang": "ne", "text": "Claude लाई सोध, MCP भनेको के हो", "expect": ["open_website", "browser_new_tab", "look"]}
 {"id": "ne-find-file", "lang": "ne", "text": "मेरो resume फाइल कहाँ छ, खोज", "expect": ["find_files"]}
-{"id": "ro-what-page", "lang": "ne-roman", "text": "ahile kun page khuleko cha, dekhchau?", "expect": ["browser_snapshot", "browser_read_page"]}
-{"id": "ro-comment", "lang": "ne-roman", "text": "yo post ma badhai cha bhanera comment gara", "expect": ["social_comment"], "confirm": true}
+{"id": "ro-what-page", "lang": "ne-roman", "text": "ahile kun page khuleko cha, dekhchau?", "expect": ["look", "browser_read_page"]}
+{"id": "ro-comment", "lang": "ne-roman", "text": "yo post ma badhai cha bhanera comment gara", "expect": ["look"]}
 {"id": "ro-compose", "lang": "ne-roman", "text": "Asha Rai lai email lekha, subject Namaste, subha prabhat bhanera", "expect": ["gmail_compose"]}
-{"id": "ro-ask-claude", "lang": "ne-roman", "text": "Claude lai sodha MCP bhaneko ke ho", "expect": ["ask_chatbot"]}
+{"id": "ro-ask-claude", "lang": "ne-roman", "text": "Claude lai sodha MCP bhaneko ke ho", "expect": ["open_website", "browser_new_tab", "look"]}
 {"id": "ro-find-file", "lang": "ne-roman", "text": "mero resume file kaha cha, khoja", "expect": ["find_files"]}

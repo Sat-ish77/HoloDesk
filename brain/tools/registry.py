@@ -28,7 +28,7 @@ class ToolContext:
     send_photo: Callable[[str, str], None] | None = None
     engine: Any = None
     # Tools offered to the model for THIS request (name -> Tool). find_tool
-    # can add to it mid-conversation.
+    # adds shelved ones mid-conversation.
     offered: dict = field(default_factory=dict)
 
 
@@ -39,13 +39,13 @@ class Tool:
     handler: Callable[[dict, ToolContext], Any]
     parameters: dict = field(default_factory=lambda: {"type": "object", "properties": {}})
     risk: Risk | Callable[[dict], Risk] = Risk.SAFE
-    # Extra words (English, Nepali, Romanized Nepali) that should surface this
-    # tool in routing even if they are not in the description.
+    # Extra words (English, Nepali, Romanized Nepali) find_tool matches on.
     keywords: tuple[str, ...] = ()
     # Human-readable one-liner for the confirmation question.
     summarize: Callable[[dict], str] | None = None
-    always: bool = False             # always offered to the model
-    latest_only: bool = False        # only the newest result stays in the conversation (page maps)
+    # Off the default menu; the model reaches it through find_tool. For rare
+    # tools, so every step doesn't pay for their schemas.
+    shelf: bool = False
 
     def risk_for(self, args: dict) -> Risk:
         if callable(self.risk):
@@ -122,29 +122,7 @@ class ToolRegistry:
         scored.sort(key=lambda x: (-x[0], x[1].name))
         return scored
 
-    def select(self, query: str, limit: int, carry: set[str] | None = None,
-               preferred: list[str] | None = None) -> list[Tool]:
-        """Tool router: narrow the catalogue for one request.
-
-        A small prompt keeps the model accurate and cheap. With few tools we
-        send everything; past `limit` we rank by keyword overlap and keep the
-        always-on tools plus anything used earlier in the conversation."""
-        tools = self.all()
-        if len(tools) <= limit:
-            return tools
-
-        scored = self.rank(query)
-
-        chosen: dict[str, Tool] = {t.name: t for t in tools if t.always}
-        # `preferred` are the LLM router's picks; `carry` are tools used a
-        # moment ago (follow-ups usually need the same tool again).
-        for name in list(preferred or ()) + sorted(carry or ()):
-            if name in self._tools and len(chosen) < limit:
-                chosen[name] = self._tools[name]
-        for score, t in scored:
-            if len(chosen) >= limit:
-                break
-            # Fill remaining slots best-first. Zero-score tools still go in:
-            # an under-filled catalogue is worse than a slightly noisy one.
-            chosen.setdefault(t.name, t)
-        return sorted(chosen.values(), key=lambda t: t.name)
+    def menu(self) -> list[Tool]:
+        """What the model is offered on every step. No per-request routing:
+        a router that guessed wrong hid the tool the task needed."""
+        return [t for t in self.all() if not t.shelf]

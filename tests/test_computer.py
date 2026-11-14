@@ -61,7 +61,12 @@ def test_screenshot_click_then_report():
 def test_pauses_before_irreversible_steps():
     client = _Client([[{"type": "text", "text": "NEEDS OK: click Send on the email to Smarika."}]])
     out = computer_task({"goal": "send it"}, SimpleNamespace(engine=None), client=client, pyautogui=_Mouse())
-    assert out["paused"] and "click Send on the email to Smarika" in out["message"]
+    assert out["needs_ok"] == "click Send on the email to Smarika."      # the engine asks through the policy
+
+    client = _Client([[{"type": "text", "text": "Sent; the window shows Message sent."}]])
+    computer_task({"goal": "send it", "approved": out["needs_ok"]}, SimpleNamespace(engine=None),
+                  client=client, pyautogui=_Mouse())
+    assert "The user approved this step: click Send" in client.requests[0]["messages"][0]["content"]
 
 
 def test_failed_action_skips_the_rest_of_the_batch():

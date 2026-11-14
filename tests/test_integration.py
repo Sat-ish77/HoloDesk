@@ -91,23 +91,6 @@ def test_system_tools_work_on_this_machine():
     assert 1 <= len(procs["processes"]) <= 5
 
 
-def test_llm_router_picks_are_offered(monkeypatch):
-    engine, backend, _ = make_engine([say('{"tools": ["take_screenshot"]}'), say("ok")])
-    engine.cfg.llm_router, engine.cfg.max_tools_per_request = True, 2
-    engine.reply("मेरो स्क्रिन देखाऊ")
-    offered = {t["function"]["name"] for t in backend.calls[1]["tools"]}
-    assert "take_screenshot" in offered
-    assert backend.calls[0]["model"] == engine.cfg.fast_model      # router uses the cheap tier
-
-
-def test_llm_router_failure_falls_back_to_keywords():
-    def down(messages, tools):
-        raise LLMError("offline")
-    engine, backend, _ = make_engine([down, say("ok")])
-    engine.cfg.llm_router, engine.cfg.max_tools_per_request = True, 2
-    assert engine.reply("hello").text == "ok"
-
-
 def test_models_are_auto_selected_from_what_the_provider_serves():
     from brain.config import BrainConfig
     from brain.llm import resolve_models
