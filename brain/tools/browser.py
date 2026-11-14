@@ -698,10 +698,10 @@ def _gmail_draft(page) -> dict:
     try:
         chips = page.locator("[email]")      # UNVERIFIED: recipient chips carry the address
         draft["to"] = list(dict.fromkeys(chips.nth(i).get_attribute("email") for i in range(min(chips.count(), 10))))
-        subject = page.get_by_label("Subject")
-        if subject.count() and subject.first.is_visible():
+        from browser.sites import gmail
+        if gmail.compose_open(page):
             draft["compose"] = True
-            draft["subject"] = subject.first.input_value()
+            draft["subject"] = page.locator(gmail.SUBJECT).first.input_value()
     except Exception:
         pass
     draft["body"] = (pw.read_text(page, label="Message Body", timeout_ms=2000).get("text") or "").strip()
@@ -721,7 +721,7 @@ def gmail_compose(args: dict, ctx: ToolContext) -> dict:
         if not _on_gmail(page):
             page = _open_tab(page, gmail.GMAIL_URL)
             page.wait_for_timeout(1500)
-        if not pw.is_visible(page, label="Subject"):
+        if not gmail.compose_open(page):
             opened = gmail.compose(page)
             if not opened["success"]:
                 return {"success": False, "sent": False, "url": page.url,

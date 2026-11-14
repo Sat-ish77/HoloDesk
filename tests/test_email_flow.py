@@ -1,7 +1,26 @@
 from brain.email_flow import wants_email
 from brain.policy import Risk
 from brain.tools.registry import Tool
-from helpers import make_engine
+import pytest
+
+from brain.engine import ReplyEngine
+from brain.llm import LLMResponse
+from helpers import call, make_engine, say
+
+
+class _EchoWriter:
+    """Stands in for gpt-5.5: returns what was said, in the writer's format."""
+
+    def chat(self, messages, **kw):
+        ask = dict(line.split(": ", 1) for line in messages[-1]["content"].splitlines())
+        body = ask["Body, as said"]
+        subject = ask.get("Subject, as said")
+        return LLMResponse(content=f"Subject: {subject}\n\n{body}" if subject else body)
+
+
+@pytest.fixture(autouse=True)
+def _echo_writer(monkeypatch):
+    monkeypatch.setattr(ReplyEngine, "_writer", _EchoWriter(), raising=False)
 
 
 def _gmail_tools(calls):
@@ -88,7 +107,6 @@ def test_dictated_body_is_sent_as_spoken():
     from brain.llm import FakeBackend
     calls = []
     engine, _, _ = make_engine([], extra_tools=_gmail_tools(calls))
-    engine._writer = FakeBackend([])                             # any call to it would fail the test
     for said in ["write an email to Smarika", "new", "Greetings", "Hey, how are you doing today?", "no"]:
         engine.reply(said)
     assert calls[0][1]["body"] == "Hey, how are you doing today?"
@@ -130,3 +148,28 @@ def test_windows_paths_are_named_by_file_and_folder():
     path = r"C:\Users\Sat\Desktop\Satish_Resume.pdf"
     assert _basename(path) == "Satish_Resume.pdf"
     assert _describe_file(path) == "Satish_Resume.pdf in Desktop"
+
+
+def test_garbled_recipient_is_asked_again_and_spoken_address_is_parsed():
+    # Live test: Whisper turned a spoken address into "Erfosht kja ne jupon dhe Gmail".
+    engine, _, _ = make_engine([], extra_tools=_gmail_tools([]))
+    engine.reply("I want to draft an email")
+    assert engine.reply("Erfosht kja në jupon dhe Gmail").text.startswith("I didn't catch who")
+    engine.reply("satish dot wagle at gmail dot com")
+    assert engine._email_flows["voice"].to == "satish.wagle@gmail.com"
+
+
+def test_close_leaves_the_email_and_runs_as_a_command():
+    # Live test: "Close the Gmail right now" got "new email or reply?" again and again.
+    # (the test registry has open_app, not close_app: any registered tool proves the command ran)
+    engine, _, log = make_engine([call("open_app", name="notepad"), say("Done.")], extra_tools=_gmail_tools([]))
+    engine.reply("write an email to Smarika")
+    engine.reply("Close the Gmail right now.")
+    assert not engine.email_flow_waiting("voice") and log == [("open_app", {"name": "notepad"})]
+
+
+def test_unclear_new_or_reply_is_asked_only_once():
+    engine, _, _ = make_engine([], extra_tools=_gmail_tools([]))
+    engine.reply("compose an email to Smarika")
+    engine.reply("hmm")
+    assert engine.reply("whatever").text == "What's the subject?"

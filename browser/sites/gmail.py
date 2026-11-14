@@ -51,12 +51,36 @@ def fill_recipient(page, recipient: str) -> dict[str, Any]:
     return {"success": True, "error": None}
 
 
+# Live test: get_by_label("Subject") resolved to an inbox row (its aria label
+# holds the thread's subject), so compose looked open when it wasn't. These
+# name the compose window's own fields.
+SUBJECT = 'input[name="subjectbox"]'
+BODY = 'div[role="textbox"][aria-label="Message Body"]'
+
+
+def compose_open(page) -> bool:
+    try:
+        return page.locator(SUBJECT).first.is_visible()
+    except Exception:
+        return False
+
+
+def _fill(page, selector: str, text: str) -> dict[str, Any]:
+    try:
+        page.locator(selector).first.fill(text, timeout=8000)
+        return {"success": True, "error": None}
+    except Exception as e:
+        return {"success": False, "error": f"{type(e).__name__}: {str(e).splitlines()[0][:120]}"}
+
+
 def fill_subject(page, subject: str) -> dict[str, Any]:
-    return pw.type_into(page, subject, label="Subject")
+    return _fill(page, SUBJECT, subject)
 
 
 def fill_message(page, body: str) -> dict[str, Any]:
-    result = pw.type_into(page, body, label="Message Body")
+    result = _fill(page, BODY, body)
+    if not result["success"]:
+        result = pw.type_into(page, body, label="Message Body")
     if not result["success"]:
         result = pw.type_into(page, body, role="textbox", name="Message Body")
     return result

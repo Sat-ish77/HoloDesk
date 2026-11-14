@@ -49,7 +49,7 @@ def _join_spelled(text: str) -> str:
 _CLAIMS_ACTION = re.compile(
     r"\b(i've|i have|i)\s+(just\s+)?(opened|closed|scrolled|clicked|liked|sent|searched|typed|"
     r"played|paused|deleted|moved|launched|started|muted|skipped|gone|went|navigated|"
-    r"returned|switched|refreshed)\b"
+    r"returned|switched|refreshed|removed|fixed|updated|changed|replaced|added|corrected)\b"
     r"|\b(is|has been|have been)\s+(now\s+)?(opened|closed|open|sent|liked|deleted)\b",
     re.IGNORECASE)
 # A reply that ends on a promise ("Let me check again.") with no tool call left the user waiting.
@@ -171,7 +171,13 @@ class ReplyEngine:
             flow = self._email_flows.get(source)
             if flow is not None and flow.expired():
                 flow = self._email_flows.pop(source, None) and None
-            if flow is not None or wants_email(text):
+            if flow is not None and is_cancel(text):
+                self._email_flows.pop(source, None)
+                if len(text.split()) <= 3:
+                    return self._finish(text, source, Reply(
+                        language=lang, text="Okay, I dropped that email. Nothing was sent."))
+                # "Close the Gmail right now" leaves the email AND is a command.
+            elif flow is not None or wants_email(text):
                 return self._finish(text, source, self._email_step(text, source, lang))
             result = self._agent_loop(text, source, lang)
             return self._finish(text, source, result)
@@ -189,9 +195,6 @@ class ReplyEngine:
         flow = self._email_flows.get(source)
         if flow is None:
             flow = self._email_flows[source] = EmailFlow(text)
-        elif is_cancel(text):
-            self._email_flows.pop(source, None)
-            return Reply(language=lang, text="Okay, I dropped that email. Nothing was sent.")
         else:
             reask = flow.take(text)
             if reask:
@@ -213,14 +216,15 @@ class ReplyEngine:
             return Reply(language=lang, text=question)
 
         self._email_flows.pop(source, None)
-        if needs_writer(flow.body) or (flow.mode == "new" and you_choose(flow.subject)):
-            written = self._write_email(flow)
-            if written is None:
-                flow.body = None                      # ask for the words instead
-                self._email_flows[source] = flow
-                return Reply(ok=False, language=lang, text="I couldn't write it just now. "
-                             "Tell me exactly what the email should say, or say cancel.")
+        written = self._write_email(flow)
+        if written is not None:
             flow.subject, flow.body = written
+        elif needs_writer(flow.body) or (flow.mode == "new" and you_choose(flow.subject)):
+            flow.body = None                          # it had to be written: ask for the words instead
+            self._email_flows[source] = flow
+            return Reply(ok=False, language=lang, text="I couldn't write it just now. "
+                         "Tell me exactly what the email should say, or say cancel.")
+        # else the writer is down and the user dictated it: use their words as said
         calls: list[dict] = []
         if flow.mode == "new":
             ok, result = self._run_tool("gmail_compose", {"to": flow.to, "subject": flow.subject,
@@ -273,28 +277,30 @@ class ReplyEngine:
             writer = self._writer = (OpenAICompatibleBackend(
                 "https://api.openai.com/v1", key, self.cfg.writer_model, timeout_sec=60, attempts=1)
                 if key else self.backend)
-        write_body = needs_writer(flow.body)
-        write_subject = flow.mode == "new" and you_choose(flow.subject)
-        rules = ["You write emails for the user. Plain text, short and natural, in the user's language. "
-                 "No placeholders like [Name], no signature."]
-        if write_subject:
-            rules.append("First line exactly 'Subject: <subject>', then a blank line, then the body.")
-        if not write_body:
-            rules.append("The body below is final: repeat it unchanged.")
-        ask = f"To: {flow.to}."
-        if flow.subject and not write_subject:
-            ask += f" Subject: {flow.subject}."
-        ask += (f" What the user wants: {flow.body}" if write_body else f" Body: {flow.body}")
+        # Every email goes through the writer: the live test sent the subject
+        # "The subject will be introduction" because spoken lead-ins were kept.
+        new = flow.mode == "new"
+        rules = ["You turn what the user said by voice into the email they want. Plain text, short and "
+                 "natural, in the user's language. No placeholders like [Name], no signature.",
+                 "Drop spoken lead-ins such as 'the subject will be' or 'the email should say'.",
+                 "If the user dictated exact wording, keep it word for word; if they described what to "
+                 "say, write it. If they left the subject to you, write a fitting one."]
+        rules.append("Reply exactly as: first line 'Subject: <subject>', a blank line, then the body."
+                     if new else "Reply with only the body.")
+        ask = f"Recipient: {flow.to}\n"
+        if new:
+            ask += f"Subject, as said: {flow.subject}\n"
+        ask += f"Body, as said: {flow.body}"
         try:
             text = writer.chat([{"role": "system", "content": " ".join(rules)},
                                 {"role": "user", "content": ask}], max_tokens=2000).content.strip()
         except LLMError:
             return None
         subject = flow.subject
-        if write_subject:
+        if new:
             first, _, rest = text.partition("\n")
-            subject = first.split(":", 1)[1].strip() if first.lower().startswith("subject") else "Hello"
-            text = rest.strip()
+            if first.lower().startswith("subject"):
+                subject, text = first.split(":", 1)[1].strip(), rest.strip()
         return (subject, text) if text else None
 
     def _run_tool(self, name: str, args: dict, ctx: ToolContext, calls: list) -> tuple[bool, dict]:

@@ -15,7 +15,16 @@ import time
 _START = re.compile(r"\b(draft|write|compose|send)\b(\s+\S+){0,3}?\s+(e-?mail|mail)\b"
                     r"|\b(e-?mail|mail)\s+to\b|इमेल", re.I)
 _ASKING_ABOUT = re.compile(r"^\s*(did|have|has|was|were|is|are|can you check)\b", re.I)
-_CANCEL = re.compile(r"^\s*(cancel|never ?mind|forget (it|that)|drop it|रद्द)\b", re.I)
+# Live test: "close this email for now" and "Close the Gmail right now" were
+# answered with "new or reply?" again and again; leaving must always work.
+_CANCEL = re.compile(r"^\s*(okay,?\s+|ok,?\s+|no,?\s+)?(cancel|never ?mind|forget (it|that|this)|drop it|"
+                     r"stop|close|exit|quit|leave it|not now|रद्द)\b"
+                     r"|\b(cancel|close|stop|forget)\b.{0,20}\b(e-?mail|mail|gmail|this|it)\b", re.I)
+# "satish dot wagle at gmail dot com" / "... at the rate gmail dot com"
+_SPOKEN_AT = re.compile(r"\s+(at the rate of|at the rate|at)\s+", re.I)
+_SPOKEN_DOT = re.compile(r"\s+(dot|period)\s+", re.I)
+_EMAIL = re.compile(r"^[\w.+-]+@[\w-]+(\.[\w-]+)+$")
+_NAME = re.compile(r"^[A-Za-zऀ-ॿ][A-Za-zऀ-ॿ .'-]*$")
 _REPLY = re.compile(r"\b(reply|respond|existing|thread|old|previous|जवाफ|jawaf)\b", re.I)
 _NEW = re.compile(r"\b(new|fresh|naya|नयाँ)\b", re.I)
 # "send an email to Smarika Koirala" -> recipient known up front.
@@ -62,9 +71,10 @@ class EmailFlow:
         self.attachment_path = None
         self.choices: list[str] = []    # several files matched: the user picks one
         self.started = time.time()
+        self._mode_asked_again = False
         m = _TO_NAME.search(request or "")
-        if m:
-            self.to = m.group(1).strip()
+        if m and recipient(m.group(1)):
+            self.to = recipient(m.group(1))
 
     def expired(self) -> bool:
         return time.time() - self.started > TIMEOUT_SEC
@@ -106,12 +116,20 @@ class EmailFlow:
                 return "Which one? Say first, second, or part of the file name."
             self.attachment_path = self.choices[pos]
             return None
+        if slot == "to":
+            self.to = recipient(answer)
+            if not self.to:
+                return "I didn't catch who. Say the name again, or spell the email address."
+            return None
         if slot == "mode":
-            if _REPLY.search(answer):
+            if _REPLY.search(answer) and not _NEW.search(answer):
                 self.mode = "reply"
             elif _NEW.search(answer):
                 self.mode = "new"
+            elif self._mode_asked_again:
+                self.mode = "new"           # never loop on this question
             else:
+                self._mode_asked_again = True
                 return "Sorry, a new email or a reply to an existing thread?"
             return None
         setattr(self, slot, answer)
@@ -138,3 +156,15 @@ _FILE_FILLER = {"my", "the", "a", "an", "file", "called", "named", "attach", "at
 def search_words(spoken: str) -> list[str]:
     """'my resume pdf' -> ['resume', 'pdf']: file names rarely contain the filler."""
     return [w for w in re.findall(r"[a-z0-9]+", spoken.lower()) if w not in _FILE_FILLER]
+
+
+def recipient(spoken: str) -> str | None:
+    """A usable recipient from speech, or None. Whisper turned a spoken address
+    into 'Erfosht kja në jupon dhe Gmail', which was used as the recipient."""
+    text = " ".join((spoken or "").split()).strip(" .,")
+    if " at " in f" {text.lower()} " and (" dot " in f" {text.lower()} " or "." in text):
+        email = _SPOKEN_DOT.sub(".", _SPOKEN_AT.sub("@", f" {text} ")).replace(" ", "").lower()
+        return email if _EMAIL.match(email) else None
+    if _EMAIL.match(text.replace(" ", "").lower()):
+        return text.replace(" ", "").lower()
+    return text if _NAME.match(text) and len(text.split()) <= 4 else None
