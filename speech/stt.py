@@ -101,12 +101,17 @@ class CloudSTT:
 
 _HALLUCINATIONS = {"thank you", "thanks for watching", "thank you for watching", "you", "bye",
                    "subscribe", "please subscribe"}
+_ALWAYS_NOISE = _HALLUCINATIONS - {"bye"}   # "bye" alone is a real way to end
 
 
 def _looks_like_silence(result: dict) -> bool:
     """Whisper invents fluent text from room noise. Its own per-segment
     confidence numbers are the best signal that it did."""
     text = (result.get("text") or "").strip().lower().strip(" .!?।")
+    # A lone "Thank you." arrived with low no_speech_prob and ended a live
+    # conversation; nobody gives a command that is only these words.
+    if text in _ALWAYS_NOISE:
+        return True
     segments = result.get("segments") or []
     if segments:
         no_speech = [float(s.get("no_speech_prob") or 0.0) for s in segments]

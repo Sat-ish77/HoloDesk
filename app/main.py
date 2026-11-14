@@ -362,13 +362,15 @@ def speak(text):
         # Async speech (1 = SVSFlagsAsync) so we can interrupt
         sapi_speaker.Speak(text, 1)
         
-        # Wait for speech to finish, but check stop flag
-        while sapi_speaker.Status.RunningState == 2:  # 2 = SRSEIsSpeaking
+        # Polling RunningState right after an async Speak reads 0 (not started
+        # yet), so this returned after 1.2 s of a 12.4 s reply and the mic
+        # opened while HOLO was still talking: the source of every echo.
+        # WaitUntilDone(100) waits up to 100 ms and is True only when audio ends.
+        while not sapi_speaker.WaitUntilDone(100):
             if stop_speaking_flag:
                 sapi_speaker.Speak("", 2)  # 2 = SVSFPurgeBeforeSpeak (stops speech)
                 print("SPEECH INTERRUPTED!")
                 break
-            time.sleep(0.1)  # Check every 100ms
             
         print("SPEECH DONE")  # Confirm it finished
     except Exception as e:

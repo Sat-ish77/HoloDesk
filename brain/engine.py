@@ -256,12 +256,14 @@ class ReplyEngine:
                 messages.append({"role": "tool", "tool_call_id": call.id,
                                  "name": call.name, "content": result})
 
+        # This is spoken aloud; the tool-by-tool log ("browser_click_ref (failed)")
+        # was read to the user. The details stay in reply.tool_calls.
+        n, failed = len(executed), sum(1 for c in executed if not c["ok"])
         return Reply(ok=False, language=lang, tool_calls=executed, photos=photos, text=_t(
             lang,
-            "I ran out of steps before finishing. Here's what I did so far: "
-            + _describe(executed),
-            "काम पूरा हुनुअघि नै मेरा चरण सकिए। अहिलेसम्म: " + _describe(executed),
-            "Kaam pura hunu aghi step sakiyo. Ahile samma: " + _describe(executed)))
+            f"I couldn't finish that. I tried {n} steps and {failed} failed.",
+            f"मैले त्यो पूरा गर्न सकिनँ। {n} चरण प्रयास गरेँ, {failed} असफल भए।",
+            f"Maile tyo pura garna sakina. {n} step try gare, {failed} asafal bhaye."))
 
     def _handle_call(self, call, offered, ctx, source, lang, seen, executed, photos):
         """Returns (tool_result_text, stop_reply). stop_reply ends the loop."""
@@ -589,12 +591,6 @@ def _json(obj) -> str:
         return json.dumps(obj, ensure_ascii=False, default=str)
     except Exception:
         return str(obj)
-
-
-def _describe(executed: list[dict]) -> str:
-    if not executed:
-        return "nothing yet."
-    return ", ".join(f"{c['name']} ({'ok' if c['ok'] else 'failed'})" for c in executed) + "."
 
 
 def _parse_facts(raw: str) -> list[dict]:
