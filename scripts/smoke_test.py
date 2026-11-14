@@ -54,4 +54,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    sys.stdout.flush()
+    # The browser worker thread kept the process alive after the results printed.
+    import os
+    os._exit(code)
