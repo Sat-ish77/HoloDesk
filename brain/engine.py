@@ -26,8 +26,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from .config import BrainConfig, load_config
-from .llm import LLMBackend, LLMError, LLMResponse, make_backend, resolve_models
-from .email_flow import EmailFlow, is_cancel, wants_email
+from .llm import LLMBackend, LLMError, LLMResponse, OpenAICompatibleBackend, make_backend, resolve_models
+from .email_flow import EmailFlow, is_cancel, needs_writer, wants_email, you_choose
 from .memory import MemoryStore
 from .policy import Decision, Policy, Risk, is_no, is_yes
 from .tools.registry import Tool, ToolContext, ToolError, ToolRegistry, tokenize
@@ -200,6 +200,14 @@ class ReplyEngine:
             return Reply(language=lang, text=question)
 
         self._email_flows.pop(source, None)
+        if needs_writer(flow.body) or (flow.mode == "new" and you_choose(flow.subject)):
+            written = self._write_email(flow)
+            if written is None:
+                flow.body = None                      # ask for the words instead
+                self._email_flows[source] = flow
+                return Reply(ok=False, language=lang, text="I couldn't write it just now. "
+                             "Tell me exactly what the email should say, or say cancel.")
+            flow.subject, flow.body = written
         ctx = ToolContext(source=source, cfg=self.cfg, memory=self.memory,
                           notify=self.notify, send_photo=self.send_photo, engine=self)
         calls: list[dict] = []
@@ -225,6 +233,39 @@ class ReplyEngine:
         self.policy.set_pending("gmail_send", {}, send.summary_for({}) if send else "send the email", source)
         return Reply(needs_confirmation=True, language=lang, tool_calls=calls,
                      text=f"It's ready. {what}, saying: {body}. Shall I hit send? Say yes, or cancel.")
+
+    def _write_email(self, flow: EmailFlow) -> tuple[str | None, str] | None:
+        """A strong model writes what the user only described. It is read back
+        in full before the send, so the user hears every word first."""
+        writer = getattr(self, "_writer", None)
+        if writer is None:
+            key = self.cfg.fallback_api_key
+            writer = self._writer = (OpenAICompatibleBackend(
+                "https://api.openai.com/v1", key, self.cfg.writer_model, timeout_sec=60, attempts=1)
+                if key else self.backend)
+        write_body = needs_writer(flow.body)
+        write_subject = flow.mode == "new" and you_choose(flow.subject)
+        rules = ["You write emails for the user. Plain text, short and natural, in the user's language. "
+                 "No placeholders like [Name], no signature."]
+        if write_subject:
+            rules.append("First line exactly 'Subject: <subject>', then a blank line, then the body.")
+        if not write_body:
+            rules.append("The body below is final: repeat it unchanged.")
+        ask = f"To: {flow.to}."
+        if flow.subject and not write_subject:
+            ask += f" Subject: {flow.subject}."
+        ask += (f" What the user wants: {flow.body}" if write_body else f" Body: {flow.body}")
+        try:
+            text = writer.chat([{"role": "system", "content": " ".join(rules)},
+                                {"role": "user", "content": ask}], max_tokens=2000).content.strip()
+        except LLMError:
+            return None
+        subject = flow.subject
+        if write_subject:
+            first, _, rest = text.partition("\n")
+            subject = first.split(":", 1)[1].strip() if first.lower().startswith("subject") else "Hello"
+            text = rest.strip()
+        return (subject, text) if text else None
 
     def _run_tool(self, name: str, args: dict, ctx: ToolContext, calls: list) -> tuple[bool, dict]:
         tool = self.registry.get(name)

@@ -112,3 +112,13 @@ def test_yes_no_in_both_languages():
         assert is_no(word), word
     assert not is_yes("yes delete everything else too")   # only a bare yes confirms
     assert not is_yes("no") and not is_no("yes")
+
+
+def test_spoken_confirmations_from_the_live_test():
+    # Exact-match only: "Yes, yes, go ahead, send it" was ignored and the question repeated.
+    for text in ["yes please send it", "it is good to send", "Yes, yes, yes, go ahead, send it, send it.",
+                 "looks good, send it"]:
+        assert is_yes(text), text
+    for text in ["don't send it", "not yet", "hold on", "yes, no wait"]:
+        assert is_no(text) and not is_yes(text), text
+    assert not is_yes("okay, what's the weather?")

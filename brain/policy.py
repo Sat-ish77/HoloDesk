@@ -177,12 +177,41 @@ def _norm_reply(text: str) -> str:
     return re.sub(r"[\s\.\!\?,।]+$", "", (text or "").strip().lower())
 
 
+# Exact-match only turned "Yes, please send it" and "go ahead, it's good to
+# send" into new requests, and the confirmation was asked again and again.
+_YES_HINT = re.compile(r"\b(yes|yeah|yep|yup|ok|okay|sure|confirm|go ahead|proceed|do it|send it|"
+                       r"looks good|it'?s good|good to (go|send)|ho|huncha|hunchha|thik cha|हो|हुन्छ|ठीक छ)\b", re.I)
+_NO_HINT = re.compile(r"\b(no|nope|nah|cancel|stop|don'?t|do not|abort|wait|hold on|not yet|never ?mind|"
+                      r"hoina|haina|nagara|होइन|नगर|रद्द)\b", re.I)
+# "okay, what's the weather?" must not approve a pending send.
+_QUESTION = re.compile(r"\?|\b(what|who|where|when|why|how|which)\b", re.I)
+
+
+# A yes may carry only confirmation words: "yes, delete everything else too"
+# must not approve anything, it adds a new instruction.
+_CONFIRM_WORDS = {
+    "yes", "yeah", "yep", "yup", "ok", "okay", "sure", "confirm", "confirmed", "go", "ahead", "proceed",
+    "do", "it", "its", "it's", "is", "send", "please", "pls", "this", "that", "the", "email", "mail",
+    "good", "looks", "fine", "great", "perfect", "to", "now", "right", "just", "all", "set", "thanks",
+    "thank", "you", "alright", "correct", "hajur", "ho", "huncha", "hunchha", "thik", "cha", "chha",
+}
+
+
 def is_yes(text: str) -> bool:
-    return _norm_reply(text) in _YES
+    t = _norm_reply(text)
+    if t in _YES:
+        return True
+    words = re.findall(r"[a-z']+", t)
+    return (bool(words) and bool(_YES_HINT.search(t)) and not _NO_HINT.search(t)
+            and not _QUESTION.search(t) and all(w in _CONFIRM_WORDS for w in words))
 
 
 def is_no(text: str) -> bool:
-    return _norm_reply(text) in _NO
+    t = _norm_reply(text)
+    if t in _NO:
+        return True
+    # Mixed ("don't send it", "yes, no wait") counts as no: the safe side before a send.
+    return len(t.split()) <= 8 and bool(_NO_HINT.search(t))
 
 
 @dataclass

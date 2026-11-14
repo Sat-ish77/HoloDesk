@@ -20,7 +20,20 @@ _REPLY = re.compile(r"\b(reply|respond|existing|thread|old|previous|जवाफ
 _NEW = re.compile(r"\b(new|fresh|naya|नयाँ)\b", re.I)
 # "send an email to Smarika Koirala" -> recipient known up front.
 _TO_NAME = re.compile(r"\bto\s+([A-Z][\w.'@-]*(?:\s+[A-Z][\w.'@-]*){0,2})")
+# "tell her I'll be late" describes an email; "Hey, how are you?" is the email.
+_DESCRIBES = re.compile(r"^\s*(please\s+)?(write|tell|ask|let (her|him|them)|thank|invite|remind|explain|"
+                        r"apologi[sz]e|wish|make it|draft|compose|something about|about)\b", re.I)
+_YOU_CHOOSE = re.compile(r"^\s*(you (choose|decide|pick|write it|come up)|anything|whatever|up to you|"
+                         r"make (one|it) up|your choice)\b", re.I)
 TIMEOUT_SEC = 300
+
+
+def needs_writer(answer: str | None) -> bool:
+    return bool(answer) and bool(_DESCRIBES.search(answer) or _YOU_CHOOSE.search(answer))
+
+
+def you_choose(answer: str | None) -> bool:
+    return bool(answer) and bool(_YOU_CHOOSE.search(answer))
 
 QUESTIONS = {
     "to": "Who should the email go to?",

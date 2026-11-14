@@ -112,6 +112,11 @@ class OpenAICompatibleBackend(LLMBackend):
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
+        # gpt-5 / o-series reject max_tokens and any non-default temperature
+        # (live: HTTP 400 "Use 'max_completion_tokens' instead").
+        if str(payload["model"]).startswith(("gpt-5", "o1", "o3", "o4")):
+            payload["max_completion_tokens"] = payload.pop("max_tokens")
+            payload.pop("temperature")
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"

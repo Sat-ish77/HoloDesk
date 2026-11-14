@@ -74,6 +74,9 @@ class BrainConfig:
     fallback_api_key: str = field(default_factory=lambda: _env("OPENAI_API_KEY"))
     fallback_model: str = field(default_factory=lambda: _env(
         "HOLODESK_FALLBACK_MODEL", "gpt-4o-mini"))
+    # Writes email bodies the user only describes ("tell her I'll be late"),
+    # always on OpenAI (OPENAI_API_KEY) whatever the main model is.
+    writer_model: str = field(default_factory=lambda: _env("HOLODESK_WRITER_MODEL", "gpt-5.5"))
 
     # --- Agent loop ---
     max_turns: int = field(default_factory=lambda: _env_int("HOLODESK_MAX_TURNS", 12))

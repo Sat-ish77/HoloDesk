@@ -62,3 +62,26 @@ def test_only_real_email_requests_start_the_flow():
     assert wants_email("Can you write her a mail saying hi")
     assert not wants_email("did you send the email?")
     assert not wants_email("open gmail")
+
+
+def test_described_body_is_written_by_the_writer_model():
+    from brain.llm import FakeBackend, LLMResponse
+    calls = []
+    engine, _, _ = make_engine([], extra_tools=_gmail_tools(calls))
+    engine._writer = FakeBackend([LLMResponse(content="Subject: Running late\n\nHi Smarika, I'll be ten minutes late.")])
+    engine.reply("send an email to Smarika Koirala")
+    engine.reply("new")
+    engine.reply("you choose")                                   # subject
+    engine.reply("tell her I'll be ten minutes late")            # describes, doesn't dictate
+    assert calls[0] == ("gmail_compose", {"to": "Smarika Koirala", "subject": "Running late",
+                                          "body": "Hi Smarika, I'll be ten minutes late."})
+
+
+def test_dictated_body_is_sent_as_spoken():
+    from brain.llm import FakeBackend
+    calls = []
+    engine, _, _ = make_engine([], extra_tools=_gmail_tools(calls))
+    engine._writer = FakeBackend([])                             # any call to it would fail the test
+    for said in ["write an email to Smarika", "new", "Greetings", "Hey, how are you doing today?"]:
+        engine.reply(said)
+    assert calls[0][1]["body"] == "Hey, how are you doing today?"
