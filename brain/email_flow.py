@@ -118,12 +118,16 @@ class EmailFlow:
         return None
 
 
+def _parts(path: str) -> list[str]:
+    return re.split(r"[\\/]", path.rstrip("\\/"))     # Windows paths use backslashes
+
+
 def _basename(path: str) -> str:
-    return re.split(r"[\/]", path.rstrip("\/"))[-1]
+    return _parts(path)[-1]
 
 
 def _describe_file(path: str) -> str:
-    parts = re.split(r"[\/]", path.rstrip("\/"))
+    parts = _parts(path)
     return f"{parts[-1]} in {parts[-2]}" if len(parts) > 1 else parts[-1]
 
 

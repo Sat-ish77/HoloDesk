@@ -122,3 +122,11 @@ def test_unknown_file_is_asked_again():
     engine, _, _ = make_engine([], extra_tools=_gmail_tools([]))
     _to_attachment_question(engine)
     assert "couldn't find a file like 'invoice'" in engine.reply("invoice").text
+
+
+def test_windows_paths_are_named_by_file_and_folder():
+    # A regex that split only on "/" read a whole Windows path as the file name.
+    from brain.email_flow import _basename, _describe_file
+    path = r"C:\Users\Sat\Desktop\Satish_Resume.pdf"
+    assert _basename(path) == "Satish_Resume.pdf"
+    assert _describe_file(path) == "Satish_Resume.pdf in Desktop"
