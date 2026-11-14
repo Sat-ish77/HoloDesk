@@ -279,3 +279,9 @@ def test_unanswered_request_from_history_is_not_replayed():
     sent = [m["content"] for m in backend.calls[0]["messages"]]
     assert not any("MCP and API keys" in c for c in sent)
     assert log == [] and reply.text == "Hi! How can I help?"
+
+
+def test_gone_back_without_a_tool_is_challenged():
+    # Smoke test: "I've gone back to the Google search results" with no tool call.
+    from brain.engine import _CLAIMS_ACTION
+    assert _CLAIMS_ACTION.search("I've gone back to the Google search results.")

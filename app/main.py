@@ -876,17 +876,27 @@ class VoiceAssistantThread(threading.Thread):
         text = self._strip_echo_prefix(text)
         if not text:
             return None
+        req_id = time.time()
         try:
-            command_queue.put_nowait({"type": "USER_COMMAND", "text": text, "source": "voice", "ts": time.time()})
+            command_queue.put_nowait({"type": "USER_COMMAND", "text": text, "source": "voice", "ts": req_id})
         except queue.Full:
             return None
 
         print(f"YOU: {text}")
-        try:
-            reply = voice_reply_queue.get(timeout=60)
-        except queue.Empty:
-            print("[VOICE] Timeout waiting for reply")
-            return None
+        # Replies carry the id of the request they answer. Before, a slow task
+        # (Gmail compose) outlived the 60 s wait, its late answer was handed to
+        # the next question, and every reply after that was one request behind.
+        deadline = time.time() + 120
+        while True:
+            try:
+                reply = voice_reply_queue.get(timeout=max(0.1, deadline - time.time()))
+            except queue.Empty:
+                print("HOLO: (still working on that; I'll skip its answer if it comes late)")
+                return None
+            if isinstance(reply, dict) and reply.get("id") not in (None, req_id):
+                print(f"HOLO: (skipped a late answer to an earlier request) {str(reply.get('text'))[:60]}")
+                continue
+            break
 
         if reply is None or (isinstance(reply, dict) and reply.get("text") is None):
             return None

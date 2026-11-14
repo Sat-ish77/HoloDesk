@@ -65,6 +65,8 @@ class OrchestratorAgent(threading.Thread):
                 continue
 
             try:
+                # Echoed on every reply so the voice thread can drop late answers.
+                self._current_id = item.get("ts") if isinstance(item, dict) else None
                 text = (item.get("text") if isinstance(item, dict) else str(item)) or ""
                 text = text.strip()
                 if not text:
@@ -137,7 +139,7 @@ class OrchestratorAgent(threading.Thread):
     def _reply(self, payload: dict):
         try:
             # voice thread expects dict: {"text": str, "prompt": bool}
-            voice_reply_queue.put_nowait(payload)
+            voice_reply_queue.put_nowait({**payload, "id": getattr(self, "_current_id", None)})
         except queue.Full:
             # If voice thread isn't ready, drop rather than deadlock.
             pass

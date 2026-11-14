@@ -64,7 +64,7 @@ def test_orchestrator_uses_brain_and_falls_back_when_llm_is_down(monkeypatch):
 
     orch.brain, _, log = make_engine([call("open_app", name="chrome"), say("Chrome is open.")])
     assert orch._try_brain("open chrome") is True
-    assert voice_reply_queue.get_nowait() == {"text": "Chrome is open.", "prompt": True}
+    assert voice_reply_queue.get_nowait() == {"text": "Chrome is open.", "prompt": True, "id": None}
     assert log == [("open_app", {"name": "chrome"})]
 
     def down(messages, tools):

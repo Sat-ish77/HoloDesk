@@ -46,7 +46,8 @@ def _join_spelled(text: str) -> str:
 # ponytail: English-only claim check; Nepali claims ("खोलियो") pass unchecked until it matters.
 _CLAIMS_ACTION = re.compile(
     r"\b(i've|i have|i)\s+(just\s+)?(opened|closed|scrolled|clicked|liked|sent|searched|typed|"
-    r"played|paused|deleted|moved|launched|started|muted|skipped)\b"
+    r"played|paused|deleted|moved|launched|started|muted|skipped|gone|went|navigated|"
+    r"returned|switched|refreshed)\b"
     r"|\b(is|has been|have been)\s+(now\s+)?(opened|closed|open|sent|liked|deleted)\b",
     re.IGNORECASE)
 # A reply that ends on a promise ("Let me check again.") with no tool call left the user waiting.
@@ -421,6 +422,10 @@ class ReplyEngine:
             "and controls it through tools. You can run commands, open and close apps, manage "
             "files and windows, read the screen and remember things.",
 
+            # Smoke test: "what page is this" was answered from an earlier turn's
+            # history while the page had changed. History says what was, not what is.
+            "STATE: For what is on the screen, page or tab right now, call a tool to look; "
+            "never answer from earlier turns. "
             "ACTIONS: To do something on the computer you MUST call a tool. Never say you did "
             "something unless a tool result in this conversation confirms it. If a tool fails, "
             "say so plainly and say what you tried. If no tool can do the job, say you can't do "

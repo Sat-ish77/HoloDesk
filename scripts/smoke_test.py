@@ -17,6 +17,7 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(ROOT / ".env")
 
 from brain.bootstrap import build_engine  # noqa: E402
+from brain.memory import MemoryStore  # noqa: E402
 
 # (command, tools that count as success; empty = must answer without tools)
 CASES = [
@@ -34,6 +35,9 @@ def main() -> int:
     if engine is None:
         print("brain disabled or no LLM key")
         return 2
+    # Fresh memory every run: a second run read the first run's history and
+    # answered "Notepad is already open" instead of acting, so runs weren't comparable.
+    engine.memory = MemoryStore(":memory:")
     passed = 0
     for text, want in CASES:
         t = time.time()
